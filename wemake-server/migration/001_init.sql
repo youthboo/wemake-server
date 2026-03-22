@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS connections (
 );
 
 -- Create indexes
-CREATE INDEX idx_factories_email ON factories(email);
-CREATE INDEX idx_entrepreneurs_email ON entrepreneurs(email);
-CREATE INDEX idx_connections_factory_id ON connections(factory_id);
-CREATE INDEX idx_connections_entrepreneur_id ON connections(entrepreneur_id);
+CREATE INDEX IF NOT EXISTS idx_factories_email ON factories(email);
+CREATE INDEX IF NOT EXISTS idx_entrepreneurs_email ON entrepreneurs(email);
+CREATE INDEX IF NOT EXISTS idx_connections_factory_id ON connections(factory_id);
+CREATE INDEX IF NOT EXISTS idx_connections_entrepreneur_id ON connections(entrepreneur_id);
