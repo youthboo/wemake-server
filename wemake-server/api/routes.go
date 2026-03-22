@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/jmoiron/sqlx"
 	"github.com/yourusername/wemake/internal/config"
 	"github.com/yourusername/wemake/internal/handler"
@@ -12,6 +13,11 @@ import (
 
 func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	app := fiber.New()
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: cfg.CORSOrigins,
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-User-ID",
+		AllowMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+	}))
 
 	// Initialize repositories
 	factoryRepo := repository.NewFactoryRepository(db)

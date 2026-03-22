@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: wemake-server
+    runtime: go
+    rootDir: wemake-server
+    plan: free
+    region: singapore
+    buildCommand: go build -tags netgo -ldflags '-s -w' -o app ./cmd/app
+    startCommand: ./app
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: wemake-postgres
+          property: connectionString
+
+databases:
+  - name: wemake-postgres
+    plan: free
+    region: singapore
