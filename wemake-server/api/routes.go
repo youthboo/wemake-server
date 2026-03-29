@@ -19,6 +19,9 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 		AllowMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS",
 	}))
 
+	// Serve static files for media uploads
+	app.Static("/uploads", "./uploads")
+
 	// Initialize repositories
 	factoryRepo := repository.NewFactoryRepository(db)
 	authRepo := repository.NewAuthRepository(db)
@@ -63,6 +66,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	masterHandler := handler.NewMasterHandler(masterService)
 	transactionHandler := handler.NewTransactionHandler(transactionService)
 	frontendHandler := handler.NewFrontendHandler(frontendService)
+	mediaHandler := handler.NewMediaHandler()
 
 	// Health check route
 	app.Get("/health", func(c *fiber.Ctx) error {
@@ -141,9 +145,16 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	master.Get("/units", masterHandler.GetUnits)
 	master.Get("/shipping-methods", masterHandler.GetShippingMethods)
 
+	media := api.Group("/media")
+	media.Post("/upload", mediaHandler.UploadFile)
+
 	frontend := api.Group("/frontend")
 	frontend.Get("/bootstrap", frontendHandler.GetBootstrap)
 	frontend.Get("/mock-data", frontendHandler.GetMockData)
+	frontend.Get("/products", frontendHandler.GetProducts)
+	frontend.Get("/promotions", frontendHandler.GetPromotions)
+	frontend.Get("/promo-codes", frontendHandler.GetPromoCodes)
+	frontend.Get("/explore", frontendHandler.GetExplore)
 	frontend.Get("/me", frontendHandler.GetCurrentUser)
 	frontend.Get("/factories", frontendHandler.ListFactories)
 	frontend.Get("/factories/:factory_id", frontendHandler.GetFactoryDetail)

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/yourusername/wemake/internal/domain"
 )
 
 type FrontendRepository struct {
@@ -490,5 +491,43 @@ func (r *FrontendRepository) ListMessagesByReference(referenceType, referenceID 
 		ORDER BY created_at ASC
 	`
 	err := r.db.Select(&items, query, referenceType, referenceID, userID)
+	return items, err
+}
+
+func (r *FrontendRepository) GetProducts(limit int, categoryID string) ([]domain.Product, error) {
+	var items []domain.Product
+	var err error
+
+	if categoryID != "" {
+		query := `SELECT id, title, price, image_url, discount, factory_id, category_id FROM products WHERE category_id = $1 ORDER BY id ASC LIMIT $2`
+		err = r.db.Select(&items, query, categoryID, limit)
+	} else {
+		query := `SELECT id, title, price, image_url, discount, factory_id, category_id FROM products ORDER BY id ASC LIMIT $1`
+		err = r.db.Select(&items, query, limit)
+	}
+
+	if err == sql.ErrNoRows {
+		return []domain.Product{}, nil
+	}
+	return items, err
+}
+
+func (r *FrontendRepository) GetPromotions(limit int) ([]domain.Promotion, error) {
+	var items []domain.Promotion
+	query := `SELECT id, title, description, price, image_url, tag, factory_id FROM promotions ORDER BY id ASC LIMIT $1`
+	err := r.db.Select(&items, query, limit)
+	if err == sql.ErrNoRows {
+		return []domain.Promotion{}, nil
+	}
+	return items, err
+}
+
+func (r *FrontendRepository) GetPromoCodes() ([]domain.PromoCode, error) {
+	var items []domain.PromoCode
+	query := `SELECT id, title, subtitle, code, valid_until FROM promo_codes ORDER BY id ASC`
+	err := r.db.Select(&items, query)
+	if err == sql.ErrNoRows {
+		return []domain.PromoCode{}, nil
+	}
 	return items, err
 }

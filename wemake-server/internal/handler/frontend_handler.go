@@ -142,3 +142,48 @@ func (h *FrontendHandler) GetMockData(c *fiber.Ctx) error {
 	}
 	return c.JSON(item)
 }
+
+func (h *FrontendHandler) GetProducts(c *fiber.Ctx) error {
+	limit := c.QueryInt("limit", 8)
+	categoryID := c.Query("category_id", "")
+
+	items, err := h.service.GetProducts(limit, categoryID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch products"})
+	}
+	return c.JSON(items)
+}
+
+func (h *FrontendHandler) GetPromotions(c *fiber.Ctx) error {
+	limit := c.QueryInt("limit", 4)
+
+	items, err := h.service.GetPromotions(limit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch promotions"})
+	}
+	return c.JSON(items)
+}
+
+func (h *FrontendHandler) GetPromoCodes(c *fiber.Ctx) error {
+	items, err := h.service.GetPromoCodes()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch promo codes"})
+	}
+	return c.JSON(items)
+}
+
+func (h *FrontendHandler) GetExplore(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid user context"})
+	}
+
+	item, err := h.service.GetExploreData(userID)
+	if err != nil {
+		if repository.IsNotFoundError(err) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch explore data"})
+	}
+	return c.JSON(item)
+}

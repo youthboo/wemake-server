@@ -332,3 +332,40 @@ type MockNotification struct {
 	ConversationID string `json:"conversationId,omitempty"`
 	Avatar         string `json:"avatar"`
 }
+
+type Product struct {
+	ID        string  `db:"id" json:"id"`
+	Title     string  `db:"title" json:"title"`
+	Price      string  `db:"price" json:"price"`
+	ImageURL   string  `db:"image_url" json:"image_url"`
+	Discount   *string `db:"discount" json:"discount"`
+	FactoryID  *string `db:"factory_id" json:"factory_id,omitempty"`
+	CategoryID *string `db:"category_id" json:"-"`
+}
+
+type Promotion struct {
+	ID          string  `db:"id" json:"id"`
+	Title       string  `db:"title" json:"title"`
+	Description string  `db:"description" json:"description"`
+	Price       string  `db:"price" json:"price"`
+	ImageURL    string  `db:"image_url" json:"image_url"`
+	Tag         string  `db:"tag" json:"tag"`
+	FactoryID   *string `db:"factory_id" json:"factory_id,omitempty"`
+}
+
+type PromoCode struct {
+	ID         string  `db:"id" json:"id"`
+	Title      string  `db:"title" json:"title"`
+	Subtitle   string  `db:"subtitle" json:"subtitle"`
+	Code       string  `db:"code" json:"code"`
+	ValidUntil *string `db:"valid_until" json:"valid_until,omitempty"`
+}
+
+type ExploreData struct {
+	Products     []Product         `json:"products"`
+	Promotions   []Promotion       `json:"promotions"`
+	PromoCodes   []PromoCode       `json:"promo_codes"`
+	Factories    []MockFactory     `json:"factories"`
+	IdeaArticles []MockIdeaArticle `json:"idea_articles"`
+	Categories   []MockCategory    `json:"categories"`
+}

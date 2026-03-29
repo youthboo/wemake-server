@@ -1057,3 +1057,50 @@ func max(a int, b int) int {
 	}
 	return b
 }
+
+func (s *FrontendService) GetProducts(limit int, categoryID string) ([]domain.Product, error) {
+	if limit <= 0 {
+		limit = 8
+	}
+	return s.repo.GetProducts(limit, categoryID)
+}
+
+func (s *FrontendService) GetPromotions(limit int) ([]domain.Promotion, error) {
+	if limit <= 0 {
+		limit = 4
+	}
+	return s.repo.GetPromotions(limit)
+}
+
+func (s *FrontendService) GetPromoCodes() ([]domain.PromoCode, error) {
+	return s.repo.GetPromoCodes()
+}
+
+func (s *FrontendService) GetExploreData(userID int64) (*domain.ExploreData, error) {
+	products, err := s.GetProducts(8, "")
+	if err != nil {
+		products = []domain.Product{}
+	}
+	promotions, err := s.GetPromotions(4)
+	if err != nil {
+		promotions = []domain.Promotion{}
+	}
+	promoCodes, err := s.GetPromoCodes()
+	if err != nil {
+		promoCodes = []domain.PromoCode{}
+	}
+
+	mockData, err := s.GetMockData(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &domain.ExploreData{
+		Products:     products,
+		Promotions:   promotions,
+		PromoCodes:   promoCodes,
+		Factories:    mockData.Factories,
+		IdeaArticles: mockData.IdeaArticles,
+		Categories:   mockData.Categories,
+	}, nil
+}
