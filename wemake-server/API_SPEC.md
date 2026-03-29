@@ -458,20 +458,22 @@ Auth required.
   "reference_id": "1",
   "receiver_id": 2,
   "content": "Hello",
-  "attachment_url": ""
+  "attachment_url": "",
+  "conv_id": 1,
+  "message_type": "TX",
+  "quote_data": "{\"price\": 65000, \"lead_time\": 21}"
 }
 ```
+*Note: `conv_id`, `message_type` (e.g., TX or QT), and `quote_data` are optional but strongly recommended for conversation threading and rich quoting.*
 
 ### `GET /messages/`
 
-Required query params:
+Supports fetching by `conv_id` natively, or fallback to references.
 
-- `reference_type`
-- `reference_id`
-
-Example:
+Examples:
 
 ```txt
+GET /messages/?conv_id=1
 GET /messages/?reference_type=RFQ&reference_id=1
 ```
 
