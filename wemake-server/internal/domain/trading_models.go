@@ -44,6 +44,10 @@ type Message struct {
 	ReceiverID    int64     `db:"receiver_id" json:"receiver_id"`
 	Content       string    `db:"content" json:"content"`
 	AttachmentURL string    `db:"attachment_url" json:"attachment_url,omitempty"`
+	ConvID        *int64    `db:"conv_id" json:"conv_id,omitempty"`
+	MessageType   string    `db:"message_type" json:"message_type"`
+	QuoteData     *string   `db:"quote_data" json:"quote_data,omitempty"`
+	IsRead        bool      `db:"is_read" json:"is_read"`
 	CreatedAt     time.Time `db:"created_at" json:"created_at"`
 }
 

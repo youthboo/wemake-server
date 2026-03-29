@@ -18,11 +18,14 @@ func NewMessageHandler(service *service.MessageService) *MessageHandler {
 
 func (h *MessageHandler) CreateMessage(c *fiber.Ctx) error {
 	type reqBody struct {
-		ReferenceType string `json:"reference_type"`
-		ReferenceID   string `json:"reference_id"`
-		ReceiverID    int64  `json:"receiver_id"`
-		Content       string `json:"content"`
-		AttachmentURL string `json:"attachment_url"`
+		ReferenceType string  `json:"reference_type"`
+		ReferenceID   string  `json:"reference_id"`
+		ReceiverID    int64   `json:"receiver_id"`
+		Content       string  `json:"content"`
+		AttachmentURL string  `json:"attachment_url"`
+		ConvID        *int64  `json:"conv_id"`
+		MessageType   string  `json:"message_type"`
+		QuoteData     *string `json:"quote_data"`
 	}
 	senderID, err := getUserIDFromHeader(c)
 	if err != nil {
@@ -42,6 +45,10 @@ func (h *MessageHandler) CreateMessage(c *fiber.Ctx) error {
 		ReceiverID:    req.ReceiverID,
 		Content:       req.Content,
 		AttachmentURL: req.AttachmentURL,
+		ConvID:        req.ConvID,
+		MessageType:   req.MessageType,
+		QuoteData:     req.QuoteData,
+		IsRead:        false,
 	}
 	if err := h.service.Create(item); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create message"})
@@ -54,10 +61,20 @@ func (h *MessageHandler) ListMessages(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
 	}
+
+	convID := c.QueryInt("conv_id", 0)
+	if convID > 0 {
+		items, err := h.service.ListByConvID(int64(convID))
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch messages by conv_id"})
+		}
+		return c.JSON(items)
+	}
+
 	referenceType := c.Query("reference_type")
 	referenceID := c.Query("reference_id")
 	if strings.TrimSpace(referenceType) == "" || strings.TrimSpace(referenceID) == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "reference_type and reference_id are required"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "reference_type and reference_id (or conv_id) are required"})
 	}
 	items, err := h.service.ListByReference(referenceType, referenceID, userID)
 	if err != nil {

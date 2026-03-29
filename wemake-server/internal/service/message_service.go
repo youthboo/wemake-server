@@ -28,7 +28,11 @@ func (s *MessageService) Create(item *domain.Message) error {
 }
 
 func (s *MessageService) ListByReference(referenceType, referenceID string, userID int64) ([]domain.Message, error) {
-	return s.repo.ListByReference(strings.TrimSpace(strings.ToUpper(referenceType)), strings.TrimSpace(referenceID), userID)
+	return s.repo.ListByReference(referenceType, referenceID, userID)
+}
+
+func (s *MessageService) ListByConvID(convID int64) ([]domain.Message, error) {
+	return s.repo.ListByConvID(convID)
 }
 
 func (s *MessageService) ListThreads(userID int64) ([]domain.MessageThread, error) {

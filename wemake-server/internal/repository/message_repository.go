@@ -14,9 +14,12 @@ func NewMessageRepository(db *sqlx.DB) *MessageRepository {
 }
 
 func (r *MessageRepository) Create(item *domain.Message) error {
+	if item.MessageType == "" {
+		item.MessageType = "TX"
+	}
 	query := `
-		INSERT INTO messages (message_id, reference_type, reference_id, sender_id, receiver_id, content, attachment_url, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO messages (message_id, reference_type, reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, is_read)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`
 	_, err := r.db.Exec(
 		query,
@@ -28,6 +31,10 @@ func (r *MessageRepository) Create(item *domain.Message) error {
 		item.Content,
 		item.AttachmentURL,
 		item.CreatedAt,
+		item.ConvID,
+		item.MessageType,
+		item.QuoteData,
+		item.IsRead,
 	)
 	return err
 }
@@ -35,12 +42,24 @@ func (r *MessageRepository) Create(item *domain.Message) error {
 func (r *MessageRepository) ListByReference(referenceType, referenceID string, userID int64) ([]domain.Message, error) {
 	var items []domain.Message
 	query := `
-		SELECT message_id, reference_type, reference_id, sender_id, receiver_id, content, attachment_url, created_at
+		SELECT message_id, reference_type, reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, is_read
 		FROM messages
 		WHERE reference_type = $1 AND reference_id = $2 AND (sender_id = $3 OR receiver_id = $3)
 		ORDER BY created_at ASC
 	`
 	err := r.db.Select(&items, query, referenceType, referenceID, userID)
+	return items, err
+}
+
+func (r *MessageRepository) ListByConvID(convID int64) ([]domain.Message, error) {
+	var items []domain.Message
+	query := `
+		SELECT message_id, reference_type, reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, is_read
+		FROM messages
+		WHERE conv_id = $1
+		ORDER BY created_at ASC
+	`
+	err := r.db.Select(&items, query, convID)
 	return items, err
 }
 
