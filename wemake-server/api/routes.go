@@ -36,6 +36,12 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	masterRepo := repository.NewMasterRepository(db)
 	transactionRepo := repository.NewTransactionRepository(db)
 	frontendRepo := repository.NewFrontendRepository(db)
+	reviewRepo := repository.NewReviewRepository(db)
+	conversationRepo := repository.NewConversationRepository(db)
+	notificationRepo := repository.NewNotificationRepository(db)
+	showcaseRepo := repository.NewShowcaseRepository(db)
+	favoriteRepo := repository.NewFavoriteRepository(db)
+	certificateRepo := repository.NewCertificateRepository(db)
 
 	// Initialize services
 	factoryService := service.NewFactoryService(factoryRepo)
@@ -51,6 +57,12 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	masterService := service.NewMasterService(masterRepo)
 	transactionService := service.NewTransactionService(transactionRepo)
 	frontendService := service.NewFrontendService(frontendRepo)
+	reviewService := service.NewReviewService(reviewRepo)
+	conversationService := service.NewConversationService(conversationRepo)
+	notificationService := service.NewNotificationService(notificationRepo)
+	showcaseService := service.NewShowcaseService(showcaseRepo)
+	favoriteService := service.NewFavoriteService(favoriteRepo)
+	certificateService := service.NewCertificateService(certificateRepo)
 
 	// Initialize handlers
 	factoryHandler := handler.NewFactoryHandler(factoryService)
@@ -67,6 +79,12 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	transactionHandler := handler.NewTransactionHandler(transactionService)
 	frontendHandler := handler.NewFrontendHandler(frontendService)
 	mediaHandler := handler.NewMediaHandler()
+	reviewHandler := handler.NewReviewHandler(reviewService)
+	conversationHandler := handler.NewConversationHandler(conversationService)
+	notificationHandler := handler.NewNotificationHandler(notificationService)
+	showcaseHandler := handler.NewShowcaseHandler(showcaseService)
+	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
+	certificateHandler := handler.NewCertificateHandler(certificateService)
 
 	// Health check route
 	app.Get("/health", func(c *fiber.Ctx) error {
@@ -92,6 +110,10 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	factories.Get("/:id", factoryHandler.GetFactory)
 	factories.Patch("/:id", factoryHandler.UpdateFactory)
 	factories.Delete("/:id", factoryHandler.DeleteFactory)
+	factories.Get("/:factory_id/reviews", reviewHandler.ListByFactory)
+	factories.Post("/:factory_id/reviews", reviewHandler.Create)
+	factories.Get("/:factory_id/certificates", certificateHandler.ListByFactory)
+	factories.Post("/:factory_id/certificates", certificateHandler.Create)
 
 	addresses := api.Group("/addresses")
 	addresses.Get("/", addressHandler.ListAddresses)
@@ -147,6 +169,27 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 
 	media := api.Group("/media")
 	media.Post("/upload", mediaHandler.UploadFile)
+
+	conversations := api.Group("/conversations")
+	conversations.Get("/", conversationHandler.List)
+	conversations.Get("/:conv_id", conversationHandler.Get)
+	conversations.Post("/", conversationHandler.Create)
+
+	notifications := api.Group("/notifications")
+	notifications.Get("/", notificationHandler.List)
+	notifications.Patch("/:noti_id/read", notificationHandler.MarkAsRead)
+
+	showcases := api.Group("/showcases")
+	showcases.Get("/", showcaseHandler.List)
+	showcases.Post("/", showcaseHandler.Create)
+
+	promoSlides := api.Group("/promo-slides")
+	promoSlides.Get("/", showcaseHandler.ListPromoSlides)
+
+	favorites := api.Group("/favorites")
+	favorites.Get("/", favoriteHandler.List)
+	favorites.Post("/", favoriteHandler.Add)
+	favorites.Delete("/:showcase_id", favoriteHandler.Remove)
 
 	frontend := api.Group("/frontend")
 	frontend.Get("/bootstrap", frontendHandler.GetBootstrap)
