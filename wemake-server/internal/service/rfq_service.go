@@ -11,6 +11,8 @@ import (
 )
 
 var ErrMaxRFQImages = errors.New("rfq image limit exceeded (max 4)")
+var ErrInvalidSubCategory = errors.New("sub_category_id is invalid for the selected category")
+var ErrInvalidShippingMethod = errors.New("shipping_method_id is invalid")
 
 type RFQService struct {
 	repo *repository.RFQRepository
@@ -27,6 +29,27 @@ func (s *RFQService) Create(rfq *domain.RFQ) error {
 	rfq.Status = "OP"
 	rfq.CreatedAt = now
 	rfq.UpdatedAt = now
+
+	if rfq.SubCategoryID != nil {
+		valid, err := s.repo.SubCategoryBelongsToCategory(*rfq.SubCategoryID, rfq.CategoryID)
+		if err != nil {
+			return err
+		}
+		if !valid {
+			return ErrInvalidSubCategory
+		}
+	}
+
+	if rfq.ShippingMethodID != nil {
+		valid, err := s.repo.ShippingMethodExists(*rfq.ShippingMethodID)
+		if err != nil {
+			return err
+		}
+		if !valid {
+			return ErrInvalidShippingMethod
+		}
+	}
+
 	return s.repo.Create(rfq)
 }
 

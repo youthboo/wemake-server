@@ -17,6 +17,10 @@ func (s *CatalogService) GetCategories() ([]domain.Category, error) {
 	return s.repo.GetCategories()
 }
 
+func (s *CatalogService) GetSubCategories(categoryID int64) ([]domain.SubCategory, error) {
+	return s.repo.GetSubCategories(categoryID)
+}
+
 func (s *CatalogService) GetUnits() ([]domain.Unit, error) {
 	return s.repo.GetUnits()
 }

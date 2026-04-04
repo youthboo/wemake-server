@@ -15,20 +15,22 @@ func NewRFQRepository(db *sqlx.DB) *RFQRepository {
 
 func (r *RFQRepository) Create(rfq *domain.RFQ) error {
 	query := `
-		INSERT INTO rfqs (user_id, category_id, title, quantity, unit_id, budget_per_piece, details, address_id, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO rfqs (user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id, shipping_method_id, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING rfq_id
 	`
 	return r.db.QueryRow(
 		query,
 		rfq.UserID,
 		rfq.CategoryID,
+		nullableInt64Value(rfq.SubCategoryID),
 		rfq.Title,
 		rfq.Quantity,
 		rfq.UnitID,
 		rfq.BudgetPerPiece,
 		rfq.Details,
 		rfq.AddressID,
+		nullableInt64Value(rfq.ShippingMethodID),
 		rfq.Status,
 		rfq.CreatedAt,
 		rfq.UpdatedAt,
@@ -38,7 +40,7 @@ func (r *RFQRepository) Create(rfq *domain.RFQ) error {
 func (r *RFQRepository) ListByUserID(userID int64, status string) ([]domain.RFQ, error) {
 	var rfqs []domain.RFQ
 	query := `
-		SELECT rfq_id, user_id, category_id, title, quantity, unit_id, budget_per_piece, details, address_id, status, created_at, updated_at
+		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id, shipping_method_id, status, created_at, updated_at
 		FROM rfqs
 		WHERE user_id = $1
 	`
@@ -55,7 +57,7 @@ func (r *RFQRepository) ListByUserID(userID int64, status string) ([]domain.RFQ,
 func (r *RFQRepository) GetByID(userID, rfqID int64) (*domain.RFQ, error) {
 	var rfq domain.RFQ
 	query := `
-		SELECT rfq_id, user_id, category_id, title, quantity, unit_id, budget_per_piece, details, address_id, status, created_at, updated_at
+		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id, shipping_method_id, status, created_at, updated_at
 		FROM rfqs
 		WHERE user_id = $1 AND rfq_id = $2
 	`
@@ -89,4 +91,40 @@ func (r *RFQRepository) ListImages(rfqID int64) ([]domain.RFQImage, error) {
 	query := "SELECT image_id, rfq_id, image_url FROM rfq_images WHERE rfq_id = $1 ORDER BY image_id"
 	err := r.db.Select(&images, query, rfqID)
 	return images, err
+}
+
+func (r *RFQRepository) SubCategoryBelongsToCategory(subCategoryID, categoryID int64) (bool, error) {
+	var exists bool
+	query := `
+		SELECT EXISTS (
+			SELECT 1
+			FROM lbi_sub_categories
+			WHERE sub_category_id = $1
+				AND category_id = $2
+				AND status = '1'
+		)
+	`
+	err := r.db.Get(&exists, query, subCategoryID, categoryID)
+	return exists, err
+}
+
+func (r *RFQRepository) ShippingMethodExists(shippingMethodID int64) (bool, error) {
+	var exists bool
+	query := `
+		SELECT EXISTS (
+			SELECT 1
+			FROM lbi_shipping_methods
+			WHERE shipping_method_id = $1
+				AND status = '1'
+		)
+	`
+	err := r.db.Get(&exists, query, shippingMethodID)
+	return exists, err
+}
+
+func nullableInt64Value(value *int64) interface{} {
+	if value == nil {
+		return nil
+	}
+	return *value
 }

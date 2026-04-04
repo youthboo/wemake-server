@@ -19,13 +19,15 @@ func NewRFQHandler(service *service.RFQService) *RFQHandler {
 
 func (h *RFQHandler) CreateRFQ(c *fiber.Ctx) error {
 	type createRFQRequest struct {
-		CategoryID     int64   `json:"category_id"`
-		Title          string  `json:"title"`
-		Quantity       int64   `json:"quantity"`
-		UnitID         int64   `json:"unit_id"`
-		BudgetPerPiece float64 `json:"budget_per_piece"`
-		Details        string  `json:"details"`
-		AddressID      int64   `json:"address_id"`
+		CategoryID       int64   `json:"category_id"`
+		SubCategoryID    *int64  `json:"sub_category_id"`
+		Title            string  `json:"title"`
+		Quantity         int64   `json:"quantity"`
+		UnitID           int64   `json:"unit_id"`
+		BudgetPerPiece   float64 `json:"budget_per_piece"`
+		Details          string  `json:"details"`
+		AddressID        int64   `json:"address_id"`
+		ShippingMethodID *int64  `json:"shipping_method_id"`
 	}
 
 	userID, err := getUserIDFromHeader(c)
@@ -43,17 +45,22 @@ func (h *RFQHandler) CreateRFQ(c *fiber.Ctx) error {
 	}
 
 	rfq := &domain.RFQ{
-		UserID:         userID,
-		CategoryID:     req.CategoryID,
-		Title:          req.Title,
-		Quantity:       req.Quantity,
-		UnitID:         req.UnitID,
-		BudgetPerPiece: req.BudgetPerPiece,
-		Details:        req.Details,
-		AddressID:      req.AddressID,
+		UserID:           userID,
+		CategoryID:       req.CategoryID,
+		SubCategoryID:    req.SubCategoryID,
+		Title:            req.Title,
+		Quantity:         req.Quantity,
+		UnitID:           req.UnitID,
+		BudgetPerPiece:   req.BudgetPerPiece,
+		Details:          req.Details,
+		AddressID:        req.AddressID,
+		ShippingMethodID: req.ShippingMethodID,
 	}
 
 	if err := h.service.Create(rfq); err != nil {
+		if err == service.ErrInvalidSubCategory || err == service.ErrInvalidShippingMethod {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create rfq"})
 	}
 	return c.Status(fiber.StatusCreated).JSON(rfq)
