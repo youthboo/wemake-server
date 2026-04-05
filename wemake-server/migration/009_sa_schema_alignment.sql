@@ -145,7 +145,7 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS reference_id_num BIGINT;
 
 UPDATE messages
 SET reference_id_num = NULLIF(TRIM(reference_id::text), '')::bigint
-WHERE reference_id ~ '^[[:space:]]*[0-9]+[[:space:]]*$';
+WHERE reference_id::text ~ '^[[:space:]]*[0-9]+[[:space:]]*$';
 
 UPDATE messages SET reference_id_num = 0 WHERE reference_id_num IS NULL;
 
