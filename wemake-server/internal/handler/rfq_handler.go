@@ -2,6 +2,7 @@ package handler
 
 import (
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/yourusername/wemake/internal/domain"
@@ -28,6 +29,7 @@ func (h *RFQHandler) CreateRFQ(c *fiber.Ctx) error {
 		Details          string  `json:"details"`
 		AddressID        int64   `json:"address_id"`
 		ShippingMethodID *int64  `json:"shipping_method_id"`
+		DeadlineDate     *string `json:"deadline_date"`
 	}
 
 	userID, err := getUserIDFromHeader(c)
@@ -55,6 +57,13 @@ func (h *RFQHandler) CreateRFQ(c *fiber.Ctx) error {
 		Details:          req.Details,
 		AddressID:        req.AddressID,
 		ShippingMethodID: req.ShippingMethodID,
+	}
+	if req.DeadlineDate != nil && strings.TrimSpace(*req.DeadlineDate) != "" {
+		d, err := time.Parse("2006-01-02", strings.TrimSpace(*req.DeadlineDate))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "deadline_date must be YYYY-MM-DD"})
+		}
+		rfq.DeadlineDate = &d
 	}
 
 	if err := h.service.Create(rfq); err != nil {

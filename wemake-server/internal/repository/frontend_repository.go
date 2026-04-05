@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/yourusername/wemake/internal/domain"
@@ -105,7 +106,7 @@ type FrontendOrderTimelineRow struct {
 
 type FrontendMessageThreadRow struct {
 	ReferenceType string `db:"reference_type"`
-	ReferenceID   string `db:"reference_id"`
+	ReferenceID   int64  `db:"reference_id"`
 	LastMessage   string `db:"last_message"`
 	LastMessageAt string `db:"last_message_at"`
 	CounterpartID int64  `db:"counterpart_id"`
@@ -114,7 +115,7 @@ type FrontendMessageThreadRow struct {
 type FrontendMessageRow struct {
 	MessageID     string         `db:"message_id"`
 	ReferenceType string         `db:"reference_type"`
-	ReferenceID   string         `db:"reference_id"`
+	ReferenceID   int64          `db:"reference_id"`
 	SenderID      int64          `db:"sender_id"`
 	ReceiverID    int64          `db:"receiver_id"`
 	Content       string         `db:"content"`
@@ -174,12 +175,12 @@ func (r *FrontendRepository) ListFactories() ([]FrontendFactoryRow, error) {
 		SELECT
 			u.user_id AS id,
 			fp.factory_name AS name,
-			p.name_th AS location,
-			ft.type_name AS specialization,
-			COALESCE(fp.tax_id, '') <> '' AS verified,
-			COALESCE(completed.completed_orders, 0) AS completed_orders,
+			COALESCE(fp.location, p.name_th) AS location,
+			COALESCE(fp.specialization, ft.type_name) AS specialization,
+			COALESCE(fp.is_verified, FALSE) AS verified,
+			COALESCE(completed.completed_orders, fp.completed_orders, 0) AS completed_orders,
 			lead.average_lead_days,
-			'' AS description
+			COALESCE(fp.description, '') AS description
 		FROM users u
 		INNER JOIN factory_profiles fp ON fp.user_id = u.user_id
 		LEFT JOIN lbi_factory_types ft ON ft.factory_type_id = fp.factory_type_id
@@ -209,12 +210,12 @@ func (r *FrontendRepository) GetFactoryDetail(factoryID int64) (*FrontendFactory
 		SELECT
 			u.user_id AS id,
 			fp.factory_name AS name,
-			p.name_th AS location,
-			ft.type_name AS specialization,
-			COALESCE(fp.tax_id, '') <> '' AS verified,
-			COALESCE(completed.completed_orders, 0) AS completed_orders,
+			COALESCE(fp.location, p.name_th) AS location,
+			COALESCE(fp.specialization, ft.type_name) AS specialization,
+			COALESCE(fp.is_verified, FALSE) AS verified,
+			COALESCE(completed.completed_orders, fp.completed_orders, 0) AS completed_orders,
 			lead.average_lead_days,
-			'' AS description,
+			COALESCE(fp.description, '') AS description,
 			a.address_detail,
 			p.name_th AS province_name,
 			u.email,
@@ -339,7 +340,13 @@ func (r *FrontendRepository) ListOrdersByUserID(userID int64) ([]FrontendOrderRo
 			o.total_amount,
 			o.deposit_amount AS deposit_paid,
 			o.status,
-			TO_CHAR((o.created_at + (q.lead_time_days || ' days')::interval), 'YYYY-MM-DD') AS estimated_delivery,
+			TO_CHAR(
+				COALESCE(
+					o.estimated_delivery::timestamp,
+					(o.created_at + (q.lead_time_days || ' days')::interval)
+				),
+				'YYYY-MM-DD'
+			) AS estimated_delivery,
 			TO_CHAR(o.created_at, 'YYYY-MM-DD') AS created_at
 		FROM orders o
 		INNER JOIN quotations q ON q.quote_id = o.quote_id
@@ -364,7 +371,13 @@ func (r *FrontendRepository) GetOrderByUserID(userID, orderID int64) (*FrontendO
 			o.total_amount,
 			o.deposit_amount AS deposit_paid,
 			o.status,
-			TO_CHAR((o.created_at + (q.lead_time_days || ' days')::interval), 'YYYY-MM-DD') AS estimated_delivery,
+			TO_CHAR(
+				COALESCE(
+					o.estimated_delivery::timestamp,
+					(o.created_at + (q.lead_time_days || ' days')::interval)
+				),
+				'YYYY-MM-DD'
+			) AS estimated_delivery,
 			TO_CHAR(o.created_at, 'YYYY-MM-DD') AS created_at
 		FROM orders o
 		INNER JOIN quotations q ON q.quote_id = o.quote_id
@@ -383,14 +396,14 @@ func (r *FrontendRepository) ListOrderTimeline(orderID int64) ([]FrontendOrderTi
 	query := `
 		SELECT
 			pu.update_id AS id,
-			lp.step_name AS title,
-			TO_CHAR(pu.created_at, 'YYYY-MM-DD') AS date,
+			COALESCE(ps.name, '') AS title,
+			TO_CHAR(COALESCE(pu.update_date, pu.created_at), 'YYYY-MM-DD') AS date,
 			pu.description,
 			pu.image_url AS photo
 		FROM production_updates pu
-		LEFT JOIN lbi_production lp ON lp.step_id = pu.step_id
+		LEFT JOIN production_steps ps ON ps.step_id = pu.step_id
 		WHERE pu.order_id = $1
-		ORDER BY pu.created_at ASC
+		ORDER BY COALESCE(pu.update_date, pu.created_at) ASC
 	`
 	err := r.db.Select(&items, query, orderID)
 	return items, err
@@ -439,21 +452,21 @@ func (r *FrontendRepository) GetUserLabel(userID int64) (*FrontendUserLabelRow, 
 	return &item, nil
 }
 
-func (r *FrontendRepository) GetReferenceLabel(referenceType, referenceID string) (*FrontendReferenceLabelRow, error) {
+func (r *FrontendRepository) GetReferenceLabel(referenceType string, referenceID int64) (*FrontendReferenceLabelRow, error) {
 	var item FrontendReferenceLabelRow
-	switch referenceType {
-	case "RFQ":
+	switch normalizeFrontendRefType(referenceType) {
+	case "RQ":
 		query := `
 			SELECT
 				r.title AS project_name,
 				EXISTS(SELECT 1 FROM quotations q WHERE q.rfq_id = r.rfq_id) AS has_quote
 			FROM rfqs r
-			WHERE r.rfq_id::text = $1
+			WHERE r.rfq_id = $1
 		`
 		if err := r.db.Get(&item, query, referenceID); err != nil {
 			return nil, err
 		}
-	case "ORDER":
+	case "OD":
 		query := `
 			SELECT
 				r.title AS project_name,
@@ -461,7 +474,7 @@ func (r *FrontendRepository) GetReferenceLabel(referenceType, referenceID string
 			FROM orders o
 			INNER JOIN quotations q ON q.quote_id = o.quote_id
 			INNER JOIN rfqs r ON r.rfq_id = q.rfq_id
-			WHERE o.order_id::text = $1
+			WHERE o.order_id = $1
 		`
 		if err := r.db.Get(&item, query, referenceID); err != nil {
 			return nil, err
@@ -472,7 +485,19 @@ func (r *FrontendRepository) GetReferenceLabel(referenceType, referenceID string
 	return &item, nil
 }
 
-func (r *FrontendRepository) ListMessagesByReference(referenceType, referenceID string, userID int64) ([]FrontendMessageRow, error) {
+func normalizeFrontendRefType(t string) string {
+	u := strings.ToUpper(strings.TrimSpace(t))
+	switch u {
+	case "RFQ", "RQ":
+		return "RQ"
+	case "ORDER", "OD":
+		return "OD"
+	default:
+		return u
+	}
+}
+
+func (r *FrontendRepository) ListMessagesByReference(referenceType string, referenceID int64, userID int64) ([]FrontendMessageRow, error) {
 	var items []FrontendMessageRow
 	query := `
 		SELECT
@@ -490,19 +515,30 @@ func (r *FrontendRepository) ListMessagesByReference(referenceType, referenceID 
 		  AND (sender_id = $3 OR receiver_id = $3)
 		ORDER BY created_at ASC
 	`
-	err := r.db.Select(&items, query, referenceType, referenceID, userID)
+	err := r.db.Select(&items, query, normalizeFrontendRefType(referenceType), referenceID, userID)
 	return items, err
 }
 
 func (r *FrontendRepository) GetProducts(limit int, categoryID string) ([]domain.Product, error) {
 	var items []domain.Product
+	base := `
+		SELECT
+			showcase_id::text AS id,
+			title,
+			COALESCE(excerpt, '-') AS price,
+			COALESCE(image_url, '') AS image_url,
+			NULL::text AS discount,
+			factory_id::text AS factory_id,
+			category_id::text AS category_id
+		FROM factory_showcases
+		WHERE content_type = 'PD'
+	`
 	var err error
-
 	if categoryID != "" {
-		query := `SELECT id, title, price, image_url, discount, factory_id, category_id FROM products WHERE category_id = $1 ORDER BY id ASC LIMIT $2`
+		query := base + ` AND category_id::text = $1 ORDER BY created_at DESC LIMIT $2`
 		err = r.db.Select(&items, query, categoryID, limit)
 	} else {
-		query := `SELECT id, title, price, image_url, discount, factory_id, category_id FROM products ORDER BY id ASC LIMIT $1`
+		query := base + ` ORDER BY created_at DESC LIMIT $1`
 		err = r.db.Select(&items, query, limit)
 	}
 
@@ -514,7 +550,20 @@ func (r *FrontendRepository) GetProducts(limit int, categoryID string) ([]domain
 
 func (r *FrontendRepository) GetPromotions(limit int) ([]domain.Promotion, error) {
 	var items []domain.Promotion
-	query := `SELECT id, title, description, price, image_url, tag, factory_id FROM promotions ORDER BY id ASC LIMIT $1`
+	query := `
+		SELECT
+			showcase_id::text AS id,
+			title,
+			COALESCE(excerpt, '') AS description,
+			COALESCE(min_order::text, '-') AS price,
+			COALESCE(image_url, '') AS image_url,
+			'' AS tag,
+			factory_id::text AS factory_id
+		FROM factory_showcases
+		WHERE content_type = 'PM'
+		ORDER BY created_at DESC
+		LIMIT $1
+	`
 	err := r.db.Select(&items, query, limit)
 	if err == sql.ErrNoRows {
 		return []domain.Promotion{}, nil
@@ -524,7 +573,17 @@ func (r *FrontendRepository) GetPromotions(limit int) ([]domain.Promotion, error
 
 func (r *FrontendRepository) GetPromoCodes() ([]domain.PromoCode, error) {
 	var items []domain.PromoCode
-	query := `SELECT id, title, subtitle, code, valid_until FROM promo_codes ORDER BY id ASC`
+	query := `
+		SELECT
+			slide_id::text AS id,
+			title,
+			COALESCE(subtitle, '') AS subtitle,
+			COALESCE(code, '') AS code,
+			NULL::date AS valid_until
+		FROM promo_slides
+		WHERE status = '1'
+		ORDER BY slide_id DESC
+	`
 	err := r.db.Select(&items, query)
 	if err == sql.ErrNoRows {
 		return []domain.PromoCode{}, nil

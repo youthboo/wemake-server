@@ -54,17 +54,19 @@ func (r *MasterRepository) GetFactoryTypes() ([]domain.LBIFactoryType, error) {
 }
 
 func (r *MasterRepository) GetProductCategories(parentID *int64) ([]domain.LBIProductCategory, error) {
-	var items []domain.LBIProductCategory
-	query := "SELECT category_id, parent_category_id, category_name, status FROM lbi_product_categories WHERE status = '1'"
-	args := []interface{}{}
-	if parentID == nil {
-		query += " AND parent_category_id IS NULL"
-	} else {
-		query += " AND parent_category_id = $1"
-		args = append(args, *parentID)
+	if parentID != nil {
+		return []domain.LBIProductCategory{}, nil
 	}
-	query += " ORDER BY category_id"
-	err := r.db.Select(&items, query, args...)
+	var items []domain.LBIProductCategory
+	query := `
+		SELECT c.category_id,
+		       NULL::bigint AS parent_category_id,
+		       c.name AS category_name,
+		       '1' AS status
+		FROM categories c
+		ORDER BY c.category_id
+	`
+	err := r.db.Select(&items, query)
 	return items, err
 }
 

@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"strings"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/yourusername/wemake/internal/domain"
 	"github.com/yourusername/wemake/internal/service"
@@ -17,6 +19,7 @@ func NewProductionHandler(service *service.ProductionService) *ProductionHandler
 func (h *ProductionHandler) CreateUpdate(c *fiber.Ctx) error {
 	type reqBody struct {
 		StepID      int64  `json:"step_id"`
+		Status      string `json:"status"`
 		Description string `json:"description"`
 		ImageURL    string `json:"image_url"`
 	}
@@ -31,9 +34,16 @@ func (h *ProductionHandler) CreateUpdate(c *fiber.Ctx) error {
 	if req.StepID <= 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "step_id is required"})
 	}
+	status := strings.TrimSpace(strings.ToUpper(req.Status))
+	if status == "" {
+		status = "CR"
+	} else if status != "CD" && status != "CR" && status != "PD" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "status must be CD, CR, or PD"})
+	}
 	item := &domain.ProductionUpdate{
 		OrderID:     int64(orderID),
 		StepID:      req.StepID,
+		Status:      status,
 		Description: req.Description,
 		ImageURL:    req.ImageURL,
 	}

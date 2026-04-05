@@ -14,25 +14,33 @@ func NewProductionRepository(db *sqlx.DB) *ProductionRepository {
 }
 
 func (r *ProductionRepository) Create(item *domain.ProductionUpdate) error {
+	if item.Status == "" {
+		item.Status = "CR"
+	}
+	if item.UpdateDate.IsZero() {
+		item.UpdateDate = item.CreatedAt
+	}
 	query := `
-		INSERT INTO production_updates (order_id, step_id, description, image_url, created_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO production_updates (order_id, step_id, status, description, image_url, created_at, update_date)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING update_id
 	`
 	return r.db.QueryRow(
 		query,
 		item.OrderID,
 		item.StepID,
+		item.Status,
 		item.Description,
 		item.ImageURL,
 		item.CreatedAt,
+		item.UpdateDate,
 	).Scan(&item.UpdateID)
 }
 
 func (r *ProductionRepository) ListByOrderID(orderID int64) ([]domain.ProductionUpdate, error) {
 	var items []domain.ProductionUpdate
 	query := `
-		SELECT update_id, order_id, step_id, description, image_url, created_at
+		SELECT update_id, order_id, step_id, status, description, image_url, created_at, update_date
 		FROM production_updates
 		WHERE order_id = $1
 		ORDER BY created_at ASC

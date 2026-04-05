@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -19,7 +20,7 @@ func NewMessageHandler(service *service.MessageService) *MessageHandler {
 func (h *MessageHandler) CreateMessage(c *fiber.Ctx) error {
 	type reqBody struct {
 		ReferenceType string  `json:"reference_type"`
-		ReferenceID   string  `json:"reference_id"`
+		ReferenceID   int64   `json:"reference_id"`
 		ReceiverID    int64   `json:"receiver_id"`
 		Content       string  `json:"content"`
 		AttachmentURL string  `json:"attachment_url"`
@@ -35,7 +36,7 @@ func (h *MessageHandler) CreateMessage(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
 	}
-	if req.ReceiverID <= 0 || strings.TrimSpace(req.ReferenceType) == "" || strings.TrimSpace(req.ReferenceID) == "" || strings.TrimSpace(req.Content) == "" {
+	if req.ReceiverID <= 0 || strings.TrimSpace(req.ReferenceType) == "" || req.ReferenceID <= 0 || strings.TrimSpace(req.Content) == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "reference_type, reference_id, receiver_id, content are required"})
 	}
 	item := &domain.Message{
@@ -72,9 +73,13 @@ func (h *MessageHandler) ListMessages(c *fiber.Ctx) error {
 	}
 
 	referenceType := c.Query("reference_type")
-	referenceID := c.Query("reference_id")
-	if strings.TrimSpace(referenceType) == "" || strings.TrimSpace(referenceID) == "" {
+	referenceIDRaw := c.Query("reference_id")
+	if strings.TrimSpace(referenceType) == "" || strings.TrimSpace(referenceIDRaw) == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "reference_type and reference_id (or conv_id) are required"})
+	}
+	referenceID, err := strconv.ParseInt(strings.TrimSpace(referenceIDRaw), 10, 64)
+	if err != nil || referenceID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "reference_id must be a positive integer"})
 	}
 	items, err := h.service.ListByReference(referenceType, referenceID, userID)
 	if err != nil {

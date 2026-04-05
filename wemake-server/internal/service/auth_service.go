@@ -73,7 +73,6 @@ func (s *AuthService) Register(input RegisterInput) (*LoginResult, error) {
 		Phone:        input.Phone,
 		PasswordHash: string(hashedPassword),
 		IsActive:     true,
-		LogTimestamp: &now,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
@@ -136,7 +135,7 @@ func (s *AuthService) Login(email, password string) (*LoginResult, error) {
 	if err := s.repo.UpdateLoginTimestamp(user.UserID, now); err != nil {
 		return nil, err
 	}
-	user.LogTimestamp = &now
+	user.UpdatedAt = now
 
 	token, err := s.generateToken(user)
 	if err != nil {

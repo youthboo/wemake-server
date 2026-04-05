@@ -3,14 +3,15 @@ package domain
 import "time"
 
 type Transaction struct {
-	TxID      string    `db:"tx_id" json:"tx_id"`
-	WalletID  int64     `db:"wallet_id" json:"wallet_id"`
-	OrderID   *int64    `db:"order_id" json:"order_id,omitempty"`
-	Type      string    `db:"type" json:"type"`
-	Amount    float64   `db:"amount" json:"amount"`
-	Status    string    `db:"status" json:"status"`
-	CreatedAt time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
+	TxID        string    `db:"tx_id" json:"tx_id"`
+	WalletID    int64     `db:"wallet_id" json:"wallet_id"`
+	OrderID     *int64    `db:"order_id" json:"order_id,omitempty"`
+	Type        string    `db:"type" json:"type"`
+	Amount      float64   `db:"amount" json:"amount"`
+	Status      string    `db:"status" json:"status"`
+	CreatedAt   time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt   time.Time `db:"updated_at" json:"updated_at"`
+	UploadedAt  time.Time `db:"uploaded_at" json:"uploaded_at"`
 }
 
 type LBIProvince struct {

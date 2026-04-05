@@ -32,15 +32,18 @@ func (s *OrderService) CreateFromQuotation(quotationID, userID int64) (*domain.O
 	deposit := total * 0.5
 
 	now := time.Now()
+	est := now.AddDate(0, 0, int(src.LeadTimeDays))
+	deliveryDate := time.Date(est.Year(), est.Month(), est.Day(), 0, 0, 0, 0, est.Location())
 	order := &domain.Order{
-		QuotationID:   src.QuotationID,
-		UserID:        src.UserID,
-		FactoryID:     src.FactoryID,
-		TotalAmount:   total,
-		DepositAmount: deposit,
-		Status:        "PR",
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		QuotationID:       src.QuotationID,
+		UserID:            src.UserID,
+		FactoryID:         src.FactoryID,
+		TotalAmount:       total,
+		DepositAmount:     deposit,
+		Status:            "PR",
+		EstimatedDelivery: &deliveryDate,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 	if err := s.repo.Create(order); err != nil {
 		return nil, err

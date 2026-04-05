@@ -39,7 +39,7 @@ func (r *MessageRepository) Create(item *domain.Message) error {
 	return err
 }
 
-func (r *MessageRepository) ListByReference(referenceType, referenceID string, userID int64) ([]domain.Message, error) {
+func (r *MessageRepository) ListByReference(referenceType string, referenceID int64, userID int64) ([]domain.Message, error) {
 	var items []domain.Message
 	query := `
 		SELECT message_id, reference_type, reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, is_read

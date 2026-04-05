@@ -23,7 +23,6 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	app.Static("/uploads", "./uploads")
 
 	// Initialize repositories
-	factoryRepo := repository.NewFactoryRepository(db)
 	authRepo := repository.NewAuthRepository(db)
 	catalogRepo := repository.NewCatalogRepository(db)
 	addressRepo := repository.NewAddressRepository(db)
@@ -44,7 +43,6 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	certificateRepo := repository.NewCertificateRepository(db)
 
 	// Initialize services
-	factoryService := service.NewFactoryService(factoryRepo)
 	authService := service.NewAuthService(authRepo, cfg.JWTSecret)
 	catalogService := service.NewCatalogService(catalogRepo)
 	addressService := service.NewAddressService(addressRepo)
@@ -65,7 +63,6 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	certificateService := service.NewCertificateService(certificateRepo)
 
 	// Initialize handlers
-	factoryHandler := handler.NewFactoryHandler(factoryService)
 	authHandler := handler.NewAuthHandler(authService)
 	catalogHandler := handler.NewCatalogHandler(catalogService)
 	addressHandler := handler.NewAddressHandler(addressService)
@@ -106,11 +103,6 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	api.Get("/units", catalogHandler.GetUnits)
 
 	factories := api.Group("/factories")
-	factories.Post("/", factoryHandler.CreateFactory)
-	factories.Get("/", factoryHandler.GetAllFactories)
-	factories.Get("/:id", factoryHandler.GetFactory)
-	factories.Patch("/:id", factoryHandler.UpdateFactory)
-	factories.Delete("/:id", factoryHandler.DeleteFactory)
 	factories.Get("/:factory_id/reviews", reviewHandler.ListByFactory)
 	factories.Post("/:factory_id/reviews", reviewHandler.Create)
 	factories.Get("/:factory_id/certificates", certificateHandler.ListByFactory)

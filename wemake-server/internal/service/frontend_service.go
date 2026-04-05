@@ -377,7 +377,7 @@ func (s *FrontendService) buildThreads(rows []repository.FrontendMessageThreadRo
 		}
 		items = append(items, domain.FrontendMessageThread{
 			ReferenceType: item.ReferenceType,
-			ReferenceID:   item.ReferenceID,
+			ReferenceID:   fmt.Sprintf("%d", item.ReferenceID),
 			CounterpartID: item.CounterpartID,
 			Counterpart:   userLabel.Name,
 			ProjectName:   reference.ProjectName,
@@ -818,8 +818,8 @@ func (s *FrontendService) buildMockConversation(userID int64, thread repository.
 	}
 
 	var rfqID int64
-	if thread.ReferenceType == "RFQ" {
-		rfqID, _ = strconv.ParseInt(thread.ReferenceID, 10, 64)
+	if thread.ReferenceType == "RQ" || thread.ReferenceType == "RFQ" {
+		rfqID = thread.ReferenceID
 	} else {
 		for _, rfq := range rfqMap {
 			if rfq.ProjectName == ref.ProjectName {
@@ -874,7 +874,7 @@ func (s *FrontendService) buildMockConversation(userID int64, thread repository.
 	return domain.MockConversation{
 		ID:            fmt.Sprintf("conv%d", index+1),
 		FactoryID:     fmt.Sprintf("f%d", thread.CounterpartID),
-		RFQID:         fallbackString(rfq.ID, "rfq"+thread.ReferenceID),
+		RFQID:         fallbackString(rfq.ID, fmt.Sprintf("rfq%d", thread.ReferenceID)),
 		FactoryName:   fallbackString(factory.Name, userLabel.Name),
 		FactoryAvatar: avatarURL(userLabel.Name),
 		RFQName:       ref.ProjectName,

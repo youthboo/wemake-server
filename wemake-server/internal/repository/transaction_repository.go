@@ -25,8 +25,8 @@ func NewTransactionRepository(db *sqlx.DB) *TransactionRepository {
 
 func (r *TransactionRepository) Create(item *domain.Transaction) error {
 	query := `
-		INSERT INTO transactions (tx_id, wallet_id, order_id, type, amount, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO transactions (tx_id, wallet_id, order_id, type, amount, status, created_at, updated_at, uploaded_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 	_, err := r.db.Exec(
 		query,
@@ -38,6 +38,7 @@ func (r *TransactionRepository) Create(item *domain.Transaction) error {
 		item.Status,
 		item.CreatedAt,
 		item.UpdatedAt,
+		item.UploadedAt,
 	)
 	return err
 }
@@ -45,7 +46,7 @@ func (r *TransactionRepository) Create(item *domain.Transaction) error {
 func (r *TransactionRepository) List(filters TransactionFilters) ([]domain.Transaction, error) {
 	var items []domain.Transaction
 	query := `
-		SELECT tx_id, wallet_id, order_id, type, amount, status, created_at, updated_at
+		SELECT tx_id, wallet_id, order_id, type, amount, status, created_at, updated_at, uploaded_at
 		FROM transactions
 	`
 	conditions := []string{}

@@ -34,7 +34,7 @@ func (r *CatalogRepository) GetSubCategories(categoryID int64) ([]domain.SubCate
 
 func (r *CatalogRepository) GetUnits() ([]domain.Unit, error) {
 	var units []domain.Unit
-	query := "SELECT unit_id, name FROM units ORDER BY unit_id ASC"
+	query := "SELECT unit_id, name, unit_name_en FROM units ORDER BY unit_id ASC"
 	err := r.db.Select(&units, query)
 	return units, err
 }

@@ -16,6 +16,7 @@ type QuotationOrderSource struct {
 	PricePerPiece float64 `db:"price_per_piece"`
 	Quantity      int64   `db:"quantity"`
 	MoldCost      float64 `db:"mold_cost"`
+	LeadTimeDays  int64   `db:"lead_time_days"`
 	Status        string  `db:"status"`
 }
 
@@ -26,7 +27,7 @@ func NewOrderRepository(db *sqlx.DB) *OrderRepository {
 func (r *OrderRepository) GetOrderSourceByQuotationID(quotationID, userID int64) (*QuotationOrderSource, error) {
 	var src QuotationOrderSource
 	query := `
-		SELECT q.quote_id, rfq.user_id, q.factory_id, q.price_per_piece, rfq.quantity, q.mold_cost, q.status
+		SELECT q.quote_id, rfq.user_id, q.factory_id, q.price_per_piece, rfq.quantity, q.mold_cost, q.lead_time_days, q.status
 		FROM quotations q
 		INNER JOIN rfqs rfq ON rfq.rfq_id = q.rfq_id
 		WHERE q.quote_id = $1 AND rfq.user_id = $2
@@ -39,8 +40,8 @@ func (r *OrderRepository) GetOrderSourceByQuotationID(quotationID, userID int64)
 
 func (r *OrderRepository) Create(order *domain.Order) error {
 	query := `
-		INSERT INTO orders (quote_id, user_id, factory_id, total_amount, deposit_amount, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO orders (quote_id, user_id, factory_id, total_amount, deposit_amount, status, estimated_delivery, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING order_id
 	`
 	return r.db.QueryRow(
@@ -51,6 +52,7 @@ func (r *OrderRepository) Create(order *domain.Order) error {
 		order.TotalAmount,
 		order.DepositAmount,
 		order.Status,
+		nullableTimeValue(order.EstimatedDelivery),
 		order.CreatedAt,
 		order.UpdatedAt,
 	).Scan(&order.OrderID)
@@ -59,7 +61,7 @@ func (r *OrderRepository) Create(order *domain.Order) error {
 func (r *OrderRepository) ListByUserID(userID int64, status string) ([]domain.Order, error) {
 	var orders []domain.Order
 	query := `
-		SELECT order_id, quote_id, user_id, factory_id, total_amount, deposit_amount, status, created_at, updated_at
+		SELECT order_id, quote_id, user_id, factory_id, total_amount, deposit_amount, status, estimated_delivery, created_at, updated_at
 		FROM orders
 		WHERE user_id = $1
 	`
@@ -76,7 +78,7 @@ func (r *OrderRepository) ListByUserID(userID int64, status string) ([]domain.Or
 func (r *OrderRepository) GetByID(orderID, userID int64) (*domain.Order, error) {
 	var order domain.Order
 	query := `
-		SELECT order_id, quote_id, user_id, factory_id, total_amount, deposit_amount, status, created_at, updated_at
+		SELECT order_id, quote_id, user_id, factory_id, total_amount, deposit_amount, status, estimated_delivery, created_at, updated_at
 		FROM orders
 		WHERE order_id = $1 AND user_id = $2
 	`

@@ -24,6 +24,7 @@ func (s *TransactionService) Create(item *domain.Transaction) error {
 	item.Status = strings.TrimSpace(strings.ToUpper(item.Status))
 	item.CreatedAt = now
 	item.UpdatedAt = now
+	item.UploadedAt = now
 	return s.repo.Create(item)
 }
 

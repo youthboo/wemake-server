@@ -8,15 +8,14 @@ const (
 )
 
 type User struct {
-	UserID       int64      `db:"user_id" json:"user_id"`
-	Role         string     `db:"role" json:"role"`
-	Email        string     `db:"email" json:"email"`
-	Phone        string     `db:"phone" json:"phone"`
-	PasswordHash string     `db:"password_hash" json:"-"`
-	IsActive     bool       `db:"is_active" json:"is_active"`
-	LogTimestamp *time.Time `db:"log_timestamp" json:"log_timestamp,omitempty"`
-	CreatedAt    time.Time  `db:"created_at" json:"created_at"`
-	UpdatedAt    time.Time  `db:"updated_at" json:"updated_at"`
+	UserID       int64     `db:"user_id" json:"user_id"`
+	Role         string    `db:"role" json:"role"`
+	Email        string    `db:"email" json:"email"`
+	Phone        string    `db:"phone" json:"phone"`
+	PasswordHash string    `db:"password_hash" json:"-"`
+	IsActive     bool      `db:"is_active" json:"is_active"`
+	CreatedAt    time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at" json:"updated_at"`
 }
 
 type CustomerProfile struct {
@@ -26,10 +25,21 @@ type CustomerProfile struct {
 }
 
 type FactoryProfile struct {
-	UserID        int64  `db:"user_id" json:"user_id"`
-	FactoryName   string `db:"factory_name" json:"factory_name"`
-	FactoryTypeID int64  `db:"factory_type_id" json:"factory_type_id"`
-	TaxID         string `db:"tax_id" json:"tax_id,omitempty"`
+	UserID          int64    `db:"user_id" json:"user_id"`
+	FactoryName     string   `db:"factory_name" json:"factory_name"`
+	FactoryTypeID   int64    `db:"factory_type_id" json:"factory_type_id"`
+	TaxID           string   `db:"tax_id" json:"tax_id,omitempty"`
+	Location        *string  `db:"location" json:"location,omitempty"`
+	Rating          *float64 `db:"rating" json:"rating,omitempty"`
+	ReviewCount     int64    `db:"review_count" json:"review_count"`
+	Specialization  *string  `db:"specialization" json:"specialization,omitempty"`
+	MinOrder        *int64   `db:"min_order" json:"min_order,omitempty"`
+	LeadTimeDesc    *string  `db:"lead_time_desc" json:"lead_time_desc,omitempty"`
+	IsVerified      bool     `db:"is_verified" json:"is_verified"`
+	CompletedOrders int64    `db:"completed_orders" json:"completed_orders"`
+	ImageURL        *string  `db:"image_url" json:"image_url,omitempty"`
+	Description     *string  `db:"description" json:"description,omitempty"`
+	PriceRange      *string  `db:"price_range" json:"price_range,omitempty"`
 }
 
 type PasswordResetToken struct {

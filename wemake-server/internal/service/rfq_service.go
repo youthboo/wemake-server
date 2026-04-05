@@ -29,6 +29,7 @@ func (s *RFQService) Create(rfq *domain.RFQ) error {
 	rfq.Status = "OP"
 	rfq.CreatedAt = now
 	rfq.UpdatedAt = now
+	rfq.UploadedAt = &now
 
 	if rfq.SubCategoryID != nil {
 		valid, err := s.repo.SubCategoryBelongsToCategory(*rfq.SubCategoryID, rfq.CategoryID)

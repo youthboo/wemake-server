@@ -16,8 +16,9 @@ type SubCategory struct {
 }
 
 type Unit struct {
-	UnitID int64  `db:"unit_id" json:"unit_id"`
-	Name   string `db:"name" json:"name"`
+	UnitID     int64  `db:"unit_id" json:"unit_id"`
+	Name       string `db:"name" json:"name"`
+	UnitNameEn string `db:"unit_name_en" json:"unit_name_en"`
 }
 
 type Address struct {
@@ -40,20 +41,22 @@ type Wallet struct {
 }
 
 type RFQ struct {
-	RFQID            int64     `db:"rfq_id" json:"rfq_id"`
-	UserID           int64     `db:"user_id" json:"user_id"`
-	CategoryID       int64     `db:"category_id" json:"category_id"`
-	SubCategoryID    *int64    `db:"sub_category_id" json:"sub_category_id,omitempty"`
-	Title            string    `db:"title" json:"title"`
-	Quantity         int64     `db:"quantity" json:"quantity"`
-	UnitID           int64     `db:"unit_id" json:"unit_id"`
-	BudgetPerPiece   float64   `db:"budget_per_piece" json:"budget_per_piece"`
-	Details          string    `db:"details" json:"details"`
-	AddressID        int64     `db:"address_id" json:"address_id"`
-	ShippingMethodID *int64    `db:"shipping_method_id" json:"shipping_method_id,omitempty"`
-	Status           string    `db:"status" json:"status"`
-	CreatedAt        time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt        time.Time `db:"updated_at" json:"updated_at"`
+	RFQID            int64      `db:"rfq_id" json:"rfq_id"`
+	UserID           int64      `db:"user_id" json:"user_id"`
+	CategoryID       int64      `db:"category_id" json:"category_id"`
+	SubCategoryID    *int64     `db:"sub_category_id" json:"sub_category_id,omitempty"`
+	Title            string     `db:"title" json:"title"`
+	Quantity         int64      `db:"quantity" json:"quantity"`
+	UnitID           int64      `db:"unit_id" json:"unit_id"`
+	BudgetPerPiece   float64    `db:"budget_per_piece" json:"budget_per_piece"`
+	Details          string     `db:"details" json:"details"`
+	AddressID        int64      `db:"address_id" json:"address_id"`
+	ShippingMethodID *int64     `db:"shipping_method_id" json:"shipping_method_id,omitempty"`
+	Status           string     `db:"status" json:"status"`
+	DeadlineDate     *time.Time `db:"deadline_date" json:"deadline_date,omitempty"`
+	UploadedAt       *time.Time `db:"uploaded_at" json:"uploaded_at,omitempty"`
+	CreatedAt        time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt        time.Time  `db:"updated_at" json:"updated_at"`
 }
 
 type RFQImage struct {

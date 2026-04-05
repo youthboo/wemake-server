@@ -19,7 +19,7 @@ func NewAuthRepository(db *sqlx.DB) *AuthRepository {
 func (r *AuthRepository) GetUserByEmail(email string) (*domain.User, error) {
 	var user domain.User
 	query := `
-		SELECT user_id, role, email, phone, password_hash, is_active, log_timestamp, created_at, updated_at
+		SELECT user_id, role, email, phone, password_hash, is_active, created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`
@@ -37,8 +37,8 @@ func (r *AuthRepository) CreateCustomerUser(user *domain.User, customer *domain.
 	defer tx.Rollback()
 
 	const userInsert = `
-		INSERT INTO users (role, email, phone, password_hash, is_active, log_timestamp, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO users (role, email, phone, password_hash, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING user_id
 	`
 	if err := tx.QueryRow(
@@ -48,7 +48,6 @@ func (r *AuthRepository) CreateCustomerUser(user *domain.User, customer *domain.
 		user.Phone,
 		user.PasswordHash,
 		user.IsActive,
-		user.LogTimestamp,
 		user.CreatedAt,
 		user.UpdatedAt,
 	).Scan(&user.UserID); err != nil {
@@ -74,8 +73,8 @@ func (r *AuthRepository) CreateFactoryUser(user *domain.User, factory *domain.Fa
 	defer tx.Rollback()
 
 	const userInsert = `
-		INSERT INTO users (role, email, phone, password_hash, is_active, log_timestamp, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO users (role, email, phone, password_hash, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING user_id
 	`
 	if err := tx.QueryRow(
@@ -85,7 +84,6 @@ func (r *AuthRepository) CreateFactoryUser(user *domain.User, factory *domain.Fa
 		user.Phone,
 		user.PasswordHash,
 		user.IsActive,
-		user.LogTimestamp,
 		user.CreatedAt,
 		user.UpdatedAt,
 	).Scan(&user.UserID); err != nil {
@@ -104,8 +102,8 @@ func (r *AuthRepository) CreateFactoryUser(user *domain.User, factory *domain.Fa
 }
 
 func (r *AuthRepository) UpdateLoginTimestamp(userID int64, loginAt time.Time) error {
-	query := "UPDATE users SET log_timestamp = $1, updated_at = $2 WHERE user_id = $3"
-	_, err := r.db.Exec(query, loginAt, loginAt, userID)
+	query := "UPDATE users SET updated_at = $1 WHERE user_id = $2"
+	_, err := r.db.Exec(query, loginAt, userID)
 	return err
 }
 

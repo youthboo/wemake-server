@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"time"
+
 	"github.com/jmoiron/sqlx"
 	"github.com/yourusername/wemake/internal/domain"
 )
@@ -15,8 +17,8 @@ func NewRFQRepository(db *sqlx.DB) *RFQRepository {
 
 func (r *RFQRepository) Create(rfq *domain.RFQ) error {
 	query := `
-		INSERT INTO rfqs (user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id, shipping_method_id, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		INSERT INTO rfqs (user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id, shipping_method_id, status, deadline_date, uploaded_at, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING rfq_id
 	`
 	return r.db.QueryRow(
@@ -32,6 +34,8 @@ func (r *RFQRepository) Create(rfq *domain.RFQ) error {
 		rfq.AddressID,
 		nullableInt64Value(rfq.ShippingMethodID),
 		rfq.Status,
+		nullableTimeValue(rfq.DeadlineDate),
+		nullableTimeValue(rfq.UploadedAt),
 		rfq.CreatedAt,
 		rfq.UpdatedAt,
 	).Scan(&rfq.RFQID)
@@ -40,7 +44,7 @@ func (r *RFQRepository) Create(rfq *domain.RFQ) error {
 func (r *RFQRepository) ListByUserID(userID int64, status string) ([]domain.RFQ, error) {
 	var rfqs []domain.RFQ
 	query := `
-		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id, shipping_method_id, status, created_at, updated_at
+		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id, shipping_method_id, status, deadline_date, uploaded_at, created_at, updated_at
 		FROM rfqs
 		WHERE user_id = $1
 	`
@@ -57,7 +61,7 @@ func (r *RFQRepository) ListByUserID(userID int64, status string) ([]domain.RFQ,
 func (r *RFQRepository) GetByID(userID, rfqID int64) (*domain.RFQ, error) {
 	var rfq domain.RFQ
 	query := `
-		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id, shipping_method_id, status, created_at, updated_at
+		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id, shipping_method_id, status, deadline_date, uploaded_at, created_at, updated_at
 		FROM rfqs
 		WHERE user_id = $1 AND rfq_id = $2
 	`
@@ -123,6 +127,13 @@ func (r *RFQRepository) ShippingMethodExists(shippingMethodID int64) (bool, erro
 }
 
 func nullableInt64Value(value *int64) interface{} {
+	if value == nil {
+		return nil
+	}
+	return *value
+}
+
+func nullableTimeValue(value *time.Time) interface{} {
 	if value == nil {
 		return nil
 	}
