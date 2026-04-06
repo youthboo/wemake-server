@@ -26,6 +26,7 @@ type registerRequest struct {
 	FactoryName   string `json:"factory_name"`
 	FactoryTypeID int64  `json:"factory_type_id"`
 	TaxID         string `json:"tax_id"`
+	ProvinceID    *int64 `json:"province_id"`
 }
 
 type loginRequest struct {
@@ -62,6 +63,7 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		FactoryName:   req.FactoryName,
 		FactoryTypeID: req.FactoryTypeID,
 		TaxID:         req.TaxID,
+		ProvinceID:    req.ProvinceID,
 	})
 	if err != nil {
 		switch err {

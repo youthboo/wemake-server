@@ -36,6 +36,7 @@ type RegisterInput struct {
 	FactoryName   string
 	FactoryTypeID int64
 	TaxID         string
+	ProvinceID    *int64
 }
 
 type LoginResult struct {
@@ -97,6 +98,7 @@ func (s *AuthService) Register(input RegisterInput) (*LoginResult, error) {
 			FactoryName:   strings.TrimSpace(input.FactoryName),
 			FactoryTypeID: input.FactoryTypeID,
 			TaxID:         strings.TrimSpace(input.TaxID),
+			ProvinceID:    input.ProvinceID,
 		}
 		if err := s.repo.CreateFactoryUser(user, factory); err != nil {
 			return nil, err

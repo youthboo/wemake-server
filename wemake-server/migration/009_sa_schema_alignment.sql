@@ -62,7 +62,7 @@ ALTER TABLE map_showcase_tags
 
 -- 2) factory_profiles — SA fields + FK to factory type master
 ALTER TABLE factory_profiles
-    ADD COLUMN IF NOT EXISTS location VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS province_id BIGINT NULL REFERENCES lbi_provinces(row_id),
     ADD COLUMN IF NOT EXISTS rating DECIMAL(3, 2),
     ADD COLUMN IF NOT EXISTS review_count INT NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS specialization VARCHAR(200),

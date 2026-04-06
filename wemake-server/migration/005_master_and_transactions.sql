@@ -14,14 +14,14 @@ CREATE INDEX IF NOT EXISTS idx_transactions_order_id ON transactions(order_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_type_status ON transactions(type, status);
 
 CREATE TABLE IF NOT EXISTS lbi_provinces (
-    row_id BIGINT PRIMARY KEY,
+    row_id BIGSERIAL PRIMARY KEY,
     name_th VARCHAR(150) NOT NULL,
     name_en VARCHAR(150) NOT NULL,
     status CHAR(1) NOT NULL DEFAULT '1' CHECK (status IN ('1', '0'))
 );
 
 CREATE TABLE IF NOT EXISTS lbi_districts (
-    row_id BIGINT PRIMARY KEY,
+    row_id BIGSERIAL PRIMARY KEY,
     province_id BIGINT NOT NULL REFERENCES lbi_provinces(row_id),
     name_th VARCHAR(150) NOT NULL,
     name_en VARCHAR(150) NOT NULL,
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS lbi_districts (
 );
 
 CREATE TABLE IF NOT EXISTS lbi_sub_districts (
-    row_id BIGINT PRIMARY KEY,
+    row_id BIGSERIAL PRIMARY KEY,
     district_id BIGINT NOT NULL REFERENCES lbi_districts(row_id),
     name_th VARCHAR(150) NOT NULL,
     name_en VARCHAR(150) NOT NULL,
@@ -38,20 +38,20 @@ CREATE TABLE IF NOT EXISTS lbi_sub_districts (
 );
 
 CREATE TABLE IF NOT EXISTS lbi_factory_types (
-    factory_type_id BIGINT PRIMARY KEY,
+    factory_type_id BIGSERIAL PRIMARY KEY,
     type_name VARCHAR(150) NOT NULL UNIQUE,
     status CHAR(1) NOT NULL DEFAULT '1' CHECK (status IN ('1', '0'))
 );
 
 CREATE TABLE IF NOT EXISTS lbi_product_categories (
-    category_id BIGINT PRIMARY KEY,
+    category_id BIGSERIAL PRIMARY KEY,
     parent_category_id BIGINT NULL REFERENCES lbi_product_categories(category_id),
     category_name VARCHAR(150) NOT NULL,
     status CHAR(1) NOT NULL DEFAULT '1' CHECK (status IN ('1', '0'))
 );
 
 CREATE TABLE IF NOT EXISTS lbi_production (
-    step_id BIGINT PRIMARY KEY,
+    step_id BIGSERIAL PRIMARY KEY,
     factory_type_id BIGINT NOT NULL REFERENCES lbi_factory_types(factory_type_id),
     step_name VARCHAR(150) NOT NULL,
     sequence INT NOT NULL,
@@ -60,14 +60,14 @@ CREATE TABLE IF NOT EXISTS lbi_production (
 );
 
 CREATE TABLE IF NOT EXISTS lbi_units (
-    unit_id BIGINT PRIMARY KEY,
+    unit_id BIGSERIAL PRIMARY KEY,
     unit_name_th VARCHAR(50) NOT NULL,
     unit_name_en VARCHAR(50) NOT NULL,
     status CHAR(1) NOT NULL DEFAULT '1' CHECK (status IN ('1', '0'))
 );
 
 CREATE TABLE IF NOT EXISTS lbi_shipping_methods (
-    shipping_method_id BIGINT PRIMARY KEY,
+    shipping_method_id BIGSERIAL PRIMARY KEY,
     method_name VARCHAR(100) NOT NULL UNIQUE,
     status CHAR(1) NOT NULL DEFAULT '1' CHECK (status IN ('1', '0'))
 );
@@ -115,3 +115,12 @@ INSERT INTO lbi_shipping_methods (shipping_method_id, method_name, status) VALUE
     (1, 'ลูกค้ารับเองที่โรงงาน', '1'),
     (2, 'ขนส่งเอกชน', '1')
 ON CONFLICT (shipping_method_id) DO NOTHING;
+
+SELECT setval(pg_get_serial_sequence('lbi_provinces', 'row_id'), COALESCE((SELECT MAX(row_id) FROM lbi_provinces), 1), true);
+SELECT setval(pg_get_serial_sequence('lbi_districts', 'row_id'), COALESCE((SELECT MAX(row_id) FROM lbi_districts), 1), true);
+SELECT setval(pg_get_serial_sequence('lbi_sub_districts', 'row_id'), COALESCE((SELECT MAX(row_id) FROM lbi_sub_districts), 1), true);
+SELECT setval(pg_get_serial_sequence('lbi_factory_types', 'factory_type_id'), COALESCE((SELECT MAX(factory_type_id) FROM lbi_factory_types), 1), true);
+SELECT setval(pg_get_serial_sequence('lbi_product_categories', 'category_id'), COALESCE((SELECT MAX(category_id) FROM lbi_product_categories), 1), true);
+SELECT setval(pg_get_serial_sequence('lbi_production', 'step_id'), COALESCE((SELECT MAX(step_id) FROM lbi_production), 1), true);
+SELECT setval(pg_get_serial_sequence('lbi_units', 'unit_id'), COALESCE((SELECT MAX(unit_id) FROM lbi_units), 1), true);
+SELECT setval(pg_get_serial_sequence('lbi_shipping_methods', 'shipping_method_id'), COALESCE((SELECT MAX(shipping_method_id) FROM lbi_shipping_methods), 1), true);

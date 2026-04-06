@@ -650,7 +650,18 @@ Mark a notification as read.
 
 ### `GET /showcases`
 
-List showcases. Supports query param `?type=PD` (Product, Promotion, Idea).
+List showcases (newest first). Optional filter:
+
+| Query | Value | Meaning |
+|-------|-------|---------|
+| `type` | `PD` | Products only |
+| `type` | `PM` | Promotions only |
+| `type` | `ID` | Ideas only |
+| *(omit)* | — | All content types |
+
+Examples: `GET /api/v1/showcases`, `GET /api/v1/showcases?type=PD`
+
+Invalid `type` returns `400` with an error message.
 
 ### `POST /showcases`
 

@@ -29,7 +29,7 @@ type FactoryProfile struct {
 	FactoryName     string   `db:"factory_name" json:"factory_name"`
 	FactoryTypeID   int64    `db:"factory_type_id" json:"factory_type_id"`
 	TaxID           string   `db:"tax_id" json:"tax_id,omitempty"`
-	Location        *string  `db:"location" json:"location,omitempty"`
+	ProvinceID      *int64   `db:"province_id" json:"province_id,omitempty"`
 	Rating          *float64 `db:"rating" json:"rating,omitempty"`
 	ReviewCount     int64    `db:"review_count" json:"review_count"`
 	Specialization  *string  `db:"specialization" json:"specialization,omitempty"`

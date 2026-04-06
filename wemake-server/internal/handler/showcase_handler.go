@@ -1,10 +1,17 @@
 package handler
 
 import (
+	"strings"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/yourusername/wemake/internal/domain"
 	"github.com/yourusername/wemake/internal/service"
 )
+
+// Allowed values for GET /showcases?type= (matches factory_showcases.content_type)
+var showcaseTypeQueryAllowed = map[string]struct{}{
+	"PD": {}, "PM": {}, "ID": {},
+}
 
 type ShowcaseHandler struct {
 	service *service.ShowcaseService
@@ -15,7 +22,14 @@ func NewShowcaseHandler(service *service.ShowcaseService) *ShowcaseHandler {
 }
 
 func (h *ShowcaseHandler) List(c *fiber.Ctx) error {
-	contentType := c.Query("type", "")
+	contentType := strings.TrimSpace(c.Query("type", ""))
+	if contentType != "" {
+		if _, ok := showcaseTypeQueryAllowed[contentType]; !ok {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid query type: use PD (product), PM (promotion), or ID (idea); omit type for all showcases",
+			})
+		}
+	}
 	items, err := h.service.ListAll(contentType)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch showcases"})

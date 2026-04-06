@@ -39,6 +39,12 @@ type FrontendFactoryRow struct {
 	CompletedOrders int64           `db:"completed_orders"`
 	AverageLeadDays sql.NullFloat64 `db:"average_lead_days"`
 	Description     sql.NullString  `db:"description"`
+	Rating          float64         `db:"rating"`
+	ReviewCount     int64           `db:"review_count"`
+	MinOrder        sql.NullInt64   `db:"min_order"`
+	LeadTimeDesc    sql.NullString  `db:"lead_time_desc"`
+	ImageURL        sql.NullString  `db:"image_url"`
+	PriceRange      sql.NullString  `db:"price_range"`
 }
 
 type FrontendFactoryDetailRow struct {
@@ -50,6 +56,12 @@ type FrontendFactoryDetailRow struct {
 	CompletedOrders int64           `db:"completed_orders"`
 	AverageLeadDays sql.NullFloat64 `db:"average_lead_days"`
 	Description     sql.NullString  `db:"description"`
+	Rating          float64         `db:"rating"`
+	ReviewCount     int64           `db:"review_count"`
+	MinOrder        sql.NullInt64   `db:"min_order"`
+	LeadTimeDesc    sql.NullString  `db:"lead_time_desc"`
+	ImageURL        sql.NullString  `db:"image_url"`
+	PriceRange      sql.NullString  `db:"price_range"`
 	AddressDetail   sql.NullString  `db:"address_detail"`
 	ProvinceName    sql.NullString  `db:"province_name"`
 	Email           string          `db:"email"`
@@ -175,17 +187,31 @@ func (r *FrontendRepository) ListFactories() ([]FrontendFactoryRow, error) {
 		SELECT
 			u.user_id AS id,
 			fp.factory_name AS name,
-			COALESCE(fp.location, p.name_th) AS location,
+			COALESCE(fp_p.name_th, p.name_th) AS location,
 			COALESCE(fp.specialization, ft.type_name) AS specialization,
 			COALESCE(fp.is_verified, FALSE) AS verified,
 			COALESCE(completed.completed_orders, fp.completed_orders, 0) AS completed_orders,
 			lead.average_lead_days,
-			COALESCE(fp.description, '') AS description
+			COALESCE(fp.description, '') AS description,
+			COALESCE(rev.avg_rating, fp.rating, 0)::float8 AS rating,
+			COALESCE(rev.review_cnt, fp.review_count, 0) AS review_count,
+			fp.min_order,
+			fp.lead_time_desc,
+			fp.image_url,
+			fp.price_range
 		FROM users u
 		INNER JOIN factory_profiles fp ON fp.user_id = u.user_id
 		LEFT JOIN lbi_factory_types ft ON ft.factory_type_id = fp.factory_type_id
+		LEFT JOIN lbi_provinces fp_p ON fp_p.row_id = fp.province_id
 		LEFT JOIN addresses a ON a.user_id = u.user_id AND a.is_default = TRUE
 		LEFT JOIN lbi_provinces p ON p.row_id = a.province_id
+		LEFT JOIN (
+			SELECT factory_id::bigint AS factory_id,
+				ROUND(AVG(rating::numeric), 2)::float8 AS avg_rating,
+				COUNT(*)::bigint AS review_cnt
+			FROM factory_reviews
+			GROUP BY factory_id
+		) rev ON rev.factory_id = u.user_id
 		LEFT JOIN (
 			SELECT factory_id, COUNT(*) AS completed_orders
 			FROM orders
@@ -210,21 +236,35 @@ func (r *FrontendRepository) GetFactoryDetail(factoryID int64) (*FrontendFactory
 		SELECT
 			u.user_id AS id,
 			fp.factory_name AS name,
-			COALESCE(fp.location, p.name_th) AS location,
+			COALESCE(fp_p.name_th, p.name_th) AS location,
 			COALESCE(fp.specialization, ft.type_name) AS specialization,
 			COALESCE(fp.is_verified, FALSE) AS verified,
 			COALESCE(completed.completed_orders, fp.completed_orders, 0) AS completed_orders,
 			lead.average_lead_days,
 			COALESCE(fp.description, '') AS description,
+			COALESCE(rev.avg_rating, fp.rating, 0)::float8 AS rating,
+			COALESCE(rev.review_cnt, fp.review_count, 0) AS review_count,
+			fp.min_order,
+			fp.lead_time_desc,
+			fp.image_url,
+			fp.price_range,
 			a.address_detail,
-			p.name_th AS province_name,
+			COALESCE(fp_p.name_th, p.name_th) AS province_name,
 			u.email,
 			u.phone
 		FROM users u
 		INNER JOIN factory_profiles fp ON fp.user_id = u.user_id
 		LEFT JOIN lbi_factory_types ft ON ft.factory_type_id = fp.factory_type_id
+		LEFT JOIN lbi_provinces fp_p ON fp_p.row_id = fp.province_id
 		LEFT JOIN addresses a ON a.user_id = u.user_id AND a.is_default = TRUE
 		LEFT JOIN lbi_provinces p ON p.row_id = a.province_id
+		LEFT JOIN (
+			SELECT factory_id::bigint AS factory_id,
+				ROUND(AVG(rating::numeric), 2)::float8 AS avg_rating,
+				COUNT(*)::bigint AS review_cnt
+			FROM factory_reviews
+			GROUP BY factory_id
+		) rev ON rev.factory_id = u.user_id
 		LEFT JOIN (
 			SELECT factory_id, COUNT(*) AS completed_orders
 			FROM orders

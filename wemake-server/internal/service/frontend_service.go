@@ -150,6 +150,12 @@ func (s *FrontendService) GetFactoryDetail(factoryID int64) (*domain.FrontendFac
 			CompletedOrders: row.CompletedOrders,
 			AverageLeadDays: row.AverageLeadDays,
 			Description:     row.Description,
+			Rating:          row.Rating,
+			ReviewCount:     row.ReviewCount,
+			MinOrder:        row.MinOrder,
+			LeadTimeDesc:    row.LeadTimeDesc,
+			ImageURL:        row.ImageURL,
+			PriceRange:      row.PriceRange,
 		}),
 		Profile: domain.FrontendFactoryProfile{
 			Address:              strings.Join(addressParts, ", "),
@@ -393,10 +399,12 @@ func (s *FrontendService) buildThreads(rows []repository.FrontendMessageThreadRo
 
 func mapFactoryCard(row repository.FrontendFactoryRow) domain.FrontendFactoryCard {
 	specialization := row.Specialization.String
-	leadDays := int64(row.AverageLeadDays.Float64 + 0.5)
-	leadTime := ""
-	if leadDays > 0 {
-		leadTime = fmt.Sprintf("%d วัน", leadDays)
+	leadTime := strings.TrimSpace(row.LeadTimeDesc.String)
+	if leadTime == "" {
+		leadDays := int64(row.AverageLeadDays.Float64 + 0.5)
+		if leadDays > 0 {
+			leadTime = fmt.Sprintf("%d วัน", leadDays)
+		}
 	}
 
 	tags := []string{}
@@ -407,20 +415,25 @@ func mapFactoryCard(row repository.FrontendFactoryRow) domain.FrontendFactoryCar
 		tags = append(tags, "Verified")
 	}
 
+	minOrder := int64(0)
+	if row.MinOrder.Valid {
+		minOrder = row.MinOrder.Int64
+	}
+
 	return domain.FrontendFactoryCard{
 		ID:              row.ID,
 		Name:            row.Name,
 		Location:        row.Location.String,
-		Rating:          0,
-		Reviews:         0,
+		Rating:          row.Rating,
+		Reviews:         row.ReviewCount,
 		Specialization:  specialization,
 		Tags:            tags,
-		MinOrder:        0,
+		MinOrder:        minOrder,
 		LeadTime:        leadTime,
-		Image:           "",
+		Image:           row.ImageURL.String,
 		Verified:        row.Verified,
 		CompletedOrders: row.CompletedOrders,
-		PriceRange:      "",
+		PriceRange:      row.PriceRange.String,
 		Description:     row.Description.String,
 	}
 }

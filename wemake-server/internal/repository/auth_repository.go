@@ -91,10 +91,14 @@ func (r *AuthRepository) CreateFactoryUser(user *domain.User, factory *domain.Fa
 	}
 
 	const factoryInsert = `
-		INSERT INTO factory_profiles (user_id, factory_name, factory_type_id, tax_id)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO factory_profiles (user_id, factory_name, factory_type_id, tax_id, province_id)
+		VALUES ($1, $2, $3, $4, $5)
 	`
-	if _, err := tx.Exec(factoryInsert, user.UserID, factory.FactoryName, factory.FactoryTypeID, factory.TaxID); err != nil {
+	var provinceID sql.NullInt64
+	if factory.ProvinceID != nil && *factory.ProvinceID > 0 {
+		provinceID = sql.NullInt64{Int64: *factory.ProvinceID, Valid: true}
+	}
+	if _, err := tx.Exec(factoryInsert, user.UserID, factory.FactoryName, factory.FactoryTypeID, factory.TaxID, provinceID); err != nil {
 		return err
 	}
 

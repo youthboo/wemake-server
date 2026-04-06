@@ -18,6 +18,19 @@ services:
         generateValue: true
       - key: CORS_ORIGINS
         sync: false
+      # Set in dashboard to https://<your-service>.onrender.com (no trailing slash).
+      - key: PUBLIC_BASE_URL
+        sync: false
+      # Option A: single URL from Cloudinary dashboard (API Key Settings → CLOUDINARY_URL)
+      - key: CLOUDINARY_URL
+        sync: false
+      # Option B: or set all three (leave CLOUDINARY_URL empty)
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
       - key: DATABASE_URL
         fromDatabase:
           name: wemake-postgres

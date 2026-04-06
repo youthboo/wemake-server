@@ -1,11 +1,14 @@
 package api
 
 import (
+	"log"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/jmoiron/sqlx"
 	"github.com/yourusername/wemake/internal/config"
 	"github.com/yourusername/wemake/internal/handler"
+	"github.com/yourusername/wemake/internal/media"
 	"github.com/yourusername/wemake/internal/middleware"
 	"github.com/yourusername/wemake/internal/repository"
 	"github.com/yourusername/wemake/internal/service"
@@ -75,7 +78,12 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	masterHandler := handler.NewMasterHandler(masterService)
 	transactionHandler := handler.NewTransactionHandler(transactionService)
 	frontendHandler := handler.NewFrontendHandler(frontendService)
-	mediaHandler := handler.NewMediaHandler()
+	cld, err := media.NewCloudinaryClient(cfg)
+	if err != nil {
+		log.Printf("cloudinary disabled: invalid configuration: %v", err)
+		cld = nil
+	}
+	mediaHandler := handler.NewMediaHandler(cfg.PublicBaseURL, cld)
 	reviewHandler := handler.NewReviewHandler(reviewService)
 	conversationHandler := handler.NewConversationHandler(conversationService)
 	notificationHandler := handler.NewNotificationHandler(notificationService)
