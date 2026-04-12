@@ -2,6 +2,8 @@ package repository
 
 import (
 	"database/sql"
+	"fmt"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/yourusername/wemake/internal/domain"
@@ -60,9 +62,17 @@ func (r *QuotationRepository) ListByFactoryID(factoryID int64, status string) ([
 	var items []domain.Quotation
 	query := quotationSelectBase() + ` WHERE factory_id = $1`
 	args := []interface{}{factoryID}
-	if status != "" {
+	statuses := splitCSVUpper(status)
+	if len(statuses) == 1 {
 		query += ` AND status = $2`
-		args = append(args, status)
+		args = append(args, statuses[0])
+	} else if len(statuses) > 1 {
+		placeholders := make([]string, 0, len(statuses))
+		for _, st := range statuses {
+			placeholders = append(placeholders, fmt.Sprintf("$%d", len(args)+1))
+			args = append(args, st)
+		}
+		query += ` AND status IN (` + strings.Join(placeholders, ", ") + `)`
 	}
 	query += ` ORDER BY create_time DESC`
 	err := r.db.Select(&items, query, args...)
@@ -132,6 +142,24 @@ func nullableInt64Ptr(v *int64) interface{} {
 		return nil
 	}
 	return *v
+}
+
+func splitCSVUpper(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		item := strings.TrimSpace(strings.ToUpper(part))
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	return out
 }
 
 func (r *QuotationRepository) ListHistory(quoteID int64) ([]domain.QuotationHistoryEntry, error) {

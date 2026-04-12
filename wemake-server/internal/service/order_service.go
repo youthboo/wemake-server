@@ -1,6 +1,7 @@
 package service
 
 import (
+	"database/sql"
 	"errors"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 )
 
 var ErrQuotationNotAccepted = errors.New("quotation must be accepted before creating order")
+var ErrShipOrderInvalid = errors.New("tracking_no and courier are required")
 
 type OrderService struct {
 	repo *repository.OrderRepository
@@ -78,4 +80,28 @@ func (s *OrderService) UpdateStatus(orderID int64, status string, actorUserID *i
 
 func (s *OrderService) ListActivity(orderID int64) ([]domain.OrderActivityEntry, error) {
 	return s.repo.ListActivity(orderID)
+}
+
+func (s *OrderService) MarkShipped(orderID, factoryID int64, trackingNo, courier string) error {
+	trackingNo = strings.TrimSpace(trackingNo)
+	courier = strings.TrimSpace(courier)
+	if trackingNo == "" || courier == "" {
+		return ErrShipOrderInvalid
+	}
+	order, err := s.repo.GetByParticipant(orderID, factoryID, domain.RoleFactory)
+	if err != nil {
+		return err
+	}
+	if order.Status != "PR" && order.Status != "QC" && order.Status != "SH" {
+		return sql.ErrNoRows
+	}
+	if err := s.repo.MarkShipped(orderID, factoryID, trackingNo, courier); err != nil {
+		return err
+	}
+	uid := factoryID
+	return s.repo.InsertActivity(orderID, &uid, "ORDER_SHIPPED", map[string]interface{}{
+		"status":      "SH",
+		"tracking_no": trackingNo,
+		"courier":     courier,
+	})
 }

@@ -14,6 +14,7 @@ type FactoryShowcase struct {
 	MinOrder      *int      `db:"min_order" json:"min_order,omitempty"`
 	LeadTimeDays  *int      `db:"lead_time_days" json:"lead_time_days,omitempty"`
 	LikesCount    int       `db:"likes_count" json:"likes_count"`
+	ViewCount     int64     `db:"view_count" json:"view_count"`
 	CreatedAt     time.Time `db:"created_at" json:"created_at"`
 }
 
@@ -30,6 +31,7 @@ type ShowcaseExploreItem struct {
 	MinOrder        *int      `db:"min_order" json:"min_order,omitempty"`
 	LeadTimeDays    *int      `db:"lead_time_days" json:"lead_time_days,omitempty"`
 	LikesCount      int       `db:"likes_count" json:"likes_count"`
+	ViewCount       int64     `db:"view_count" json:"view_count"`
 	CreatedAt       time.Time `db:"created_at" json:"created_at"`
 	FactoryName     string    `db:"factory_name" json:"factory_name"`
 	FactoryImageURL *string   `db:"factory_image_url" json:"factory_image_url,omitempty"`
@@ -46,4 +48,14 @@ type PromoSlide struct {
 	Code     string `db:"code" json:"code"`
 	ImageURL string `db:"image_url" json:"image_url"`
 	Status   string `db:"status" json:"status"`
+}
+
+type ShowcaseAnalytics struct {
+	ShowcaseID      int64   `json:"showcase_id"`
+	FactoryID       int64   `json:"factory_id"`
+	Title           string  `json:"title"`
+	ContentType     string  `json:"content_type"`
+	LikesCount      int     `json:"likes_count"`
+	ViewCount       int64   `json:"view_count"`
+	EngagementScore float64 `json:"engagement_score"`
 }

@@ -417,3 +417,200 @@ func (r *FactoryRepository) RemoveFactorySubCategory(factoryID, subCategoryID in
 	}
 	return nil
 }
+
+func (r *FactoryRepository) ReplaceFactoryCategories(factoryID int64, categoryIDs []int64) error {
+	tx, err := r.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if _, err = tx.Exec(`DELETE FROM map_factory_categories WHERE factory_id = $1`, factoryID); err != nil {
+		return err
+	}
+	for _, categoryID := range categoryIDs {
+		if _, err = tx.Exec(
+			`INSERT INTO map_factory_categories (factory_id, category_id) VALUES ($1, $2)`,
+			factoryID, categoryID,
+		); err != nil {
+			var pqErr *pq.Error
+			if errors.As(err, &pqErr) && pqErr.Code == "23503" {
+				return ErrInvalidFactoryCategory
+			}
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (r *FactoryRepository) ReplaceFactorySubCategories(factoryID int64, subCategoryIDs []int64) error {
+	tx, err := r.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if _, err = tx.Exec(`DELETE FROM map_factory_sub_categories WHERE factory_id = $1`, factoryID); err != nil {
+		return err
+	}
+	for _, subCategoryID := range subCategoryIDs {
+		if _, err = tx.Exec(
+			`INSERT INTO map_factory_sub_categories (factory_id, sub_category_id) VALUES ($1, $2)`,
+			factoryID, subCategoryID,
+		); err != nil {
+			var pqErr *pq.Error
+			if errors.As(err, &pqErr) && pqErr.Code == "23503" {
+				return ErrInvalidFactorySubCategory
+			}
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashboard, error) {
+	var out domain.FactoryDashboard
+	out.FactoryID = factoryID
+	out.RecentMatchingRFQs = []domain.FactoryDashboardRFQItem{}
+	out.RecentOrders = []domain.FactoryDashboardOrderItem{}
+	out.RecentQuotations = []domain.FactoryDashboardQuotationItem{}
+	out.RecentShowcases = []domain.FactoryDashboardShowcaseItem{}
+
+	if err := r.db.Get(&out.Counts.PendingRFQs, `
+		SELECT COUNT(DISTINCT r.rfq_id)
+		FROM rfqs r
+		INNER JOIN map_factory_categories mfc
+			ON mfc.factory_id = $1
+		   AND mfc.category_id = r.category_id
+		WHERE r.status = 'OP'
+		  AND (
+			r.deadline_date IS NULL
+			OR r.deadline_date >= CURRENT_DATE
+		  )
+		  AND (
+			r.sub_category_id IS NULL
+			OR EXISTS (
+				SELECT 1
+				FROM map_factory_sub_categories mfs
+				WHERE mfs.factory_id = $1
+				  AND mfs.sub_category_id = r.sub_category_id
+			)
+		  )
+	`, factoryID); err != nil {
+		return nil, err
+	}
+
+	if err := r.db.Get(&out.Counts.ActiveOrders, `
+		SELECT COUNT(*)
+		FROM orders
+		WHERE factory_id = $1
+		  AND status IN ('PR', 'QC', 'SH')
+	`, factoryID); err != nil {
+		return nil, err
+	}
+
+	if err := r.db.Get(&out.Counts.PendingProductionUpdates, `
+		SELECT COUNT(*)
+		FROM production_updates pu
+		INNER JOIN orders o ON o.order_id = pu.order_id
+		WHERE o.factory_id = $1
+		  AND pu.status = 'CR'
+	`, factoryID); err != nil {
+		return nil, err
+	}
+
+	if err := r.db.Get(&out.Counts.UnreadMessages, `
+		SELECT COALESCE(SUM(unread_factory), 0)
+		FROM conversations
+		WHERE factory_id = $1
+	`, factoryID); err != nil {
+		return nil, err
+	}
+
+	if err := r.db.Get(&out.Counts.UnreadNotifications, `
+		SELECT COUNT(*)
+		FROM notifications
+		WHERE user_id = $1
+		  AND is_read = FALSE
+	`, factoryID); err != nil {
+		return nil, err
+	}
+
+	if err := r.db.Get(&out.Wallet, `
+		SELECT good_fund, pending_fund
+		FROM wallets
+		WHERE user_id = $1
+	`, factoryID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			out.Wallet = domain.FactoryDashboardWallet{}
+			return &out, nil
+		}
+		return nil, err
+	}
+
+	if err := r.db.Select(&out.RecentMatchingRFQs, `
+		SELECT DISTINCT r.rfq_id, r.title, r.category_id, r.sub_category_id, r.status, r.deadline_date, r.created_at
+		FROM rfqs r
+		INNER JOIN map_factory_categories mfc
+			ON mfc.factory_id = $1
+		   AND mfc.category_id = r.category_id
+		WHERE r.status = 'OP'
+		  AND (
+			r.deadline_date IS NULL
+			OR r.deadline_date >= CURRENT_DATE
+		  )
+		  AND (
+			r.sub_category_id IS NULL
+			OR EXISTS (
+				SELECT 1
+				FROM map_factory_sub_categories mfs
+				WHERE mfs.factory_id = $1
+				  AND mfs.sub_category_id = r.sub_category_id
+			)
+		  )
+		ORDER BY r.created_at DESC
+		LIMIT 5
+	`, factoryID); err != nil {
+		return nil, err
+	}
+
+	if err := r.db.Select(&out.RecentOrders, `
+		SELECT order_id, quote_id, user_id, status, total_amount, estimated_delivery, created_at
+		FROM orders
+		WHERE factory_id = $1
+		ORDER BY updated_at DESC, created_at DESC
+		LIMIT 5
+	`, factoryID); err != nil {
+		return nil, err
+	}
+
+	if err := r.db.Select(&out.RecentQuotations, `
+		SELECT quote_id, rfq_id, status, price_per_piece, lead_time_days, log_timestamp
+		FROM quotations
+		WHERE factory_id = $1
+		ORDER BY log_timestamp DESC, create_time DESC
+		LIMIT 5
+	`, factoryID); err != nil {
+		return nil, err
+	}
+
+	if err := r.db.Select(&out.RecentShowcases, `
+		SELECT showcase_id, content_type, title, category_id, sub_category_id, created_at
+		FROM factory_showcases
+		WHERE factory_id = $1
+		ORDER BY created_at DESC
+		LIMIT 5
+	`, factoryID); err != nil {
+		return nil, err
+	}
+
+	return &out, nil
+}

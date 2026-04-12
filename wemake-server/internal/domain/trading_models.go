@@ -23,18 +23,18 @@ type Quotation struct {
 }
 
 type QuotationHistoryEntry struct {
-	HistoryID        int64      `db:"history_id" json:"history_id"`
-	QuoteID          int64      `db:"quote_id" json:"quote_id"`
-	EventType        string     `db:"event_type" json:"event_type"`
-	VersionAfter     int        `db:"version_after" json:"version_after"`
-	PricePerPiece    *float64   `db:"price_per_piece" json:"price_per_piece,omitempty"`
-	MoldCost         *float64   `db:"mold_cost" json:"mold_cost,omitempty"`
-	LeadTimeDays     *int64     `db:"lead_time_days" json:"lead_time_days,omitempty"`
-	ShippingMethodID *int64     `db:"shipping_method_id" json:"shipping_method_id,omitempty"`
-	Status           *string    `db:"status" json:"status,omitempty"`
-	Reason           *string    `db:"reason" json:"reason,omitempty"`
-	EditedBy         *int64     `db:"edited_by" json:"edited_by,omitempty"`
-	CreatedAt        time.Time  `db:"created_at" json:"created_at"`
+	HistoryID        int64     `db:"history_id" json:"history_id"`
+	QuoteID          int64     `db:"quote_id" json:"quote_id"`
+	EventType        string    `db:"event_type" json:"event_type"`
+	VersionAfter     int       `db:"version_after" json:"version_after"`
+	PricePerPiece    *float64  `db:"price_per_piece" json:"price_per_piece,omitempty"`
+	MoldCost         *float64  `db:"mold_cost" json:"mold_cost,omitempty"`
+	LeadTimeDays     *int64    `db:"lead_time_days" json:"lead_time_days,omitempty"`
+	ShippingMethodID *int64    `db:"shipping_method_id" json:"shipping_method_id,omitempty"`
+	Status           *string   `db:"status" json:"status,omitempty"`
+	Reason           *string   `db:"reason" json:"reason,omitempty"`
+	EditedBy         *int64    `db:"edited_by" json:"edited_by,omitempty"`
+	CreatedAt        time.Time `db:"created_at" json:"created_at"`
 }
 
 type OrderActivityEntry struct {
@@ -47,16 +47,19 @@ type OrderActivityEntry struct {
 }
 
 type Order struct {
-	OrderID            int64        `db:"order_id" json:"order_id"`
-	QuotationID        int64        `db:"quote_id" json:"quote_id"`
-	UserID             int64        `db:"user_id" json:"user_id"`
-	FactoryID          int64        `db:"factory_id" json:"factory_id"`
-	TotalAmount        float64      `db:"total_amount" json:"total_amount"`
-	DepositAmount      float64      `db:"deposit_amount" json:"deposit_amount"`
-	Status             string       `db:"status" json:"status"`
-	EstimatedDelivery  *time.Time `db:"estimated_delivery" json:"estimated_delivery,omitempty"`
-	CreatedAt          time.Time    `db:"created_at" json:"created_at"`
-	UpdatedAt          time.Time    `db:"updated_at" json:"updated_at"`
+	OrderID           int64      `db:"order_id" json:"order_id"`
+	QuotationID       int64      `db:"quote_id" json:"quote_id"`
+	UserID            int64      `db:"user_id" json:"user_id"`
+	FactoryID         int64      `db:"factory_id" json:"factory_id"`
+	TotalAmount       float64    `db:"total_amount" json:"total_amount"`
+	DepositAmount     float64    `db:"deposit_amount" json:"deposit_amount"`
+	Status            string     `db:"status" json:"status"`
+	EstimatedDelivery *time.Time `db:"estimated_delivery" json:"estimated_delivery,omitempty"`
+	TrackingNo        *string    `db:"tracking_no" json:"tracking_no,omitempty"`
+	Courier           *string    `db:"courier" json:"courier,omitempty"`
+	ShippedAt         *time.Time `db:"shipped_at" json:"shipped_at,omitempty"`
+	CreatedAt         time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt         time.Time  `db:"updated_at" json:"updated_at"`
 }
 
 type ProductionUpdate struct {

@@ -98,6 +98,29 @@ func (r *ShowcaseRepository) GetByID(showcaseID, factoryID int64) (*domain.Facto
 	return &s, nil
 }
 
+func (r *ShowcaseRepository) GetAnalytics(showcaseID, factoryID int64) (*domain.ShowcaseAnalytics, error) {
+	var item domain.ShowcaseAnalytics
+	err := r.db.Get(&item, `
+		SELECT
+			showcase_id,
+			factory_id,
+			title,
+			content_type,
+			likes_count,
+			view_count,
+			CASE
+				WHEN view_count > 0 THEN ROUND((likes_count::numeric / view_count::numeric) * 100, 2)::float8
+				ELSE 0
+			END AS engagement_score
+		FROM factory_showcases
+		WHERE showcase_id = $1 AND factory_id = $2
+	`, showcaseID, factoryID)
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
 func (r *ShowcaseRepository) ListPromoSlides() ([]domain.PromoSlide, error) {
 	var items []domain.PromoSlide
 	query := `SELECT * FROM promo_slides WHERE status = '1' ORDER BY slide_id DESC`

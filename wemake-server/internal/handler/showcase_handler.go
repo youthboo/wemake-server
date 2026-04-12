@@ -33,6 +33,29 @@ func (h *ShowcaseHandler) List(c *fiber.Ctx) error {
 			})
 		}
 	}
+	factoryParam := strings.TrimSpace(c.Query("factory_id", ""))
+	if factoryParam != "" {
+		if strings.EqualFold(factoryParam, "me") {
+			userID, err := getUserIDFromHeader(c)
+			if err != nil {
+				return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+			}
+			items, err := h.service.ListExploreByFactory(userID, contentType)
+			if err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch showcases"})
+			}
+			return c.JSON(items)
+		}
+		factoryID, err := strconv.ParseInt(factoryParam, 10, 64)
+		if err != nil || factoryID <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid factory_id"})
+		}
+		items, err := h.service.ListExploreByFactory(factoryID, contentType)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch showcases"})
+		}
+		return c.JSON(items)
+	}
 	items, err := h.service.ListExplore(contentType)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch showcases"})
@@ -104,6 +127,25 @@ func (h *ShowcaseHandler) Delete(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete showcase"})
 	}
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func (h *ShowcaseHandler) GetAnalytics(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+	}
+	showcaseID, err := strconv.ParseInt(c.Params("showcase_id"), 10, 64)
+	if err != nil || showcaseID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid showcase_id"})
+	}
+	item, err := h.service.GetAnalytics(showcaseID, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "showcase not found"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch analytics"})
+	}
+	return c.JSON(item)
 }
 
 func (h *ShowcaseHandler) Create(c *fiber.Ctx) error {

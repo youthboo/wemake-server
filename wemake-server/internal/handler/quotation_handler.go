@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -90,6 +91,42 @@ func (h *QuotationHandler) ListMine(c *fiber.Ctx) error {
 	}
 	status := c.Query("status")
 	items, err := h.service.ListMine(userID, status)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch quotations"})
+	}
+	return c.JSON(items)
+}
+
+func (h *QuotationHandler) ListCollection(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
+	}
+	u, err := h.auth.GetUserByID(userID)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "user not found"})
+	}
+	factoryParam := strings.TrimSpace(c.Query("factory_id"))
+	if factoryParam == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "factory_id query is required"})
+	}
+	if u.Role != domain.RoleFactory {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "factory role required"})
+	}
+	var factoryID int64
+	if strings.EqualFold(factoryParam, "me") {
+		factoryID = userID
+	} else {
+		parsed, parseErr := strconv.ParseInt(factoryParam, 10, 64)
+		if parseErr != nil || parsed <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid factory_id"})
+		}
+		if parsed != userID {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "factory_id must match authenticated factory"})
+		}
+		factoryID = parsed
+	}
+	items, err := h.service.ListMine(factoryID, c.Query("status"))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch quotations"})
 	}

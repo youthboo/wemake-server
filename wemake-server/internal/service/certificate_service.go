@@ -24,3 +24,11 @@ func (s *CertificateService) Create(cert *domain.FactoryCertificate) error {
 func (s *CertificateService) DeleteByMapID(factoryID, mapID int64) error {
 	return s.repo.DeleteByMapID(factoryID, mapID)
 }
+
+func (s *CertificateService) DeleteByCertID(factoryID, certID int64) error {
+	return s.repo.DeleteByCertID(factoryID, certID)
+}
+
+func (s *CertificateService) PatchByCertID(factoryID, certID int64, documentURL *string, expireDate *string, certNumber *string) error {
+	return s.repo.PatchByCertID(factoryID, certID, documentURL, expireDate, certNumber)
+}

@@ -21,3 +21,11 @@ func (r *WalletRepository) GetByUserID(userID int64) (*domain.Wallet, error) {
 	}
 	return &wallet, nil
 }
+
+func (r *WalletRepository) GetWalletIDByUserID(userID int64) (*int64, error) {
+	var walletID int64
+	if err := r.db.Get(&walletID, "SELECT wallet_id FROM wallets WHERE user_id = $1", userID); err != nil {
+		return nil, err
+	}
+	return &walletID, nil
+}

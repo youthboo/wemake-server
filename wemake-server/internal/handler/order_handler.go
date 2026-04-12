@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/yourusername/wemake/internal/domain"
 	"github.com/yourusername/wemake/internal/repository"
 	"github.com/yourusername/wemake/internal/service"
 )
@@ -50,6 +53,20 @@ func (h *OrderHandler) ListOrders(c *fiber.Ctx) error {
 	u, err := h.auth.GetUserByID(userID)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "user not found"})
+	}
+	if factoryParam := strings.TrimSpace(c.Query("factory_id")); factoryParam != "" {
+		if u.Role != domain.RoleFactory {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "factory role required"})
+		}
+		if !strings.EqualFold(factoryParam, "me") {
+			factoryID, parseErr := strconv.ParseInt(factoryParam, 10, 64)
+			if parseErr != nil || factoryID <= 0 {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid factory_id"})
+			}
+			if factoryID != userID {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "factory_id must match authenticated factory"})
+			}
+		}
 	}
 	status := strings.TrimSpace(c.Query("status"))
 	items, err := h.service.List(userID, u.Role, status)
@@ -133,4 +150,44 @@ func (h *OrderHandler) PatchOrderStatus(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update order status"})
 	}
 	return c.JSON(fiber.Map{"message": "order status updated"})
+}
+
+func (h *OrderHandler) MarkShipped(c *fiber.Ctx) error {
+	type reqBody struct {
+		TrackingNo string `json:"tracking_no"`
+		Courier    string `json:"courier"`
+	}
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
+	}
+	u, err := h.auth.GetUserByID(userID)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "user not found"})
+	}
+	if u.Role != domain.RoleFactory {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "factory role required"})
+	}
+	orderID, err := c.ParamsInt("order_id")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid order_id"})
+	}
+	var req reqBody
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	if err := h.service.MarkShipped(int64(orderID), userID, req.TrackingNo, req.Courier); err != nil {
+		if errors.Is(err, service.ErrShipOrderInvalid) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
+		if repository.IsNotFoundError(err) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "order not found"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to mark order as shipped"})
+	}
+	item, err := h.service.GetByID(int64(orderID), userID, u.Role)
+	if err != nil {
+		return c.JSON(fiber.Map{"message": "order marked as shipped"})
+	}
+	return c.JSON(item)
 }

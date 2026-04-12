@@ -29,6 +29,10 @@ func (s *ShowcaseService) GetByID(showcaseID, factoryID int64) (*domain.FactoryS
 	return s.repo.GetByID(showcaseID, factoryID)
 }
 
+func (s *ShowcaseService) GetAnalytics(showcaseID, factoryID int64) (*domain.ShowcaseAnalytics, error) {
+	return s.repo.GetAnalytics(showcaseID, factoryID)
+}
+
 func (s *ShowcaseService) Update(showcase *domain.FactoryShowcase) error {
 	return s.repo.Update(showcase)
 }

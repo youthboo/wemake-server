@@ -3,6 +3,8 @@ package repository
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/yourusername/wemake/internal/domain"
@@ -64,14 +66,22 @@ func (r *OrderRepository) Create(order *domain.Order) error {
 func (r *OrderRepository) ListByUserID(userID int64, status string) ([]domain.Order, error) {
 	var orders []domain.Order
 	query := `
-		SELECT order_id, quote_id, user_id, factory_id, total_amount, deposit_amount, status, estimated_delivery, created_at, updated_at
+		SELECT order_id, quote_id, user_id, factory_id, total_amount, deposit_amount, status, estimated_delivery, tracking_no, courier, shipped_at, created_at, updated_at
 		FROM orders
 		WHERE user_id = $1
 	`
 	args := []interface{}{userID}
-	if status != "" {
+	statuses := splitOrderStatuses(status)
+	if len(statuses) == 1 {
 		query += " AND status = $2"
-		args = append(args, status)
+		args = append(args, statuses[0])
+	} else if len(statuses) > 1 {
+		placeholders := make([]string, 0, len(statuses))
+		for _, st := range statuses {
+			placeholders = append(placeholders, fmt.Sprintf("$%d", len(args)+1))
+			args = append(args, st)
+		}
+		query += " AND status IN (" + strings.Join(placeholders, ", ") + ")"
 	}
 	query += " ORDER BY created_at DESC"
 	err := r.db.Select(&orders, query, args...)
@@ -81,7 +91,7 @@ func (r *OrderRepository) ListByUserID(userID int64, status string) ([]domain.Or
 func (r *OrderRepository) GetByID(orderID, userID int64) (*domain.Order, error) {
 	var order domain.Order
 	query := `
-		SELECT order_id, quote_id, user_id, factory_id, total_amount, deposit_amount, status, estimated_delivery, created_at, updated_at
+		SELECT order_id, quote_id, user_id, factory_id, total_amount, deposit_amount, status, estimated_delivery, tracking_no, courier, shipped_at, created_at, updated_at
 		FROM orders
 		WHERE order_id = $1 AND user_id = $2
 	`
@@ -100,14 +110,22 @@ func (r *OrderRepository) UpdateStatus(orderID int64, status string) error {
 func (r *OrderRepository) ListByFactoryID(factoryID int64, status string) ([]domain.Order, error) {
 	var orders []domain.Order
 	query := `
-		SELECT order_id, quote_id, user_id, factory_id, total_amount, deposit_amount, status, estimated_delivery, created_at, updated_at
+		SELECT order_id, quote_id, user_id, factory_id, total_amount, deposit_amount, status, estimated_delivery, tracking_no, courier, shipped_at, created_at, updated_at
 		FROM orders
 		WHERE factory_id = $1
 	`
 	args := []interface{}{factoryID}
-	if status != "" {
+	statuses := splitOrderStatuses(status)
+	if len(statuses) == 1 {
 		query += " AND status = $2"
-		args = append(args, status)
+		args = append(args, statuses[0])
+	} else if len(statuses) > 1 {
+		placeholders := make([]string, 0, len(statuses))
+		for _, st := range statuses {
+			placeholders = append(placeholders, fmt.Sprintf("$%d", len(args)+1))
+			args = append(args, st)
+		}
+		query += " AND status IN (" + strings.Join(placeholders, ", ") + ")"
 	}
 	query += " ORDER BY created_at DESC"
 	err := r.db.Select(&orders, query, args...)
@@ -117,7 +135,7 @@ func (r *OrderRepository) ListByFactoryID(factoryID int64, status string) ([]dom
 func (r *OrderRepository) GetByParticipant(orderID, userID int64, role string) (*domain.Order, error) {
 	var order domain.Order
 	query := `
-		SELECT order_id, quote_id, user_id, factory_id, total_amount, deposit_amount, status, estimated_delivery, created_at, updated_at
+		SELECT order_id, quote_id, user_id, factory_id, total_amount, deposit_amount, status, estimated_delivery, tracking_no, courier, shipped_at, created_at, updated_at
 		FROM orders
 		WHERE order_id = $1
 	`
@@ -161,4 +179,45 @@ func (r *OrderRepository) ListActivity(orderID int64) ([]domain.OrderActivityEnt
 		ORDER BY created_at ASC
 	`, orderID)
 	return rows, err
+}
+
+func splitOrderStatuses(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		item := strings.TrimSpace(strings.ToUpper(part))
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	return out
+}
+
+func (r *OrderRepository) MarkShipped(orderID, factoryID int64, trackingNo, courier string) error {
+	res, err := r.db.Exec(`
+		UPDATE orders
+		SET status = 'SH',
+		    tracking_no = $1,
+		    courier = $2,
+		    shipped_at = NOW(),
+		    updated_at = NOW()
+		WHERE order_id = $3 AND factory_id = $4
+	`, trackingNo, courier, orderID, factoryID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
