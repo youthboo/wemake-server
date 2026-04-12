@@ -2,6 +2,24 @@ package domain
 
 import "time"
 
+// FactoryAnalytics is the payload for GET /factories/me/analytics.
+type FactoryAnalytics struct {
+	FactoryID        int64   `json:"factory_id"`
+	TotalOrders      int64   `json:"total_orders"`
+	CompletedOrders  int64   `json:"completed_orders"`
+	ActiveOrders     int64   `json:"active_orders"`
+	CancelledOrders  int64   `json:"cancelled_orders"`
+	TotalRevenue     float64 `json:"total_revenue"`
+	TotalQuotations  int64   `json:"total_quotations"`
+	AcceptedQuotes   int64   `json:"accepted_quotes"`
+	PendingQuotes    int64   `json:"pending_quotes"`
+	TotalShowcases   int64   `json:"total_showcases"`
+	TotalViews       int64   `json:"total_views"`
+	TotalLikes       int64   `json:"total_likes"`
+	AverageRating    float64 `json:"average_rating"`
+	TotalReviews     int64   `json:"total_reviews"`
+}
+
 // FactoryListItem is the JSON shape for GET /api/v1/factories (Explore listing).
 type FactoryListItem struct {
 	FactoryID       int64    `json:"factory_id" db:"factory_id"`

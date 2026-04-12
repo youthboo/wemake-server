@@ -50,6 +50,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	withdrawalRepo := repository.NewWithdrawalRepository(db)
 	disputeRepo := repository.NewDisputeRepository(db)
 	quotationTemplateRepo := repository.NewQuotationTemplateRepository(db)
+	paymentScheduleRepo := repository.NewPaymentScheduleRepository(db)
 
 	// Initialize services
 	authService := service.NewAuthService(authRepo, cfg.JWTSecret)
@@ -76,6 +77,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	withdrawalService := service.NewWithdrawalService(withdrawalRepo, walletRepo)
 	disputeService := service.NewDisputeService(disputeRepo)
 	quotationTemplateService := service.NewQuotationTemplateService(quotationTemplateRepo)
+	paymentScheduleService := service.NewPaymentScheduleService(paymentScheduleRepo)
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService)
@@ -108,6 +110,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	withdrawalHandler := handler.NewWithdrawalHandler(withdrawalService)
 	disputeHandler := handler.NewDisputeHandler(disputeService)
 	quotationTemplateHandler := handler.NewQuotationTemplateHandler(quotationTemplateService)
+	paymentScheduleHandler := handler.NewPaymentScheduleHandler(paymentScheduleService)
 
 	// Health check route
 	app.Get("/health", func(c *fiber.Ctx) error {
@@ -131,6 +134,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	api.Get("/factories", factoryHandler.List)
 	api.Get("/factories/me", factoryHandler.GetMe)
 	api.Get("/factories/me/dashboard", factoryHandler.GetDashboard)
+	api.Get("/factories/me/analytics", factoryHandler.GetAnalytics)
 
 	factories := api.Group("/factories")
 	factories.Get("/:factory_id/categories", factoryHandler.ListCategories)
@@ -195,6 +199,8 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	orders.Patch("/:order_id/cancel", orderHandler.CancelOrder)
 	orders.Post("/:order_id/disputes", disputeHandler.Create)
 	orders.Get("/:order_id/disputes", disputeHandler.GetByOrderID)
+	orders.Get("/:order_id/payment-schedules", paymentScheduleHandler.List)
+	orders.Post("/:order_id/payment-schedules", paymentScheduleHandler.Create)
 	orders.Post("/:order_id/production-updates", productionHandler.CreateUpdate)
 	orders.Get("/:order_id/production-updates", productionHandler.ListUpdates)
 
@@ -259,6 +265,9 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 
 	disputes := api.Group("/disputes")
 	disputes.Patch("/:dispute_id", disputeHandler.PatchStatus)
+
+	paymentSchedules := api.Group("/payment-schedules")
+	paymentSchedules.Patch("/:schedule_id", paymentScheduleHandler.PatchStatus)
 
 	quotationTemplates := api.Group("/quotation-templates")
 	quotationTemplates.Get("/", quotationTemplateHandler.List)

@@ -334,6 +334,26 @@ func (h *FactoryHandler) ReplaceSubCategories(c *fiber.Ctx) error {
 	})
 }
 
+// GET /factories/me/analytics
+func (h *FactoryHandler) GetAnalytics(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid user context"})
+	}
+	u, err := h.auth.GetUserByID(userID)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "user not found"})
+	}
+	if strings.TrimSpace(strings.ToUpper(u.Role)) != domain.RoleFactory {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "factory role required"})
+	}
+	item, err := h.service.GetAnalytics(userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch analytics"})
+	}
+	return c.JSON(item)
+}
+
 func (h *FactoryHandler) GetDashboard(c *fiber.Ctx) error {
 	userID, err := getUserIDFromHeader(c)
 	if err != nil {

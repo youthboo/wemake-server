@@ -35,8 +35,9 @@ type FactoryProfile struct {
 	Specialization  *string  `db:"specialization" json:"specialization,omitempty"`
 	MinOrder        *int64   `db:"min_order" json:"min_order,omitempty"`
 	LeadTimeDesc    *string  `db:"lead_time_desc" json:"lead_time_desc,omitempty"`
-	IsVerified      bool     `db:"is_verified" json:"is_verified"`
-	CompletedOrders int64    `db:"completed_orders" json:"completed_orders"`
+	IsVerified      bool       `db:"is_verified" json:"is_verified"`
+	VerifiedAt      *time.Time `db:"verified_at" json:"verified_at,omitempty"`
+	CompletedOrders int64      `db:"completed_orders" json:"completed_orders"`
 	ImageURL        *string  `db:"image_url" json:"image_url,omitempty"`
 	Description     *string  `db:"description" json:"description,omitempty"`
 	PriceRange      *string  `db:"price_range" json:"price_range,omitempty"`

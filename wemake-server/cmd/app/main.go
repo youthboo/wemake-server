@@ -6,6 +6,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/yourusername/wemake/api"
 	"github.com/yourusername/wemake/internal/config"
+	"github.com/yourusername/wemake/internal/jobs"
 )
 
 func main() {
@@ -26,6 +27,9 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	defer db.Close()
+
+	// Start background jobs (expiration + auto-matching notifications)
+	jobs.Start(db)
 
 	// Initialize router and start server
 	app := api.SetupRoutes(db, cfg)

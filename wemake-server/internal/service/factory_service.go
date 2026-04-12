@@ -60,3 +60,7 @@ func (s *FactoryService) ReplaceFactorySubCategories(factoryID int64, subCategor
 func (s *FactoryService) GetDashboard(factoryID int64) (*domain.FactoryDashboard, error) {
 	return s.repo.GetDashboard(factoryID)
 }
+
+func (s *FactoryService) GetAnalytics(factoryID int64) (*domain.FactoryAnalytics, error) {
+	return s.repo.GetAnalytics(factoryID)
+}

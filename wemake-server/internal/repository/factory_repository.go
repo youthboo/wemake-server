@@ -614,3 +614,58 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 
 	return &out, nil
 }
+
+// GetAnalytics returns aggregate stats for GET /factories/me/analytics.
+func (r *FactoryRepository) GetAnalytics(factoryID int64) (*domain.FactoryAnalytics, error) {
+	out := &domain.FactoryAnalytics{FactoryID: factoryID}
+
+	if err := r.db.QueryRow(`
+		SELECT
+			COUNT(*) AS total_orders,
+			COUNT(*) FILTER (WHERE status = 'CP') AS completed_orders,
+			COUNT(*) FILTER (WHERE status IN ('PR','QC','SH','PP','WF','DL')) AS active_orders,
+			COUNT(*) FILTER (WHERE status = 'CC') AS cancelled_orders,
+			COALESCE(SUM(total_amount) FILTER (WHERE status = 'CP'), 0) AS total_revenue
+		FROM orders
+		WHERE factory_id = $1
+	`, factoryID).Scan(
+		&out.TotalOrders, &out.CompletedOrders, &out.ActiveOrders,
+		&out.CancelledOrders, &out.TotalRevenue,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := r.db.QueryRow(`
+		SELECT
+			COUNT(*) AS total_quotations,
+			COUNT(*) FILTER (WHERE status = 'AC') AS accepted_quotes,
+			COUNT(*) FILTER (WHERE status = 'PD') AS pending_quotes
+		FROM quotations
+		WHERE factory_id = $1
+	`, factoryID).Scan(&out.TotalQuotations, &out.AcceptedQuotes, &out.PendingQuotes); err != nil {
+		return nil, err
+	}
+
+	if err := r.db.QueryRow(`
+		SELECT
+			COUNT(*) AS total_showcases,
+			COALESCE(SUM(view_count), 0) AS total_views,
+			COALESCE(SUM(likes_count), 0) AS total_likes
+		FROM factory_showcases
+		WHERE factory_id = $1
+	`, factoryID).Scan(&out.TotalShowcases, &out.TotalViews, &out.TotalLikes); err != nil {
+		return nil, err
+	}
+
+	if err := r.db.QueryRow(`
+		SELECT
+			COALESCE(AVG(rating), 0) AS average_rating,
+			COUNT(*) AS total_reviews
+		FROM factory_reviews
+		WHERE factory_id = $1
+	`, factoryID).Scan(&out.AverageRating, &out.TotalReviews); err != nil {
+		return nil, err
+	}
+
+	return out, nil
+}
