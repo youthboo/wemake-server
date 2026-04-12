@@ -143,13 +143,41 @@ func (h *OrderHandler) PatchOrderStatus(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
 	}
 	status := strings.TrimSpace(strings.ToUpper(req.Status))
-	if status != "PR" && status != "QC" && status != "SH" && status != "CP" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "status must be PR, QC, SH or CP"})
+	validOrderStatuses := map[string]struct{}{
+		"PP": {}, "PR": {}, "WF": {}, "QC": {}, "SH": {}, "DL": {}, "AC": {}, "CP": {}, "CC": {},
+	}
+	if _, ok := validOrderStatuses[status]; !ok {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "status must be PP, PR, WF, QC, SH, DL, AC, CP, or CC"})
 	}
 	if err := h.service.UpdateStatus(int64(orderID), status, actor); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update order status"})
 	}
 	return c.JSON(fiber.Map{"message": "order status updated"})
+}
+
+func (h *OrderHandler) CancelOrder(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
+	}
+	u, err := h.auth.GetUserByID(userID)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "user not found"})
+	}
+	orderID, err := c.ParamsInt("order_id")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid order_id"})
+	}
+	if err := h.service.Cancel(int64(orderID), userID, u.Role); err != nil {
+		if errors.Is(err, service.ErrOrderCannotBeCancelled) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
+		if repository.IsNotFoundError(err) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "order not found"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to cancel order"})
+	}
+	return c.JSON(fiber.Map{"message": "order cancelled"})
 }
 
 func (h *OrderHandler) MarkShipped(c *fiber.Ctx) error {

@@ -149,6 +149,11 @@ func (r *ShowcaseRepository) Update(s *domain.FactoryShowcase) error {
 	return nil
 }
 
+func (r *ShowcaseRepository) IncrementViewCount(showcaseID int64) error {
+	_, err := r.db.Exec(`UPDATE factory_showcases SET view_count = view_count + 1 WHERE showcase_id = $1`, showcaseID)
+	return err
+}
+
 func (r *ShowcaseRepository) Delete(showcaseID, factoryID int64) error {
 	res, err := r.db.Exec(`DELETE FROM factory_showcases WHERE showcase_id = $1 AND factory_id = $2`, showcaseID, factoryID)
 	if err != nil {

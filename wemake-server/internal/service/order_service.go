@@ -12,6 +12,7 @@ import (
 
 var ErrQuotationNotAccepted = errors.New("quotation must be accepted before creating order")
 var ErrShipOrderInvalid = errors.New("tracking_no and courier are required")
+var ErrOrderCannotBeCancelled = errors.New("order cannot be cancelled in its current status")
 
 type OrderService struct {
 	repo *repository.OrderRepository
@@ -80,6 +81,24 @@ func (s *OrderService) UpdateStatus(orderID int64, status string, actorUserID *i
 
 func (s *OrderService) ListActivity(orderID int64) ([]domain.OrderActivityEntry, error) {
 	return s.repo.ListActivity(orderID)
+}
+
+func (s *OrderService) Cancel(orderID, userID int64, role string) error {
+	order, err := s.repo.GetByParticipant(orderID, userID, role)
+	if err != nil {
+		return err
+	}
+	cancellableStatuses := map[string]struct{}{"PE": {}, "PP": {}, "PR": {}, "WF": {}}
+	if _, ok := cancellableStatuses[order.Status]; !ok {
+		return ErrOrderCannotBeCancelled
+	}
+	if err := s.repo.UpdateStatus(orderID, "CC"); err != nil {
+		return err
+	}
+	return s.repo.InsertActivity(orderID, &userID, "ORDER_CANCELLED", map[string]interface{}{
+		"status":         "CC",
+		"previous_status": order.Status,
+	})
 }
 
 func (s *OrderService) MarkShipped(orderID, factoryID int64, trackingNo, courier string) error {

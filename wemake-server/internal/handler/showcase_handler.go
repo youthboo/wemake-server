@@ -164,6 +164,16 @@ func (h *ShowcaseHandler) Create(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(req)
 }
 
+// POST /showcases/:showcase_id/view — increment view count
+func (h *ShowcaseHandler) RecordView(c *fiber.Ctx) error {
+	showcaseID, err := strconv.ParseInt(c.Params("showcase_id"), 10, 64)
+	if err != nil || showcaseID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid showcase_id"})
+	}
+	_ = h.service.RecordView(showcaseID) // fire-and-forget; don't surface errors to caller
+	return c.JSON(fiber.Map{"message": "view recorded"})
+}
+
 func (h *ShowcaseHandler) ListPromoSlides(c *fiber.Ctx) error {
 	items, err := h.service.ListPromoSlides()
 	if err != nil {

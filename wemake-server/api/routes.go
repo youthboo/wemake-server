@@ -45,6 +45,11 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	factoryRepo := repository.NewFactoryRepository(db)
 	favoriteRepo := repository.NewFavoriteRepository(db)
 	certificateRepo := repository.NewCertificateRepository(db)
+	settlementRepo := repository.NewSettlementRepository(db)
+	topupRepo := repository.NewTopupRepository(db)
+	withdrawalRepo := repository.NewWithdrawalRepository(db)
+	disputeRepo := repository.NewDisputeRepository(db)
+	quotationTemplateRepo := repository.NewQuotationTemplateRepository(db)
 
 	// Initialize services
 	authService := service.NewAuthService(authRepo, cfg.JWTSecret)
@@ -66,6 +71,11 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	factoryService := service.NewFactoryService(factoryRepo)
 	favoriteService := service.NewFavoriteService(favoriteRepo)
 	certificateService := service.NewCertificateService(certificateRepo)
+	settlementService := service.NewSettlementService(settlementRepo)
+	topupService := service.NewTopupService(topupRepo, walletRepo)
+	withdrawalService := service.NewWithdrawalService(withdrawalRepo, walletRepo)
+	disputeService := service.NewDisputeService(disputeRepo)
+	quotationTemplateService := service.NewQuotationTemplateService(quotationTemplateRepo)
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService)
@@ -93,6 +103,11 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	factoryHandler := handler.NewFactoryHandler(factoryService, authService)
 	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 	certificateHandler := handler.NewCertificateHandler(certificateService)
+	settlementHandler := handler.NewSettlementHandler(settlementService)
+	topupHandler := handler.NewTopupHandler(topupService)
+	withdrawalHandler := handler.NewWithdrawalHandler(withdrawalService)
+	disputeHandler := handler.NewDisputeHandler(disputeService)
+	quotationTemplateHandler := handler.NewQuotationTemplateHandler(quotationTemplateService)
 
 	// Health check route
 	app.Get("/health", func(c *fiber.Ctx) error {
@@ -163,6 +178,12 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	wallets := api.Group("/wallets")
 	wallets.Get("/me", walletHandler.GetMyWallet)
 	wallets.Get("/me/transactions", walletHandler.ListMyTransactions)
+	wallets.Post("/topup", topupHandler.CreateIntent)
+	wallets.Get("/topup/:intent_id", topupHandler.GetIntent)
+	wallets.Post("/topup/:intent_id/confirm", topupHandler.ConfirmIntent)
+	wallets.Post("/withdraw", withdrawalHandler.Create)
+	wallets.Get("/withdraw", withdrawalHandler.List)
+	wallets.Patch("/withdraw/:request_id/status", withdrawalHandler.PatchStatus)
 
 	orders := api.Group("/orders")
 	orders.Post("/", orderHandler.CreateOrder)
@@ -171,6 +192,9 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	orders.Get("/:order_id", orderHandler.GetOrder)
 	orders.Post("/:order_id/ship", orderHandler.MarkShipped)
 	orders.Patch("/:order_id/status", orderHandler.PatchOrderStatus)
+	orders.Patch("/:order_id/cancel", orderHandler.CancelOrder)
+	orders.Post("/:order_id/disputes", disputeHandler.Create)
+	orders.Get("/:order_id/disputes", disputeHandler.GetByOrderID)
 	orders.Post("/:order_id/production-updates", productionHandler.CreateUpdate)
 	orders.Get("/:order_id/production-updates", productionHandler.ListUpdates)
 
@@ -215,6 +239,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	showcases.Get("/", showcaseHandler.List)
 	showcases.Post("/", showcaseHandler.Create)
 	showcases.Get("/:showcase_id/analytics", showcaseHandler.GetAnalytics)
+	showcases.Post("/:showcase_id/view", showcaseHandler.RecordView)
 	showcases.Patch("/:showcase_id", showcaseHandler.Patch)
 	showcases.Delete("/:showcase_id", showcaseHandler.Delete)
 
@@ -225,6 +250,21 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	favorites.Get("/", favoriteHandler.List)
 	favorites.Post("/", favoriteHandler.Add)
 	favorites.Delete("/:showcase_id", favoriteHandler.Remove)
+
+	settlements := api.Group("/settlements")
+	settlements.Get("/", settlementHandler.List)
+	settlements.Post("/", settlementHandler.Create)
+	settlements.Get("/:settlement_id", settlementHandler.GetByID)
+	settlements.Patch("/:settlement_id/status", settlementHandler.PatchStatus)
+
+	disputes := api.Group("/disputes")
+	disputes.Patch("/:dispute_id", disputeHandler.PatchStatus)
+
+	quotationTemplates := api.Group("/quotation-templates")
+	quotationTemplates.Get("/", quotationTemplateHandler.List)
+	quotationTemplates.Post("/", quotationTemplateHandler.Create)
+	quotationTemplates.Patch("/:template_id", quotationTemplateHandler.Patch)
+	quotationTemplates.Delete("/:template_id", quotationTemplateHandler.Delete)
 
 	frontend := api.Group("/frontend")
 	frontend.Get("/bootstrap", frontendHandler.GetBootstrap)

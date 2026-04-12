@@ -41,6 +41,10 @@ func (s *ShowcaseService) Delete(showcaseID, factoryID int64) error {
 	return s.repo.Delete(showcaseID, factoryID)
 }
 
+func (s *ShowcaseService) RecordView(showcaseID int64) error {
+	return s.repo.IncrementViewCount(showcaseID)
+}
+
 func (s *ShowcaseService) ListPromoSlides() ([]domain.PromoSlide, error) {
 	return s.repo.ListPromoSlides()
 }
