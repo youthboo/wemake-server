@@ -44,3 +44,7 @@ func (s *MasterService) GetUnits() ([]domain.LBIUnit, error) {
 func (s *MasterService) GetShippingMethods() ([]domain.LBIShippingMethod, error) {
 	return s.repo.GetShippingMethods()
 }
+
+func (s *MasterService) GetCertificates() ([]domain.LBIMasterCertificate, error) {
+	return s.repo.GetCertificates()
+}

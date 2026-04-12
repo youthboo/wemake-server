@@ -42,6 +42,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	conversationRepo := repository.NewConversationRepository(db)
 	notificationRepo := repository.NewNotificationRepository(db)
 	showcaseRepo := repository.NewShowcaseRepository(db)
+	factoryRepo := repository.NewFactoryRepository(db)
 	favoriteRepo := repository.NewFavoriteRepository(db)
 	certificateRepo := repository.NewCertificateRepository(db)
 
@@ -62,6 +63,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	conversationService := service.NewConversationService(conversationRepo)
 	notificationService := service.NewNotificationService(notificationRepo)
 	showcaseService := service.NewShowcaseService(showcaseRepo)
+	factoryService := service.NewFactoryService(factoryRepo)
 	favoriteService := service.NewFavoriteService(favoriteRepo)
 	certificateService := service.NewCertificateService(certificateRepo)
 
@@ -88,6 +90,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	conversationHandler := handler.NewConversationHandler(conversationService)
 	notificationHandler := handler.NewNotificationHandler(notificationService)
 	showcaseHandler := handler.NewShowcaseHandler(showcaseService)
+	factoryHandler := handler.NewFactoryHandler(factoryService)
 	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 	certificateHandler := handler.NewCertificateHandler(certificateService)
 
@@ -110,11 +113,18 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	api.Get("/categories/:id/sub-categories", catalogHandler.GetSubCategories)
 	api.Get("/units", catalogHandler.GetUnits)
 
+	api.Get("/factories", factoryHandler.List)
+
 	factories := api.Group("/factories")
+	factories.Get("/:factory_id/categories", factoryHandler.ListCategories)
+	factories.Post("/:factory_id/categories", factoryHandler.AddCategory)
+	factories.Delete("/:factory_id/categories/:category_id", factoryHandler.RemoveCategory)
 	factories.Get("/:factory_id/reviews", reviewHandler.ListByFactory)
 	factories.Post("/:factory_id/reviews", reviewHandler.Create)
 	factories.Get("/:factory_id/certificates", certificateHandler.ListByFactory)
 	factories.Post("/:factory_id/certificates", certificateHandler.Create)
+	factories.Get("/:factory_id/showcases", showcaseHandler.ListByFactory)
+	factories.Get("/:factory_id", factoryHandler.GetByID)
 
 	addresses := api.Group("/addresses")
 	addresses.Get("/", addressHandler.ListAddresses)
@@ -163,10 +173,12 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	master.Get("/districts", masterHandler.GetDistricts)
 	master.Get("/sub-districts", masterHandler.GetSubDistricts)
 	master.Get("/factory-types", masterHandler.GetFactoryTypes)
+	master.Get("/categories", masterHandler.GetCategories)
 	master.Get("/product-categories", masterHandler.GetProductCategories)
 	master.Get("/production-steps", masterHandler.GetProductionSteps)
 	master.Get("/units", masterHandler.GetUnits)
 	master.Get("/shipping-methods", masterHandler.GetShippingMethods)
+	master.Get("/certificates", masterHandler.GetCertificates)
 
 	media := api.Group("/media")
 	media.Post("/upload", mediaHandler.UploadFile)

@@ -61,10 +61,22 @@ func (r *MasterRepository) GetProductCategories(parentID *int64) ([]domain.LBIPr
 	query := `
 		SELECT c.category_id,
 		       NULL::bigint AS parent_category_id,
-		       c.name AS category_name,
+		       c.name AS name,
 		       '1' AS status
 		FROM categories c
 		ORDER BY c.category_id
+	`
+	err := r.db.Select(&items, query)
+	return items, err
+}
+
+func (r *MasterRepository) GetCertificates() ([]domain.LBIMasterCertificate, error) {
+	var items []domain.LBIMasterCertificate
+	query := `
+		SELECT cert_id, cert_name, description
+		FROM lbi_certificates
+		WHERE status = '1'
+		ORDER BY cert_id
 	`
 	err := r.db.Select(&items, query)
 	return items, err

@@ -13,8 +13,12 @@ func NewShowcaseService(repo *repository.ShowcaseRepository) *ShowcaseService {
 	return &ShowcaseService{repo: repo}
 }
 
-func (s *ShowcaseService) ListAll(contentType string) ([]domain.FactoryShowcase, error) {
-	return s.repo.ListAll(contentType)
+func (s *ShowcaseService) ListExplore(contentType string) ([]domain.ShowcaseExploreItem, error) {
+	return s.repo.ListExplore(contentType)
+}
+
+func (s *ShowcaseService) ListExploreByFactory(factoryID int64, contentType string) ([]domain.ShowcaseExploreItem, error) {
+	return s.repo.ListExploreByFactory(factoryID, contentType)
 }
 
 func (s *ShowcaseService) Create(showcase *domain.FactoryShowcase) error {

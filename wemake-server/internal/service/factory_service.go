@@ -1,0 +1,38 @@
+package service
+
+import (
+	"github.com/yourusername/wemake/internal/domain"
+	"github.com/yourusername/wemake/internal/repository"
+)
+
+type FactoryService struct {
+	repo *repository.FactoryRepository
+}
+
+func NewFactoryService(repo *repository.FactoryRepository) *FactoryService {
+	return &FactoryService{repo: repo}
+}
+
+func (s *FactoryService) ListPublic() ([]domain.FactoryListItem, error) {
+	return s.repo.ListPublicVerified()
+}
+
+func (s *FactoryService) GetPublicDetail(factoryID int64) (*domain.FactoryPublicDetail, error) {
+	return s.repo.GetPublicDetail(factoryID)
+}
+
+func (s *FactoryService) FactoryExistsActive(factoryID int64) (bool, error) {
+	return s.repo.FactoryExistsActive(factoryID)
+}
+
+func (s *FactoryService) ListFactoryCategories(factoryID int64) ([]domain.FactoryProfileCategory, error) {
+	return s.repo.ListFactoryCategories(factoryID)
+}
+
+func (s *FactoryService) AddFactoryCategory(factoryID, categoryID int64) error {
+	return s.repo.AddFactoryCategory(factoryID, categoryID)
+}
+
+func (s *FactoryService) RemoveFactoryCategory(factoryID, categoryID int64) error {
+	return s.repo.RemoveFactoryCategory(factoryID, categoryID)
+}

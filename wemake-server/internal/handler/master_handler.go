@@ -79,6 +79,15 @@ func (h *MasterHandler) GetProductCategories(c *fiber.Ctx) error {
 	return c.JSON(items)
 }
 
+// GetCategories is an alias for product master list (same payload as GET /master/product-categories).
+func (h *MasterHandler) GetCategories(c *fiber.Ctx) error {
+	items, err := h.service.GetProductCategories(nil)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch categories"})
+	}
+	return c.JSON(items)
+}
+
 func (h *MasterHandler) GetProductionSteps(c *fiber.Ctx) error {
 	var factoryTypeID *int64
 	if raw := c.Query("factory_type_id"); raw != "" {
@@ -107,6 +116,14 @@ func (h *MasterHandler) GetShippingMethods(c *fiber.Ctx) error {
 	items, err := h.service.GetShippingMethods()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch shipping methods"})
+	}
+	return c.JSON(items)
+}
+
+func (h *MasterHandler) GetCertificates(c *fiber.Ctx) error {
+	items, err := h.service.GetCertificates()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch certificates"})
 	}
 	return c.JSON(items)
 }

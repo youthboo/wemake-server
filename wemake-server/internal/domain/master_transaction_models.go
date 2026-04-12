@@ -47,8 +47,15 @@ type LBIFactoryType struct {
 type LBIProductCategory struct {
 	CategoryID       int64  `db:"category_id" json:"category_id"`
 	ParentCategoryID *int64 `db:"parent_category_id" json:"parent_category_id,omitempty"`
-	CategoryName     string `db:"category_name" json:"category_name"`
-	Status           string `db:"status" json:"status"`
+	Name             string `db:"name" json:"name"`
+	Status           string `db:"status" json:"status,omitempty"`
+}
+
+// LBIMasterCertificate is a row from lbi_certificates for GET /master/certificates.
+type LBIMasterCertificate struct {
+	CertID      int64   `db:"cert_id" json:"cert_id"`
+	CertName    string  `db:"cert_name" json:"cert_name"`
+	Description *string `db:"description" json:"description,omitempty"`
 }
 
 type LBIProduction struct {

@@ -30,7 +30,27 @@ func (h *ShowcaseHandler) List(c *fiber.Ctx) error {
 			})
 		}
 	}
-	items, err := h.service.ListAll(contentType)
+	items, err := h.service.ListExplore(contentType)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch showcases"})
+	}
+	return c.JSON(items)
+}
+
+func (h *ShowcaseHandler) ListByFactory(c *fiber.Ctx) error {
+	factoryID, err := c.ParamsInt("factory_id")
+	if err != nil || factoryID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid factory_id"})
+	}
+	contentType := strings.TrimSpace(c.Query("type", ""))
+	if contentType != "" {
+		if _, ok := showcaseTypeQueryAllowed[contentType]; !ok {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid query type: use PD, PM, or ID; omit type for all showcases for this factory",
+			})
+		}
+	}
+	items, err := h.service.ListExploreByFactory(int64(factoryID), contentType)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch showcases"})
 	}

@@ -23,10 +23,10 @@ func (r *CatalogRepository) GetCategories() ([]domain.Category, error) {
 func (r *CatalogRepository) GetSubCategories(categoryID int64) ([]domain.SubCategory, error) {
 	var subCategories []domain.SubCategory
 	query := `
-		SELECT sub_category_id, name, sort_order
+		SELECT sub_category_id, category_id, name, sort_order, status
 		FROM lbi_sub_categories
 		WHERE category_id = $1 AND status = '1'
-		ORDER BY sort_order ASC, name ASC
+		ORDER BY sort_order ASC, sub_category_id ASC, name ASC
 	`
 	err := r.db.Select(&subCategories, query, categoryID)
 	return subCategories, err
@@ -34,7 +34,12 @@ func (r *CatalogRepository) GetSubCategories(categoryID int64) ([]domain.SubCate
 
 func (r *CatalogRepository) GetUnits() ([]domain.Unit, error) {
 	var units []domain.Unit
-	query := "SELECT unit_id, name, unit_name_en FROM units ORDER BY unit_id ASC"
+	query := `
+		SELECT unit_id, unit_name_th AS name, unit_name_en
+		FROM lbi_units
+		WHERE status = '1'
+		ORDER BY unit_id ASC
+	`
 	err := r.db.Select(&units, query)
 	return units, err
 }
