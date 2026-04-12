@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -88,9 +89,54 @@ func (r *ShowcaseRepository) Create(showcase *domain.FactoryShowcase) error {
 	return err
 }
 
+func (r *ShowcaseRepository) GetByID(showcaseID, factoryID int64) (*domain.FactoryShowcase, error) {
+	var s domain.FactoryShowcase
+	err := r.db.Get(&s, `SELECT * FROM factory_showcases WHERE showcase_id = $1 AND factory_id = $2`, showcaseID, factoryID)
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
 func (r *ShowcaseRepository) ListPromoSlides() ([]domain.PromoSlide, error) {
 	var items []domain.PromoSlide
 	query := `SELECT * FROM promo_slides WHERE status = '1' ORDER BY slide_id DESC`
 	err := r.db.Select(&items, query)
 	return items, err
+}
+
+func (r *ShowcaseRepository) Update(s *domain.FactoryShowcase) error {
+	query := `
+		UPDATE factory_showcases
+		SET content_type = :content_type, title = :title, excerpt = :excerpt, image_url = :image_url,
+		    category_id = :category_id, sub_category_id = :sub_category_id, min_order = :min_order, lead_time_days = :lead_time_days
+		WHERE showcase_id = :showcase_id AND factory_id = :factory_id
+	`
+	res, err := r.db.NamedExec(query, s)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (r *ShowcaseRepository) Delete(showcaseID, factoryID int64) error {
+	res, err := r.db.Exec(`DELETE FROM factory_showcases WHERE showcase_id = $1 AND factory_id = $2`, showcaseID, factoryID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }

@@ -48,17 +48,34 @@ func (s *OrderService) CreateFromQuotation(quotationID, userID int64) (*domain.O
 	if err := s.repo.Create(order); err != nil {
 		return nil, err
 	}
+	uid := userID
+	_ = s.repo.InsertActivity(order.OrderID, &uid, "ORDER_CREATED", map[string]interface{}{
+		"status": order.Status, "quote_id": order.QuotationID,
+	})
 	return order, nil
 }
 
-func (s *OrderService) ListByUserID(userID int64, status string) ([]domain.Order, error) {
-	return s.repo.ListByUserID(userID, strings.TrimSpace(strings.ToUpper(status)))
+func (s *OrderService) List(userID int64, role string, status string) ([]domain.Order, error) {
+	st := strings.TrimSpace(strings.ToUpper(status))
+	if role == domain.RoleFactory {
+		return s.repo.ListByFactoryID(userID, st)
+	}
+	return s.repo.ListByUserID(userID, st)
 }
 
-func (s *OrderService) GetByID(orderID, userID int64) (*domain.Order, error) {
-	return s.repo.GetByID(orderID, userID)
+func (s *OrderService) GetByID(orderID, userID int64, role string) (*domain.Order, error) {
+	return s.repo.GetByParticipant(orderID, userID, role)
 }
 
-func (s *OrderService) UpdateStatus(orderID int64, status string) error {
-	return s.repo.UpdateStatus(orderID, strings.TrimSpace(strings.ToUpper(status)))
+func (s *OrderService) UpdateStatus(orderID int64, status string, actorUserID *int64) error {
+	if err := s.repo.UpdateStatus(orderID, strings.TrimSpace(strings.ToUpper(status))); err != nil {
+		return err
+	}
+	return s.repo.InsertActivity(orderID, actorUserID, "ORDER_STATUS", map[string]interface{}{
+		"status": strings.TrimSpace(strings.ToUpper(status)),
+	})
+}
+
+func (s *OrderService) ListActivity(orderID int64) ([]domain.OrderActivityEntry, error) {
+	return s.repo.ListActivity(orderID)
 }

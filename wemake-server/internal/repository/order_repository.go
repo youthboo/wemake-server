@@ -1,6 +1,9 @@
 package repository
 
 import (
+	"database/sql"
+	"encoding/json"
+
 	"github.com/jmoiron/sqlx"
 	"github.com/yourusername/wemake/internal/domain"
 )
@@ -92,4 +95,70 @@ func (r *OrderRepository) UpdateStatus(orderID int64, status string) error {
 	query := "UPDATE orders SET status = $1, updated_at = NOW() WHERE order_id = $2"
 	_, err := r.db.Exec(query, status, orderID)
 	return err
+}
+
+func (r *OrderRepository) ListByFactoryID(factoryID int64, status string) ([]domain.Order, error) {
+	var orders []domain.Order
+	query := `
+		SELECT order_id, quote_id, user_id, factory_id, total_amount, deposit_amount, status, estimated_delivery, created_at, updated_at
+		FROM orders
+		WHERE factory_id = $1
+	`
+	args := []interface{}{factoryID}
+	if status != "" {
+		query += " AND status = $2"
+		args = append(args, status)
+	}
+	query += " ORDER BY created_at DESC"
+	err := r.db.Select(&orders, query, args...)
+	return orders, err
+}
+
+func (r *OrderRepository) GetByParticipant(orderID, userID int64, role string) (*domain.Order, error) {
+	var order domain.Order
+	query := `
+		SELECT order_id, quote_id, user_id, factory_id, total_amount, deposit_amount, status, estimated_delivery, created_at, updated_at
+		FROM orders
+		WHERE order_id = $1
+	`
+	if err := r.db.Get(&order, query, orderID); err != nil {
+		return nil, err
+	}
+	if role == "FT" {
+		if order.FactoryID != userID {
+			return nil, sql.ErrNoRows
+		}
+	} else {
+		if order.UserID != userID {
+			return nil, sql.ErrNoRows
+		}
+	}
+	return &order, nil
+}
+
+func (r *OrderRepository) InsertActivity(orderID int64, actorUserID *int64, eventCode string, payload map[string]interface{}) error {
+	var payloadArg interface{}
+	if payload != nil {
+		b, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+		payloadArg = b
+	}
+	_, err := r.db.Exec(
+		`INSERT INTO order_activity_log (order_id, actor_user_id, event_code, payload) VALUES ($1, $2, $3, $4)`,
+		orderID, actorUserID, eventCode, payloadArg,
+	)
+	return err
+}
+
+func (r *OrderRepository) ListActivity(orderID int64) ([]domain.OrderActivityEntry, error) {
+	var rows []domain.OrderActivityEntry
+	err := r.db.Select(&rows, `
+		SELECT activity_id, order_id, actor_user_id, event_code, payload, created_at
+		FROM order_activity_log
+		WHERE order_id = $1
+		ORDER BY created_at ASC
+	`, orderID)
+	return rows, err
 }

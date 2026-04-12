@@ -1,18 +1,49 @@
 package domain
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Quotation struct {
-	QuotationID      int64     `db:"quote_id" json:"quote_id"`
-	RFQID            int64     `db:"rfq_id" json:"rfq_id"`
-	FactoryID        int64     `db:"factory_id" json:"factory_id"`
-	PricePerPiece    float64   `db:"price_per_piece" json:"price_per_piece"`
-	MoldCost         float64   `db:"mold_cost" json:"mold_cost"`
-	LeadTimeDays     int64     `db:"lead_time_days" json:"lead_time_days"`
-	ShippingMethodID int64     `db:"shipping_method_id" json:"shipping_method_id"`
-	Status           string    `db:"status" json:"status"`
-	CreateTime       time.Time `db:"create_time" json:"create_time"`
-	LogTimestamp     time.Time `db:"log_timestamp" json:"log_timestamp"`
+	QuotationID      int64      `db:"quote_id" json:"quote_id"`
+	RFQID            int64      `db:"rfq_id" json:"rfq_id"`
+	FactoryID        int64      `db:"factory_id" json:"factory_id"`
+	PricePerPiece    float64    `db:"price_per_piece" json:"price_per_piece"`
+	MoldCost         float64    `db:"mold_cost" json:"mold_cost"`
+	LeadTimeDays     int64      `db:"lead_time_days" json:"lead_time_days"`
+	ShippingMethodID int64      `db:"shipping_method_id" json:"shipping_method_id"`
+	Status           string     `db:"status" json:"status"`
+	CreateTime       time.Time  `db:"create_time" json:"create_time"`
+	LogTimestamp     time.Time  `db:"log_timestamp" json:"log_timestamp"`
+	Version          int        `db:"version" json:"version"`
+	IsLocked         bool       `db:"is_locked" json:"is_locked"`
+	LastEditedAt     *time.Time `db:"last_edited_at" json:"last_edited_at,omitempty"`
+	LastEditedBy     *int64     `db:"last_edited_by" json:"last_edited_by,omitempty"`
+}
+
+type QuotationHistoryEntry struct {
+	HistoryID        int64      `db:"history_id" json:"history_id"`
+	QuoteID          int64      `db:"quote_id" json:"quote_id"`
+	EventType        string     `db:"event_type" json:"event_type"`
+	VersionAfter     int        `db:"version_after" json:"version_after"`
+	PricePerPiece    *float64   `db:"price_per_piece" json:"price_per_piece,omitempty"`
+	MoldCost         *float64   `db:"mold_cost" json:"mold_cost,omitempty"`
+	LeadTimeDays     *int64     `db:"lead_time_days" json:"lead_time_days,omitempty"`
+	ShippingMethodID *int64     `db:"shipping_method_id" json:"shipping_method_id,omitempty"`
+	Status           *string    `db:"status" json:"status,omitempty"`
+	Reason           *string    `db:"reason" json:"reason,omitempty"`
+	EditedBy         *int64     `db:"edited_by" json:"edited_by,omitempty"`
+	CreatedAt        time.Time  `db:"created_at" json:"created_at"`
+}
+
+type OrderActivityEntry struct {
+	ActivityID  int64           `db:"activity_id" json:"activity_id"`
+	OrderID     int64           `db:"order_id" json:"order_id"`
+	ActorUserID *int64          `db:"actor_user_id" json:"actor_user_id,omitempty"`
+	EventCode   string          `db:"event_code" json:"event_code"`
+	Payload     json.RawMessage `db:"payload" json:"payload,omitempty"`
+	CreatedAt   time.Time       `db:"created_at" json:"created_at"`
 }
 
 type Order struct {

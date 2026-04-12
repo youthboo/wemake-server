@@ -16,6 +16,19 @@ func NewAuthRepository(db *sqlx.DB) *AuthRepository {
 	return &AuthRepository{db: db}
 }
 
+func (r *AuthRepository) GetUserByID(userID int64) (*domain.User, error) {
+	var user domain.User
+	query := `
+		SELECT user_id, role, email, phone, password_hash, is_active, created_at, updated_at
+		FROM users
+		WHERE user_id = $1
+	`
+	if err := r.db.Get(&user, query, userID); err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
 func (r *AuthRepository) GetUserByEmail(email string) (*domain.User, error) {
 	var user domain.User
 	query := `

@@ -36,3 +36,15 @@ func (s *FactoryService) AddFactoryCategory(factoryID, categoryID int64) error {
 func (s *FactoryService) RemoveFactoryCategory(factoryID, categoryID int64) error {
 	return s.repo.RemoveFactoryCategory(factoryID, categoryID)
 }
+
+func (s *FactoryService) ListFactorySubCategories(factoryID int64) ([]domain.FactoryProfileSubCategory, error) {
+	return s.repo.ListFactorySubCategories(factoryID)
+}
+
+func (s *FactoryService) AddFactorySubCategory(factoryID, subCategoryID int64) error {
+	return s.repo.AddFactorySubCategory(factoryID, subCategoryID)
+}
+
+func (s *FactoryService) RemoveFactorySubCategory(factoryID, subCategoryID int64) error {
+	return s.repo.RemoveFactorySubCategory(factoryID, subCategoryID)
+}

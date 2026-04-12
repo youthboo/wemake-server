@@ -24,3 +24,7 @@ func (s *AddressService) Create(address *domain.Address) error {
 func (s *AddressService) Patch(userID, addressID int64, fields map[string]interface{}) error {
 	return s.repo.Patch(userID, addressID, fields)
 }
+
+func (s *AddressService) Delete(userID, addressID int64) error {
+	return s.repo.Delete(userID, addressID)
+}

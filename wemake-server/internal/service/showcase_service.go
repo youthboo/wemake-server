@@ -25,6 +25,18 @@ func (s *ShowcaseService) Create(showcase *domain.FactoryShowcase) error {
 	return s.repo.Create(showcase)
 }
 
+func (s *ShowcaseService) GetByID(showcaseID, factoryID int64) (*domain.FactoryShowcase, error) {
+	return s.repo.GetByID(showcaseID, factoryID)
+}
+
+func (s *ShowcaseService) Update(showcase *domain.FactoryShowcase) error {
+	return s.repo.Update(showcase)
+}
+
+func (s *ShowcaseService) Delete(showcaseID, factoryID int64) error {
+	return s.repo.Delete(showcaseID, factoryID)
+}
+
 func (s *ShowcaseService) ListPromoSlides() ([]domain.PromoSlide, error) {
 	return s.repo.ListPromoSlides()
 }

@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"database/sql"
+
 	"github.com/jmoiron/sqlx"
 	"github.com/yourusername/wemake/internal/domain"
 )
@@ -18,6 +20,21 @@ func (r *CertificateRepository) ListByFactoryID(factoryID int64) ([]domain.Facto
 	query := `SELECT * FROM map_factory_certificates WHERE factory_id = $1 ORDER BY uploaded_at DESC`
 	err := r.db.Select(&items, query, factoryID)
 	return items, err
+}
+
+func (r *CertificateRepository) DeleteByMapID(factoryID, mapID int64) error {
+	res, err := r.db.Exec(`DELETE FROM map_factory_certificates WHERE map_id = $1 AND factory_id = $2`, mapID, factoryID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (r *CertificateRepository) Create(cert *domain.FactoryCertificate) error {

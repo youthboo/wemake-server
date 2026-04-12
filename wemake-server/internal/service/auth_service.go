@@ -48,6 +48,10 @@ func NewAuthService(repo *repository.AuthRepository, jwtSecret string) *AuthServ
 	return &AuthService{repo: repo, jwtSecret: jwtSecret}
 }
 
+func (s *AuthService) GetUserByID(userID int64) (*domain.User, error) {
+	return s.repo.GetUserByID(userID)
+}
+
 func (s *AuthService) Register(input RegisterInput) (*LoginResult, error) {
 	input.Email = strings.TrimSpace(strings.ToLower(input.Email))
 	input.Role = strings.TrimSpace(strings.ToUpper(input.Role))

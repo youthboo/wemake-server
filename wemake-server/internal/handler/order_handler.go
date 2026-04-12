@@ -10,10 +10,11 @@ import (
 
 type OrderHandler struct {
 	service *service.OrderService
+	auth    *service.AuthService
 }
 
-func NewOrderHandler(service *service.OrderService) *OrderHandler {
-	return &OrderHandler{service: service}
+func NewOrderHandler(orderService *service.OrderService, authService *service.AuthService) *OrderHandler {
+	return &OrderHandler{service: orderService, auth: authService}
 }
 
 func (h *OrderHandler) CreateOrder(c *fiber.Ctx) error {
@@ -46,8 +47,12 @@ func (h *OrderHandler) ListOrders(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
 	}
+	u, err := h.auth.GetUserByID(userID)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "user not found"})
+	}
 	status := strings.TrimSpace(c.Query("status"))
-	items, err := h.service.ListByUserID(userID, status)
+	items, err := h.service.List(userID, u.Role, status)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch orders"})
 	}
@@ -59,11 +64,15 @@ func (h *OrderHandler) GetOrder(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
 	}
+	u, err := h.auth.GetUserByID(userID)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "user not found"})
+	}
 	orderID, err := c.ParamsInt("order_id")
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid order_id"})
 	}
-	item, err := h.service.GetByID(int64(orderID), userID)
+	item, err := h.service.GetByID(int64(orderID), userID, u.Role)
 	if err != nil {
 		if repository.IsNotFoundError(err) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "order not found"})
@@ -73,9 +82,40 @@ func (h *OrderHandler) GetOrder(c *fiber.Ctx) error {
 	return c.JSON(item)
 }
 
+func (h *OrderHandler) ListActivity(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
+	}
+	u, err := h.auth.GetUserByID(userID)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "user not found"})
+	}
+	orderID, err := c.ParamsInt("order_id")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid order_id"})
+	}
+	if _, err := h.service.GetByID(int64(orderID), userID, u.Role); err != nil {
+		if repository.IsNotFoundError(err) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "order not found"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to verify order"})
+	}
+	items, err := h.service.ListActivity(int64(orderID))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch activity"})
+	}
+	return c.JSON(items)
+}
+
 func (h *OrderHandler) PatchOrderStatus(c *fiber.Ctx) error {
 	type reqBody struct {
 		Status string `json:"status"`
+	}
+	uid, authErr := getUserIDFromHeader(c)
+	var actor *int64
+	if authErr == nil {
+		actor = &uid
 	}
 	orderID, err := c.ParamsInt("order_id")
 	if err != nil {
@@ -89,7 +129,7 @@ func (h *OrderHandler) PatchOrderStatus(c *fiber.Ctx) error {
 	if status != "PR" && status != "QC" && status != "SH" && status != "CP" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "status must be PR, QC, SH or CP"})
 	}
-	if err := h.service.UpdateStatus(int64(orderID), status); err != nil {
+	if err := h.service.UpdateStatus(int64(orderID), status, actor); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update order status"})
 	}
 	return c.JSON(fiber.Map{"message": "order status updated"})

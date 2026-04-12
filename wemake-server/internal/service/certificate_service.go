@@ -20,3 +20,7 @@ func (s *CertificateService) ListByFactoryID(factoryID int64) ([]domain.FactoryC
 func (s *CertificateService) Create(cert *domain.FactoryCertificate) error {
 	return s.repo.Create(cert)
 }
+
+func (s *CertificateService) DeleteByMapID(factoryID, mapID int64) error {
+	return s.repo.DeleteByMapID(factoryID, mapID)
+}

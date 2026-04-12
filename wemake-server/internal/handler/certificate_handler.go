@@ -1,6 +1,10 @@
 package handler
 
 import (
+	"database/sql"
+	"errors"
+	"strconv"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/yourusername/wemake/internal/domain"
 	"github.com/yourusername/wemake/internal/service"
@@ -51,4 +55,26 @@ func (h *CertificateHandler) Create(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to upload certificate"})
 	}
 	return c.Status(fiber.StatusCreated).JSON(req)
+}
+
+func (h *CertificateHandler) Delete(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+	}
+	factoryID, err := c.ParamsInt("factory_id")
+	if err != nil || int64(factoryID) != userID {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
+	}
+	mapID, err := strconv.ParseInt(c.Params("map_id"), 10, 64)
+	if err != nil || mapID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid map_id"})
+	}
+	if err := h.service.DeleteByMapID(int64(factoryID), mapID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "certificate mapping not found"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete certificate"})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }

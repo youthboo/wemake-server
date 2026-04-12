@@ -1,6 +1,7 @@
 package service
 
 import (
+	"database/sql"
 	"errors"
 	"strings"
 	"time"
@@ -72,6 +73,38 @@ func (s *RFQService) GetByID(userID, rfqID int64) (*domain.RFQ, []domain.RFQImag
 
 func (s *RFQService) Cancel(userID, rfqID int64) error {
 	return s.repo.Cancel(userID, rfqID)
+}
+
+func (s *RFQService) ListMatchingForFactory(factoryID int64, status string) ([]domain.RFQ, error) {
+	return s.repo.ListMatchingForFactory(factoryID, strings.TrimSpace(strings.ToUpper(status)))
+}
+
+func (s *RFQService) GetForViewer(userID int64, role string, rfqID int64) (*domain.RFQ, []domain.RFQImage, error) {
+	if role == domain.RoleFactory {
+		rfq, err := s.repo.GetByIDAny(rfqID)
+		if err != nil {
+			return nil, nil, err
+		}
+		ok, err := s.repo.FactoryHasMatchingCategory(userID, rfq)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !ok {
+			hasQ, err := s.repo.FactoryHasQuotationOnRFQ(userID, rfqID)
+			if err != nil {
+				return nil, nil, err
+			}
+			if !hasQ {
+				return nil, nil, sql.ErrNoRows
+			}
+		}
+		images, err := s.repo.ListImages(rfqID)
+		if err != nil {
+			return nil, nil, err
+		}
+		return rfq, images, nil
+	}
+	return s.GetByID(userID, rfqID)
 }
 
 func (s *RFQService) AddImage(rfqID int64, imageURL string) (*domain.RFQImage, error) {

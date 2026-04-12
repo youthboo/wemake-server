@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -86,4 +87,19 @@ func (r *AddressRepository) Patch(userID, addressID int64, fields map[string]int
 	)
 	_, err := r.db.Exec(query, args...)
 	return err
+}
+
+func (r *AddressRepository) Delete(userID, addressID int64) error {
+	res, err := r.db.Exec(`DELETE FROM addresses WHERE user_id = $1 AND address_id = $2`, userID, addressID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }

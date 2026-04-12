@@ -12,10 +12,11 @@ import (
 
 type RFQHandler struct {
 	service *service.RFQService
+	auth    *service.AuthService
 }
 
-func NewRFQHandler(service *service.RFQService) *RFQHandler {
-	return &RFQHandler{service: service}
+func NewRFQHandler(rfqService *service.RFQService, authService *service.AuthService) *RFQHandler {
+	return &RFQHandler{service: rfqService, auth: authService}
 }
 
 func (h *RFQHandler) CreateRFQ(c *fiber.Ctx) error {
@@ -88,17 +89,41 @@ func (h *RFQHandler) ListRFQs(c *fiber.Ctx) error {
 	return c.JSON(rfqs)
 }
 
+func (h *RFQHandler) ListMatching(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
+	}
+	u, err := h.auth.GetUserByID(userID)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "user not found"})
+	}
+	if u.Role != domain.RoleFactory {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "factory role required"})
+	}
+	status := c.Query("status")
+	items, err := h.service.ListMatchingForFactory(userID, status)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch matching rfqs"})
+	}
+	return c.JSON(items)
+}
+
 func (h *RFQHandler) GetRFQ(c *fiber.Ctx) error {
 	userID, err := getUserIDFromHeader(c)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
+	}
+	u, err := h.auth.GetUserByID(userID)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "user not found"})
 	}
 	rfqID, err := c.ParamsInt("rfq_id")
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid rfq_id"})
 	}
 
-	rfq, images, err := h.service.GetByID(userID, int64(rfqID))
+	rfq, images, err := h.service.GetForViewer(userID, u.Role, int64(rfqID))
 	if err != nil {
 		if repository.IsNotFoundError(err) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "rfq not found"})

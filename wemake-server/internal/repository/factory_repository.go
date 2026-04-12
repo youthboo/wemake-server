@@ -360,3 +360,60 @@ func (r *FactoryRepository) RemoveFactoryCategory(factoryID, categoryID int64) e
 func (r *FactoryRepository) FactoryExistsActive(factoryID int64) (bool, error) {
 	return r.factoryExistsActive(factoryID)
 }
+
+var (
+	ErrDuplicateFactorySubCategory = errors.New("factory already has this sub-category")
+	ErrInvalidFactorySubCategory   = errors.New("invalid sub_category_id")
+)
+
+func (r *FactoryRepository) ListFactorySubCategories(factoryID int64) ([]domain.FactoryProfileSubCategory, error) {
+	return r.selectFactorySubCategories(factoryID)
+}
+
+func (r *FactoryRepository) AddFactorySubCategory(factoryID, subCategoryID int64) error {
+	var dup bool
+	if err := r.db.Get(&dup, `
+		SELECT EXISTS(
+			SELECT 1 FROM map_factory_sub_categories WHERE factory_id = $1 AND sub_category_id = $2
+		)`, factoryID, subCategoryID); err != nil {
+		return err
+	}
+	if dup {
+		return ErrDuplicateFactorySubCategory
+	}
+	_, err := r.db.Exec(
+		`INSERT INTO map_factory_sub_categories (factory_id, sub_category_id) VALUES ($1, $2)`,
+		factoryID, subCategoryID,
+	)
+	if err == nil {
+		return nil
+	}
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) {
+		switch pqErr.Code {
+		case "23505":
+			return ErrDuplicateFactorySubCategory
+		case "23503":
+			return ErrInvalidFactorySubCategory
+		}
+	}
+	return err
+}
+
+func (r *FactoryRepository) RemoveFactorySubCategory(factoryID, subCategoryID int64) error {
+	res, err := r.db.Exec(
+		`DELETE FROM map_factory_sub_categories WHERE factory_id = $1 AND sub_category_id = $2`,
+		factoryID, subCategoryID,
+	)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
