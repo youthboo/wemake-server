@@ -29,7 +29,9 @@ const showcaseExploreBaseSQL = `
 		fs.sub_category_id,
 		fs.min_order,
 		fs.lead_time_days,
+		fs.price_range,
 		fs.likes_count,
+		fs.status,
 		fs.created_at,
 		fp.factory_name,
 		fp.image_url AS factory_image_url,
@@ -48,10 +50,10 @@ func (r *ShowcaseRepository) ListExplore(contentType string) ([]domain.ShowcaseE
 	var query string
 	var args []interface{}
 	if contentType != "" {
-		query = showcaseExploreBaseSQL + ` WHERE fs.content_type = $1 ORDER BY fs.created_at DESC`
+		query = showcaseExploreBaseSQL + ` WHERE fs.status = 'AC' AND fs.content_type = $1 ORDER BY fs.created_at DESC`
 		args = append(args, contentType)
 	} else {
-		query = showcaseExploreBaseSQL + ` ORDER BY fs.created_at DESC`
+		query = showcaseExploreBaseSQL + ` WHERE fs.status = 'AC' ORDER BY fs.created_at DESC`
 	}
 	err := r.db.Select(&items, query, args...)
 	return items, err
@@ -59,7 +61,7 @@ func (r *ShowcaseRepository) ListExplore(contentType string) ([]domain.ShowcaseE
 
 func (r *ShowcaseRepository) ListExploreByFactory(factoryID int64, contentType string) ([]domain.ShowcaseExploreItem, error) {
 	var items []domain.ShowcaseExploreItem
-	clauses := []string{"fs.factory_id = $1"}
+	clauses := []string{"fs.factory_id = $1", "fs.status = 'AC'"}
 	args := []interface{}{factoryID}
 	argPos := 2
 	if contentType != "" {
@@ -72,18 +74,205 @@ func (r *ShowcaseRepository) ListExploreByFactory(factoryID int64, contentType s
 	return items, err
 }
 
+// GetShowcasesByFactory returns showcases for a factory page.
+// callerID=0 means public → only AC status; callerID==factoryID means owner → all statuses.
+func (r *ShowcaseRepository) GetShowcasesByFactory(factoryID int64, contentType string, callerID int64) ([]domain.ShowcaseByFactoryItem, error) {
+	var items []domain.ShowcaseByFactoryItem
+
+	clauses := []string{"fs.factory_id = $1"}
+	args := []interface{}{factoryID}
+	argPos := 2
+
+	if callerID != factoryID {
+		clauses = append(clauses, "fs.status = 'AC'")
+	}
+	if contentType != "" {
+		clauses = append(clauses, fmt.Sprintf("fs.content_type = $%d", argPos))
+		args = append(args, contentType)
+		argPos++
+	}
+
+	query := `
+		SELECT
+			fs.showcase_id, fs.content_type, fs.title, fs.excerpt,
+			fs.image_url, fs.category_id, fs.sub_category_id,
+			fs.min_order, fs.lead_time_days, fs.price_range,
+			fs.likes_count, fs.status, fs.created_at,
+			c.name  AS category_name,
+			sc.name AS sub_category_name
+		FROM factory_showcases fs
+		LEFT JOIN categories c         ON fs.category_id     = c.category_id
+		LEFT JOIN lbi_sub_categories sc ON fs.sub_category_id = sc.sub_category_id
+		WHERE ` + strings.Join(clauses, " AND ") + `
+		ORDER BY fs.created_at DESC`
+
+	err := r.db.Select(&items, query, args...)
+	return items, err
+}
+
+// sectionRow is the flat row returned by the sections+items JOIN query.
+type sectionRow struct {
+	SectionID    int64   `db:"section_id"`
+	SectionType  string  `db:"section_type"`
+	SectionTitle string  `db:"section_title"`
+	SortOrder    int     `db:"sort_order"`
+	ItemID       *int64  `db:"item_id"`
+	ItemTitle    *string `db:"item_title"`
+	Description  *string `db:"item_description"`
+	IconName     *string `db:"icon_name"`
+	ItemSort     *int    `db:"item_sort_order"`
+}
+
+// aggregateSections converts flat sectionRows into nested ShowcaseSections.
+func aggregateSections(rows []sectionRow) []domain.ShowcaseSection {
+	sectionMap := map[int64]*domain.ShowcaseSection{}
+	var order []int64
+	for _, row := range rows {
+		if _, ok := sectionMap[row.SectionID]; !ok {
+			sec := &domain.ShowcaseSection{
+				SectionID:    row.SectionID,
+				SectionType:  row.SectionType,
+				SectionTitle: row.SectionTitle,
+				SortOrder:    row.SortOrder,
+				Items:        []domain.ShowcaseSectionItem{},
+			}
+			sectionMap[row.SectionID] = sec
+			order = append(order, row.SectionID)
+		}
+		if row.ItemID != nil {
+			sectionMap[row.SectionID].Items = append(sectionMap[row.SectionID].Items, domain.ShowcaseSectionItem{
+				ItemID:      *row.ItemID,
+				Title:       row.ItemTitle,
+				Description: derefString(row.Description),
+				IconName:    row.IconName,
+				SortOrder:   derefInt(row.ItemSort),
+			})
+		}
+	}
+	sections := make([]domain.ShowcaseSection, 0, len(order))
+	for _, id := range order {
+		sections = append(sections, *sectionMap[id])
+	}
+	return sections
+}
+
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func derefInt(i *int) int {
+	if i == nil {
+		return 0
+	}
+	return *i
+}
+
+// GetDetail returns the full showcase detail including images and sections.
+// callerID=0 means unauthenticated public request.
+func (r *ShowcaseRepository) GetDetail(showcaseID int64) (*domain.ShowcaseDetail, error) {
+	var s domain.ShowcaseDetail
+	err := r.db.Get(&s, `
+		SELECT
+			fs.showcase_id, fs.factory_id, fs.content_type,
+			fs.title, fs.excerpt, fs.description,
+			fs.image_url, fs.category_id, fs.sub_category_id,
+			fs.min_order, fs.lead_time_days, fs.price_range,
+			fs.likes_count, fs.status, fs.created_at,
+			fp.factory_name,
+			fp.image_url         AS factory_image_url,
+			fp.rating::float8    AS factory_rating,
+			COALESCE(fp.is_verified, FALSE) AS factory_verified,
+			fp.specialization    AS factory_specialization,
+			fp.review_count      AS factory_review_count,
+			p.name_th            AS province_name,
+			c.name               AS category_name,
+			sc.name              AS sub_category_name
+		FROM factory_showcases fs
+		INNER JOIN factory_profiles fp       ON fs.factory_id      = fp.user_id
+		LEFT JOIN  categories c              ON fs.category_id     = c.category_id
+		LEFT JOIN  lbi_sub_categories sc     ON fs.sub_category_id = sc.sub_category_id
+		LEFT JOIN  lbi_provinces p           ON fp.province_id     = p.row_id
+		WHERE fs.showcase_id = $1
+	`, showcaseID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Gallery images
+	var images []domain.ShowcaseImage
+	if err := r.db.Select(&images, `
+		SELECT image_id, showcase_id, image_url, sort_order, caption
+		FROM showcase_images
+		WHERE showcase_id = $1
+		ORDER BY sort_order, image_id
+	`, showcaseID); err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+	if images == nil {
+		images = []domain.ShowcaseImage{}
+	}
+	s.Images = images
+
+	// Sections + items (flat join, aggregated in Go)
+	var rows []sectionRow
+	if err := r.db.Select(&rows, `
+		SELECT
+			s.section_id, s.section_type, s.section_title, s.sort_order,
+			i.item_id,
+			i.title       AS item_title,
+			i.description AS item_description,
+			i.icon_name,
+			i.sort_order  AS item_sort_order
+		FROM showcase_sections s
+		LEFT JOIN showcase_section_items i ON s.section_id = i.section_id
+		WHERE s.showcase_id = $1
+		ORDER BY s.sort_order, s.section_id, i.sort_order, i.item_id
+	`, showcaseID); err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	s.Sections = aggregateSections(rows)
+
+	// Specs (PD type only)
+	var specs []domain.ShowcaseSpec
+	if s.ContentType == "PD" {
+		if err := r.db.Select(&specs, `
+			SELECT spec_id, showcase_id, spec_key, spec_value, sort_order
+			FROM showcase_specs
+			WHERE showcase_id = $1
+			ORDER BY sort_order, spec_id
+		`, showcaseID); err != nil && err != sql.ErrNoRows {
+			return nil, err
+		}
+	}
+	if specs == nil {
+		specs = []domain.ShowcaseSpec{}
+	}
+	s.Specs = specs
+
+	return &s, nil
+}
+
 func (r *ShowcaseRepository) Create(showcase *domain.FactoryShowcase) error {
 	query := `
-		INSERT INTO factory_showcases (factory_id, content_type, title, excerpt, image_url, category_id, sub_category_id, min_order, lead_time_days)
-		VALUES (:factory_id, :content_type, :title, :excerpt, :image_url, :category_id, :sub_category_id, :min_order, :lead_time_days)
-		RETURNING showcase_id, created_at, likes_count
+		INSERT INTO factory_showcases
+			(factory_id, content_type, title, excerpt, description, image_url,
+			 category_id, sub_category_id, min_order, lead_time_days, price_range, status)
+		VALUES
+			(:factory_id, :content_type, :title, :excerpt, :description, :image_url,
+			 :category_id, :sub_category_id, :min_order, :lead_time_days, :price_range,
+			 COALESCE(NULLIF(:status, ''), 'AC'))
+		RETURNING showcase_id, created_at, likes_count, status
 	`
 	rows, err := r.db.NamedQuery(query, showcase)
 	if err != nil {
 		return err
 	}
 	if rows.Next() {
-		err = rows.Scan(&showcase.ShowcaseID, &showcase.CreatedAt, &showcase.LikesCount)
+		err = rows.Scan(&showcase.ShowcaseID, &showcase.CreatedAt, &showcase.LikesCount, &showcase.Status)
 	}
 	rows.Close()
 	return err
@@ -131,8 +320,17 @@ func (r *ShowcaseRepository) ListPromoSlides() ([]domain.PromoSlide, error) {
 func (r *ShowcaseRepository) Update(s *domain.FactoryShowcase) error {
 	query := `
 		UPDATE factory_showcases
-		SET content_type = :content_type, title = :title, excerpt = :excerpt, image_url = :image_url,
-		    category_id = :category_id, sub_category_id = :sub_category_id, min_order = :min_order, lead_time_days = :lead_time_days
+		SET content_type    = :content_type,
+		    title           = :title,
+		    excerpt         = :excerpt,
+		    description     = :description,
+		    image_url       = :image_url,
+		    category_id     = :category_id,
+		    sub_category_id = :sub_category_id,
+		    min_order       = :min_order,
+		    lead_time_days  = :lead_time_days,
+		    price_range     = :price_range,
+		    status          = CASE WHEN :status = '' THEN status ELSE :status END
 		WHERE showcase_id = :showcase_id AND factory_id = :factory_id
 	`
 	res, err := r.db.NamedExec(query, s)
@@ -156,6 +354,232 @@ func (r *ShowcaseRepository) IncrementViewCount(showcaseID int64) error {
 
 func (r *ShowcaseRepository) Delete(showcaseID, factoryID int64) error {
 	res, err := r.db.Exec(`DELETE FROM factory_showcases WHERE showcase_id = $1 AND factory_id = $2`, showcaseID, factoryID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// CreateImage adds a gallery image to a showcase (max 10 per showcase, ownership verified).
+func (r *ShowcaseRepository) CreateImage(img *domain.ShowcaseImage, factoryID int64) error {
+	// Verify ownership
+	var ownerID int64
+	if err := r.db.Get(&ownerID, `SELECT factory_id FROM factory_showcases WHERE showcase_id = $1`, img.ShowcaseID); err != nil {
+		return sql.ErrNoRows
+	}
+	if ownerID != factoryID {
+		return domain.ErrForbidden
+	}
+
+	// Enforce max 10 images per showcase
+	var count int
+	if err := r.db.Get(&count, `SELECT COUNT(*) FROM showcase_images WHERE showcase_id = $1`, img.ShowcaseID); err != nil {
+		return err
+	}
+	if count >= 10 {
+		return domain.ErrImageLimitExceeded
+	}
+
+	return r.db.Get(img, `
+		INSERT INTO showcase_images (showcase_id, image_url, sort_order, caption)
+		VALUES ($1, $2, $3, $4)
+		RETURNING image_id, showcase_id, image_url, sort_order, caption
+	`, img.ShowcaseID, img.ImageURL, img.SortOrder, img.Caption)
+}
+
+// DeleteImage removes a gallery image (ownership verified via showcase).
+func (r *ShowcaseRepository) DeleteImage(showcaseID, imageID, factoryID int64) error {
+	res, err := r.db.Exec(`
+		DELETE FROM showcase_images
+		WHERE image_id = $1
+		  AND showcase_id = $2
+		  AND EXISTS (SELECT 1 FROM factory_showcases WHERE showcase_id = $2 AND factory_id = $3)
+	`, imageID, showcaseID, factoryID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// GetSections returns all sections + items for a showcase (ownership verified).
+func (r *ShowcaseRepository) GetSections(showcaseID, factoryID int64) ([]domain.ShowcaseSection, error) {
+	// Verify ownership
+	var ownerID int64
+	if err := r.db.Get(&ownerID, `SELECT factory_id FROM factory_showcases WHERE showcase_id = $1`, showcaseID); err != nil {
+		return nil, sql.ErrNoRows
+	}
+	if ownerID != factoryID {
+		return nil, domain.ErrForbidden
+	}
+
+	var rows []sectionRow
+	if err := r.db.Select(&rows, `
+		SELECT
+			s.section_id, s.section_type, s.section_title, s.sort_order,
+			i.item_id,
+			i.title       AS item_title,
+			i.description AS item_description,
+			i.icon_name,
+			i.sort_order  AS item_sort_order
+		FROM showcase_sections s
+		LEFT JOIN showcase_section_items i ON s.section_id = i.section_id
+		WHERE s.showcase_id = $1
+		ORDER BY s.sort_order, s.section_id, i.sort_order, i.item_id
+	`, showcaseID); err != nil {
+		return nil, err
+	}
+	return aggregateSections(rows), nil
+}
+
+// BulkReplaceSections replaces all sections + items for a showcase in a single transaction.
+func (r *ShowcaseRepository) BulkReplaceSections(showcaseID, factoryID int64, inputs []domain.ShowcaseSectionInput) error {
+	// Verify ownership
+	var ownerID int64
+	if err := r.db.Get(&ownerID, `SELECT factory_id FROM factory_showcases WHERE showcase_id = $1`, showcaseID); err != nil {
+		return sql.ErrNoRows
+	}
+	if ownerID != factoryID {
+		return domain.ErrForbidden
+	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`DELETE FROM showcase_sections WHERE showcase_id = $1`, showcaseID); err != nil {
+		return err
+	}
+
+	for _, sec := range inputs {
+		var sectionID int64
+		if err := tx.QueryRow(
+			`INSERT INTO showcase_sections (showcase_id, section_type, section_title, sort_order)
+			 VALUES ($1, $2, $3, $4) RETURNING section_id`,
+			showcaseID, sec.SectionType, sec.SectionTitle, sec.SortOrder,
+		).Scan(&sectionID); err != nil {
+			return err
+		}
+		for _, item := range sec.Items {
+			if _, err := tx.Exec(
+				`INSERT INTO showcase_section_items (section_id, title, description, icon_name, sort_order)
+				 VALUES ($1, $2, $3, $4, $5)`,
+				sectionID, item.Title, item.Description, item.IconName, item.SortOrder,
+			); err != nil {
+				return err
+			}
+		}
+	}
+
+	return tx.Commit()
+}
+
+// GetSpecs returns all specs for a showcase (ownership verified, PD only).
+func (r *ShowcaseRepository) GetSpecs(showcaseID, factoryID int64) ([]domain.ShowcaseSpec, error) {
+	var ownerID int64
+	if err := r.db.Get(&ownerID, `SELECT factory_id FROM factory_showcases WHERE showcase_id = $1`, showcaseID); err != nil {
+		return nil, sql.ErrNoRows
+	}
+	if ownerID != factoryID {
+		return nil, domain.ErrForbidden
+	}
+	var specs []domain.ShowcaseSpec
+	if err := r.db.Select(&specs, `
+		SELECT spec_id, showcase_id, spec_key, spec_value, sort_order
+		FROM showcase_specs
+		WHERE showcase_id = $1
+		ORDER BY sort_order, spec_id
+	`, showcaseID); err != nil {
+		return nil, err
+	}
+	if specs == nil {
+		specs = []domain.ShowcaseSpec{}
+	}
+	return specs, nil
+}
+
+// BulkReplaceSpecs replaces all specs for a showcase in a single transaction.
+func (r *ShowcaseRepository) BulkReplaceSpecs(showcaseID, factoryID int64, inputs []domain.ShowcaseSpecInput) error {
+	var ownerID int64
+	if err := r.db.Get(&ownerID, `SELECT factory_id FROM factory_showcases WHERE showcase_id = $1`, showcaseID); err != nil {
+		return sql.ErrNoRows
+	}
+	if ownerID != factoryID {
+		return domain.ErrForbidden
+	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`DELETE FROM showcase_specs WHERE showcase_id = $1`, showcaseID); err != nil {
+		return err
+	}
+	for _, spec := range inputs {
+		if _, err := tx.Exec(
+			`INSERT INTO showcase_specs (showcase_id, spec_key, spec_value, sort_order)
+			 VALUES ($1, $2, $3, $4)`,
+			showcaseID, spec.SpecKey, spec.SpecValue, spec.SortOrder,
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// PatchImage updates sort_order and/or caption of a gallery image (ownership verified).
+func (r *ShowcaseRepository) PatchImage(showcaseID, imageID, factoryID int64, sortOrder *int, caption *string) (*domain.ShowcaseImage, error) {
+	res, err := r.db.Exec(`
+		UPDATE showcase_images
+		SET sort_order = COALESCE($1, sort_order),
+		    caption    = COALESCE($2, caption)
+		WHERE image_id = $3
+		  AND showcase_id = $4
+		  AND EXISTS (SELECT 1 FROM factory_showcases WHERE showcase_id = $4 AND factory_id = $5)
+	`, sortOrder, caption, imageID, showcaseID, factoryID)
+	if err != nil {
+		return nil, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		return nil, sql.ErrNoRows
+	}
+	var img domain.ShowcaseImage
+	err = r.db.Get(&img, `
+		SELECT image_id, showcase_id, image_url, sort_order, caption
+		FROM showcase_images WHERE image_id = $1
+	`, imageID)
+	return &img, err
+}
+
+// DeleteSection removes a single section (and its items via CASCADE) with ownership check.
+func (r *ShowcaseRepository) DeleteSection(showcaseID, sectionID, factoryID int64) error {
+	res, err := r.db.Exec(`
+		DELETE FROM showcase_sections
+		WHERE section_id = $1
+		  AND showcase_id = $2
+		  AND EXISTS (SELECT 1 FROM factory_showcases WHERE showcase_id = $2 AND factory_id = $3)
+	`, sectionID, showcaseID, factoryID)
 	if err != nil {
 		return err
 	}
