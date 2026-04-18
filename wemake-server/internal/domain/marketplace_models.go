@@ -57,10 +57,5 @@ type RFQ struct {
 	UploadedAt       *time.Time `db:"uploaded_at" json:"uploaded_at,omitempty"`
 	CreatedAt        time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt        time.Time  `db:"updated_at" json:"updated_at"`
-}
-
-type RFQImage struct {
-	ImageID  string `db:"image_id" json:"image_id"`
-	RFQID    int64  `db:"rfq_id" json:"rfq_id"`
-	ImageURL string `db:"image_url" json:"image_url"`
+	ImageURLs        JSONStringArray `db:"image_urls" json:"image_urls"`
 }

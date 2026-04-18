@@ -17,8 +17,8 @@ func NewRFQRepository(db *sqlx.DB) *RFQRepository {
 
 func (r *RFQRepository) Create(rfq *domain.RFQ) error {
 	query := `
-		INSERT INTO rfqs (user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id, shipping_method_id, status, deadline_date, uploaded_at, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		INSERT INTO rfqs (user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id, shipping_method_id, status, deadline_date, uploaded_at, created_at, updated_at, image_urls)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		RETURNING rfq_id
 	`
 	return r.db.QueryRow(
@@ -38,13 +38,14 @@ func (r *RFQRepository) Create(rfq *domain.RFQ) error {
 		nullableTimeValue(rfq.UploadedAt),
 		rfq.CreatedAt,
 		rfq.UpdatedAt,
+		rfq.ImageURLs,
 	).Scan(&rfq.RFQID)
 }
 
 func (r *RFQRepository) ListByUserID(userID int64, status string) ([]domain.RFQ, error) {
 	var rfqs []domain.RFQ
 	query := `
-		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id, shipping_method_id, status, deadline_date, uploaded_at, created_at, updated_at
+		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id, shipping_method_id, status, deadline_date, uploaded_at, created_at, updated_at, image_urls
 		FROM rfqs
 		WHERE user_id = $1
 	`
@@ -61,7 +62,7 @@ func (r *RFQRepository) ListByUserID(userID int64, status string) ([]domain.RFQ,
 func (r *RFQRepository) GetByID(userID, rfqID int64) (*domain.RFQ, error) {
 	var rfq domain.RFQ
 	query := `
-		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id, shipping_method_id, status, deadline_date, uploaded_at, created_at, updated_at
+		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id, shipping_method_id, status, deadline_date, uploaded_at, created_at, updated_at, image_urls
 		FROM rfqs
 		WHERE user_id = $1 AND rfq_id = $2
 	`
@@ -75,26 +76,6 @@ func (r *RFQRepository) Cancel(userID, rfqID int64) error {
 	query := "UPDATE rfqs SET status = 'CC', updated_at = NOW() WHERE user_id = $1 AND rfq_id = $2"
 	_, err := r.db.Exec(query, userID, rfqID)
 	return err
-}
-
-func (r *RFQRepository) CreateImage(image *domain.RFQImage) error {
-	query := "INSERT INTO rfq_images (image_id, rfq_id, image_url) VALUES ($1, $2, $3)"
-	_, err := r.db.Exec(query, image.ImageID, image.RFQID, image.ImageURL)
-	return err
-}
-
-func (r *RFQRepository) CountImages(rfqID int64) (int, error) {
-	var count int
-	query := "SELECT COUNT(*) FROM rfq_images WHERE rfq_id = $1"
-	err := r.db.Get(&count, query, rfqID)
-	return count, err
-}
-
-func (r *RFQRepository) ListImages(rfqID int64) ([]domain.RFQImage, error) {
-	var images []domain.RFQImage
-	query := "SELECT image_id, rfq_id, image_url FROM rfq_images WHERE rfq_id = $1 ORDER BY image_id"
-	err := r.db.Select(&images, query, rfqID)
-	return images, err
 }
 
 func (r *RFQRepository) SubCategoryBelongsToCategory(subCategoryID, categoryID int64) (bool, error) {
@@ -130,7 +111,7 @@ func (r *RFQRepository) ShippingMethodExists(shippingMethodID int64) (bool, erro
 func (r *RFQRepository) GetByIDAny(rfqID int64) (*domain.RFQ, error) {
 	var rfq domain.RFQ
 	query := `
-		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id, shipping_method_id, status, deadline_date, uploaded_at, created_at, updated_at
+		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id, shipping_method_id, status, deadline_date, uploaded_at, created_at, updated_at, image_urls
 		FROM rfqs
 		WHERE rfq_id = $1
 	`
@@ -148,7 +129,7 @@ func (r *RFQRepository) ListMatchingForFactory(factoryID int64, status string) (
 	}
 	var rfqs []domain.RFQ
 	query := `
-		SELECT DISTINCT r.rfq_id, r.user_id, r.category_id, r.sub_category_id, r.title, r.quantity, r.unit_id, r.budget_per_piece, r.details, r.address_id, r.shipping_method_id, r.status, r.deadline_date, r.uploaded_at, r.created_at, r.updated_at
+		SELECT DISTINCT r.rfq_id, r.user_id, r.category_id, r.sub_category_id, r.title, r.quantity, r.unit_id, r.budget_per_piece, r.details, r.address_id, r.shipping_method_id, r.status, r.deadline_date, r.uploaded_at, r.created_at, r.updated_at, r.image_urls
 		FROM rfqs r
 		INNER JOIN map_factory_categories mfc ON mfc.category_id = r.category_id AND mfc.factory_id = $1
 		WHERE r.status = $2

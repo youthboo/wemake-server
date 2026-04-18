@@ -13,16 +13,24 @@ func NewConversationRepository(db *sqlx.DB) *ConversationRepository {
 	return &ConversationRepository{db: db}
 }
 
+// conversationSelect lists columns explicitly: last_message is nullable in DB but domain uses string.
+const conversationSelect = `conv_id, customer_id, factory_id,
+		COALESCE(last_message, '') AS last_message,
+		COALESCE(unread_customer, 0) AS unread_customer,
+		COALESCE(unread_factory, 0) AS unread_factory,
+		COALESCE(has_quote, false) AS has_quote,
+		updated_at`
+
 func (r *ConversationRepository) ListByUserID(userID int64) ([]domain.Conversation, error) {
 	var items []domain.Conversation
-	query := `SELECT * FROM conversations WHERE customer_id = $1 OR factory_id = $1 ORDER BY updated_at DESC`
+	query := `SELECT ` + conversationSelect + ` FROM conversations WHERE customer_id = $1 OR factory_id = $1 ORDER BY updated_at DESC`
 	err := r.db.Select(&items, query, userID)
 	return items, err
 }
 
 func (r *ConversationRepository) GetByID(convID int64) (*domain.Conversation, error) {
 	var item domain.Conversation
-	query := `SELECT * FROM conversations WHERE conv_id = $1`
+	query := `SELECT ` + conversationSelect + ` FROM conversations WHERE conv_id = $1`
 	err := r.db.Get(&item, query, convID)
 	return &item, err
 }

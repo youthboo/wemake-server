@@ -362,10 +362,16 @@ func (r *FrontendRepository) ListQuotationsByRFQID(rfqID int64) ([]FrontendQuota
 }
 
 func (r *FrontendRepository) ListRFQImages(rfqID int64) ([]FrontendImageRow, error) {
-	var items []FrontendImageRow
-	query := `SELECT image_url FROM rfq_images WHERE rfq_id = $1 ORDER BY image_id`
-	err := r.db.Select(&items, query, rfqID)
-	return items, err
+	var urls domain.JSONStringArray
+	err := r.db.Get(&urls, `SELECT COALESCE(image_urls, '[]'::jsonb) FROM rfqs WHERE rfq_id = $1`, rfqID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]FrontendImageRow, 0, len(urls))
+	for _, u := range urls {
+		items = append(items, FrontendImageRow{ImageURL: u})
+	}
+	return items, nil
 }
 
 func (r *FrontendRepository) ListOrdersByUserID(userID int64) ([]FrontendOrderRow, error) {

@@ -166,7 +166,6 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	rfqs.Get("/matching", rfqHandler.ListMatching)
 	rfqs.Get("/", rfqHandler.ListRFQs)
 	rfqs.Get("/:rfq_id", rfqHandler.GetRFQ)
-	rfqs.Post("/:rfq_id/images", rfqHandler.AddRFQImage)
 	rfqs.Patch("/:rfq_id/cancel", rfqHandler.CancelRFQ)
 	rfqs.Post("/:rfq_id/quotations", quotationHandler.CreateQuotation)
 	rfqs.Get("/:rfq_id/quotations", quotationHandler.ListQuotationsByRFQ)

@@ -21,16 +21,17 @@ func NewRFQHandler(rfqService *service.RFQService, authService *service.AuthServ
 
 func (h *RFQHandler) CreateRFQ(c *fiber.Ctx) error {
 	type createRFQRequest struct {
-		CategoryID       int64   `json:"category_id"`
-		SubCategoryID    *int64  `json:"sub_category_id"`
-		Title            string  `json:"title"`
-		Quantity         int64   `json:"quantity"`
-		UnitID           int64   `json:"unit_id"`
-		BudgetPerPiece   float64 `json:"budget_per_piece"`
-		Details          string  `json:"details"`
-		AddressID        int64   `json:"address_id"`
-		ShippingMethodID *int64  `json:"shipping_method_id"`
-		DeadlineDate     *string `json:"deadline_date"`
+		CategoryID       int64    `json:"category_id"`
+		SubCategoryID    *int64   `json:"sub_category_id"`
+		Title            string   `json:"title"`
+		Quantity         int64    `json:"quantity"`
+		UnitID           int64    `json:"unit_id"`
+		BudgetPerPiece   float64  `json:"budget_per_piece"`
+		Details          string   `json:"details"`
+		AddressID        int64    `json:"address_id"`
+		ShippingMethodID *int64   `json:"shipping_method_id"`
+		DeadlineDate     *string  `json:"deadline_date"`
+		ImageURLs        []string `json:"image_urls"`
 	}
 
 	userID, err := getUserIDFromHeader(c)
@@ -58,6 +59,7 @@ func (h *RFQHandler) CreateRFQ(c *fiber.Ctx) error {
 		Details:          req.Details,
 		AddressID:        req.AddressID,
 		ShippingMethodID: req.ShippingMethodID,
+		ImageURLs:        domain.JSONStringArray(req.ImageURLs),
 	}
 	if req.DeadlineDate != nil && strings.TrimSpace(*req.DeadlineDate) != "" {
 		d, err := time.Parse("2006-01-02", strings.TrimSpace(*req.DeadlineDate))
@@ -68,7 +70,7 @@ func (h *RFQHandler) CreateRFQ(c *fiber.Ctx) error {
 	}
 
 	if err := h.service.Create(rfq); err != nil {
-		if err == service.ErrInvalidSubCategory || err == service.ErrInvalidShippingMethod {
+		if err == service.ErrInvalidSubCategory || err == service.ErrInvalidShippingMethod || err == service.ErrMinRFQImages {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create rfq"})
@@ -123,7 +125,7 @@ func (h *RFQHandler) GetRFQ(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid rfq_id"})
 	}
 
-	rfq, images, err := h.service.GetForViewer(userID, u.Role, int64(rfqID))
+	rfq, err := h.service.GetForViewer(userID, u.Role, int64(rfqID))
 	if err != nil {
 		if repository.IsNotFoundError(err) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "rfq not found"})
@@ -131,37 +133,7 @@ func (h *RFQHandler) GetRFQ(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch rfq"})
 	}
 
-	return c.JSON(fiber.Map{
-		"rfq":    rfq,
-		"images": images,
-	})
-}
-
-func (h *RFQHandler) AddRFQImage(c *fiber.Ctx) error {
-	type addImageRequest struct {
-		ImageURL string `json:"image_url"`
-	}
-	rfqID, err := c.ParamsInt("rfq_id")
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid rfq_id"})
-	}
-
-	var req addImageRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
-	}
-	if strings.TrimSpace(req.ImageURL) == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "image_url is required"})
-	}
-
-	image, err := h.service.AddImage(int64(rfqID), req.ImageURL)
-	if err != nil {
-		if err == service.ErrMaxRFQImages {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
-		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to add image"})
-	}
-	return c.Status(fiber.StatusCreated).JSON(image)
+	return c.JSON(fiber.Map{"rfq": rfq})
 }
 
 func (h *RFQHandler) CancelRFQ(c *fiber.Ctx) error {

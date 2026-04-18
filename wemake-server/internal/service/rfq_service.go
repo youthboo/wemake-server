@@ -6,14 +6,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/yourusername/wemake/internal/domain"
 	"github.com/yourusername/wemake/internal/repository"
 )
 
-var ErrMaxRFQImages = errors.New("rfq image limit exceeded (max 4)")
-var ErrInvalidSubCategory = errors.New("sub_category_id is invalid for the selected category")
-var ErrInvalidShippingMethod = errors.New("shipping_method_id is invalid")
+const minRFQImages = 5
+
+var (
+	ErrMinRFQImages            = errors.New("at least 5 image_urls are required")
+	ErrInvalidSubCategory      = errors.New("sub_category_id is invalid for the selected category")
+	ErrInvalidShippingMethod   = errors.New("shipping_method_id is invalid")
+)
 
 type RFQService struct {
 	repo *repository.RFQRepository
@@ -21,6 +24,23 @@ type RFQService struct {
 
 func NewRFQService(repo *repository.RFQRepository) *RFQService {
 	return &RFQService{repo: repo}
+}
+
+func normalizeRFQImageURLs(urls []string) domain.JSONStringArray {
+	seen := make(map[string]struct{})
+	out := make([]string, 0, len(urls))
+	for _, u := range urls {
+		u = strings.TrimSpace(u)
+		if u == "" {
+			continue
+		}
+		if _, ok := seen[u]; ok {
+			continue
+		}
+		seen[u] = struct{}{}
+		out = append(out, u)
+	}
+	return domain.JSONStringArray(out)
 }
 
 func (s *RFQService) Create(rfq *domain.RFQ) error {
@@ -31,6 +51,11 @@ func (s *RFQService) Create(rfq *domain.RFQ) error {
 	rfq.CreatedAt = now
 	rfq.UpdatedAt = now
 	rfq.UploadedAt = &now
+
+	rfq.ImageURLs = normalizeRFQImageURLs([]string(rfq.ImageURLs))
+	if len(rfq.ImageURLs) < minRFQImages {
+		return ErrMinRFQImages
+	}
 
 	if rfq.SubCategoryID != nil {
 		valid, err := s.repo.SubCategoryBelongsToCategory(*rfq.SubCategoryID, rfq.CategoryID)
@@ -59,16 +84,8 @@ func (s *RFQService) ListByUserID(userID int64, status string) ([]domain.RFQ, er
 	return s.repo.ListByUserID(userID, strings.TrimSpace(strings.ToUpper(status)))
 }
 
-func (s *RFQService) GetByID(userID, rfqID int64) (*domain.RFQ, []domain.RFQImage, error) {
-	rfq, err := s.repo.GetByID(userID, rfqID)
-	if err != nil {
-		return nil, nil, err
-	}
-	images, err := s.repo.ListImages(rfqID)
-	if err != nil {
-		return nil, nil, err
-	}
-	return rfq, images, nil
+func (s *RFQService) GetByID(userID, rfqID int64) (*domain.RFQ, error) {
+	return s.repo.GetByID(userID, rfqID)
 }
 
 func (s *RFQService) Cancel(userID, rfqID int64) error {
@@ -79,49 +96,26 @@ func (s *RFQService) ListMatchingForFactory(factoryID int64, status string) ([]d
 	return s.repo.ListMatchingForFactory(factoryID, strings.TrimSpace(strings.ToUpper(status)))
 }
 
-func (s *RFQService) GetForViewer(userID int64, role string, rfqID int64) (*domain.RFQ, []domain.RFQImage, error) {
+func (s *RFQService) GetForViewer(userID int64, role string, rfqID int64) (*domain.RFQ, error) {
 	if role == domain.RoleFactory {
 		rfq, err := s.repo.GetByIDAny(rfqID)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		ok, err := s.repo.FactoryHasMatchingCategory(userID, rfq)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		if !ok {
 			hasQ, err := s.repo.FactoryHasQuotationOnRFQ(userID, rfqID)
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 			if !hasQ {
-				return nil, nil, sql.ErrNoRows
+				return nil, sql.ErrNoRows
 			}
 		}
-		images, err := s.repo.ListImages(rfqID)
-		if err != nil {
-			return nil, nil, err
-		}
-		return rfq, images, nil
+		return rfq, nil
 	}
 	return s.GetByID(userID, rfqID)
-}
-
-func (s *RFQService) AddImage(rfqID int64, imageURL string) (*domain.RFQImage, error) {
-	count, err := s.repo.CountImages(rfqID)
-	if err != nil {
-		return nil, err
-	}
-	if count >= 4 {
-		return nil, ErrMaxRFQImages
-	}
-	image := &domain.RFQImage{
-		ImageID:  "img-" + uuid.NewString(),
-		RFQID:    rfqID,
-		ImageURL: strings.TrimSpace(imageURL),
-	}
-	if err := s.repo.CreateImage(image); err != nil {
-		return nil, err
-	}
-	return image, nil
 }
