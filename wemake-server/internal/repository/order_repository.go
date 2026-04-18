@@ -63,6 +63,52 @@ func (r *OrderRepository) Create(order *domain.Order) error {
 	).Scan(&order.OrderID)
 }
 
+// CreateTx inserts an order inside an existing transaction.
+func (r *OrderRepository) CreateTx(tx *sqlx.Tx, order *domain.Order) error {
+	query := `
+		INSERT INTO orders (quote_id, user_id, factory_id, total_amount, deposit_amount, status, estimated_delivery, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		RETURNING order_id
+	`
+	return tx.QueryRow(
+		query,
+		order.QuotationID,
+		order.UserID,
+		order.FactoryID,
+		order.TotalAmount,
+		order.DepositAmount,
+		order.Status,
+		nullableTimeValue(order.EstimatedDelivery),
+		order.CreatedAt,
+		order.UpdatedAt,
+	).Scan(&order.OrderID)
+}
+
+// OrderExistsForQuoteTx returns true if an order already exists for the quotation.
+func (r *OrderRepository) OrderExistsForQuoteTx(tx *sqlx.Tx, quoteID int64) (bool, error) {
+	var n int
+	err := tx.Get(&n, `SELECT COUNT(*) FROM orders WHERE quote_id = $1`, quoteID)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+// GetOrderSourceByQuotationIDTx loads quotation + RFQ ownership inside a transaction.
+func (r *OrderRepository) GetOrderSourceByQuotationIDTx(tx *sqlx.Tx, quotationID, userID int64) (*QuotationOrderSource, error) {
+	var src QuotationOrderSource
+	query := `
+		SELECT q.quote_id, rfq.user_id, q.factory_id, q.price_per_piece, rfq.quantity, q.mold_cost, q.lead_time_days, q.status
+		FROM quotations q
+		INNER JOIN rfqs rfq ON rfq.rfq_id = q.rfq_id
+		WHERE q.quote_id = $1 AND rfq.user_id = $2
+	`
+	if err := tx.Get(&src, query, quotationID, userID); err != nil {
+		return nil, err
+	}
+	return &src, nil
+}
+
 func (r *OrderRepository) ListByUserID(userID int64, status string) ([]domain.Order, error) {
 	var orders []domain.Order
 	query := `
@@ -164,6 +210,23 @@ func (r *OrderRepository) InsertActivity(orderID int64, actorUserID *int64, even
 		payloadArg = b
 	}
 	_, err := r.db.Exec(
+		`INSERT INTO order_activity_log (order_id, actor_user_id, event_code, payload) VALUES ($1, $2, $3, $4)`,
+		orderID, actorUserID, eventCode, payloadArg,
+	)
+	return err
+}
+
+// InsertActivityTx writes an order activity row inside an existing transaction.
+func (r *OrderRepository) InsertActivityTx(tx *sqlx.Tx, orderID int64, actorUserID *int64, eventCode string, payload map[string]interface{}) error {
+	var payloadArg interface{}
+	if payload != nil {
+		b, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+		payloadArg = b
+	}
+	_, err := tx.Exec(
 		`INSERT INTO order_activity_log (order_id, actor_user_id, event_code, payload) VALUES ($1, $2, $3, $4)`,
 		orderID, actorUserID, eventCode, payloadArg,
 	)

@@ -43,6 +43,27 @@ func (r *TransactionRepository) Create(item *domain.Transaction) error {
 	return err
 }
 
+// CreateTx inserts a transaction row using the given sqlx transaction.
+func (r *TransactionRepository) CreateTx(tx *sqlx.Tx, item *domain.Transaction) error {
+	query := `
+		INSERT INTO transactions (tx_id, wallet_id, order_id, type, amount, status, created_at, updated_at, uploaded_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	`
+	_, err := tx.Exec(
+		query,
+		item.TxID,
+		item.WalletID,
+		item.OrderID,
+		item.Type,
+		item.Amount,
+		item.Status,
+		item.CreatedAt,
+		item.UpdatedAt,
+		item.UploadedAt,
+	)
+	return err
+}
+
 func (r *TransactionRepository) List(filters TransactionFilters) ([]domain.Transaction, error) {
 	var items []domain.Transaction
 	query := `

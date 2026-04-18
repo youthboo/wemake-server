@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 	"github.com/yourusername/wemake/internal/domain"
 	"github.com/yourusername/wemake/internal/repository"
 )
@@ -13,25 +15,52 @@ import (
 var ErrQuotationNotAccepted = errors.New("quotation must be accepted before creating order")
 var ErrShipOrderInvalid = errors.New("tracking_no and courier are required")
 var ErrOrderCannotBeCancelled = errors.New("order cannot be cancelled in its current status")
+var ErrInsufficientGoodFund = errors.New("insufficient good_fund balance")
+var ErrOrderAlreadyExistsForQuote = errors.New("order already exists for this quotation")
 
 type OrderService struct {
-	repo *repository.OrderRepository
+	db       *sqlx.DB
+	repo     *repository.OrderRepository
+	wallets  *repository.WalletRepository
+	txLedger *repository.TransactionRepository
 }
 
-func NewOrderService(repo *repository.OrderRepository) *OrderService {
-	return &OrderService{repo: repo}
+func NewOrderService(db *sqlx.DB, repo *repository.OrderRepository, wallets *repository.WalletRepository, txLedger *repository.TransactionRepository) *OrderService {
+	return &OrderService{db: db, repo: repo, wallets: wallets, txLedger: txLedger}
 }
 
+// CreateFromQuotation validates the quotation, charges the customer's good_fund for the full
+// order total, credits the factory wallet, inserts two settled transactions (BU / SC), and creates the order — all in one DB transaction.
 func (s *OrderService) CreateFromQuotation(quotationID, userID int64) (*domain.Order, error) {
-	src, err := s.repo.GetOrderSourceByQuotationID(quotationID, userID)
+	tx, err := s.db.Beginx()
 	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	src, err := s.repo.GetOrderSourceByQuotationIDTx(tx, quotationID, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			tx.Rollback()
+		}
 		return nil, err
 	}
 	if src.Status != "AC" {
 		return nil, ErrQuotationNotAccepted
 	}
 
+	exists, err := s.repo.OrderExistsForQuoteTx(tx, quotationID)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, ErrOrderAlreadyExistsForQuote
+	}
+
 	total := (src.PricePerPiece * float64(src.Quantity)) + src.MoldCost
+	if total <= 0 {
+		return nil, errors.New("invalid order total")
+	}
 	deposit := total * 0.5
 
 	now := time.Now()
@@ -48,13 +77,83 @@ func (s *OrderService) CreateFromQuotation(quotationID, userID int64) (*domain.O
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}
-	if err := s.repo.Create(order); err != nil {
+
+	if _, err := s.wallets.EnsureWallet(tx, userID); err != nil {
 		return nil, err
 	}
+	if _, err := s.wallets.EnsureWallet(tx, src.FactoryID); err != nil {
+		return nil, err
+	}
+
+	customerWallet, err := s.wallets.GetByUserIDForUpdate(tx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	ok, err := s.wallets.DebitGoodFund(tx, customerWallet.WalletID, total)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrInsufficientGoodFund
+	}
+
+	factoryWallet, err := s.wallets.GetByUserIDForUpdate(tx, src.FactoryID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.wallets.CreditGoodFund(tx, factoryWallet.WalletID, total); err != nil {
+		return nil, err
+	}
+
+	if err := s.repo.CreateTx(tx, order); err != nil {
+		return nil, err
+	}
+
+	orderIDPtr := order.OrderID
+	buyTxID := "tx-" + uuid.NewString()
+	recvTxID := "tx-" + uuid.NewString()
+
+	buyRow := &domain.Transaction{
+		TxID:       buyTxID,
+		WalletID:   customerWallet.WalletID,
+		OrderID:    &orderIDPtr,
+		Type:       "BU",
+		Amount:     total,
+		Status:     "ST",
+		CreatedAt:  now,
+		UpdatedAt:  now,
+		UploadedAt: now,
+	}
+	recvRow := &domain.Transaction{
+		TxID:       recvTxID,
+		WalletID:   factoryWallet.WalletID,
+		OrderID:    &orderIDPtr,
+		Type:       "SC",
+		Amount:     total,
+		Status:     "ST",
+		CreatedAt:  now,
+		UpdatedAt:  now,
+		UploadedAt: now,
+	}
+	if err := s.txLedger.CreateTx(tx, buyRow); err != nil {
+		return nil, err
+	}
+	if err := s.txLedger.CreateTx(tx, recvRow); err != nil {
+		return nil, err
+	}
+
 	uid := userID
-	_ = s.repo.InsertActivity(order.OrderID, &uid, "ORDER_CREATED", map[string]interface{}{
+	if err := s.repo.InsertActivityTx(tx, order.OrderID, &uid, "ORDER_CREATED", map[string]interface{}{
 		"status": order.Status, "quote_id": order.QuotationID,
-	})
+		"amount": total,
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
 	return order, nil
 }
 
