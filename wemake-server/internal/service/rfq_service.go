@@ -10,12 +10,12 @@ import (
 	"github.com/yourusername/wemake/internal/repository"
 )
 
-const minRFQImages = 5
+const maxRFQImages = 5
 
 var (
-	ErrMinRFQImages            = errors.New("at least 5 image_urls are required")
-	ErrInvalidSubCategory      = errors.New("sub_category_id is invalid for the selected category")
-	ErrInvalidShippingMethod   = errors.New("shipping_method_id is invalid")
+	ErrMaxRFQImages          = errors.New("at most 5 image_urls are allowed")
+	ErrInvalidSubCategory    = errors.New("sub_category_id is invalid for the selected category")
+	ErrInvalidShippingMethod = errors.New("shipping_method_id is invalid")
 )
 
 type RFQService struct {
@@ -53,8 +53,8 @@ func (s *RFQService) Create(rfq *domain.RFQ) error {
 	rfq.UploadedAt = &now
 
 	rfq.ImageURLs = normalizeRFQImageURLs([]string(rfq.ImageURLs))
-	if len(rfq.ImageURLs) < minRFQImages {
-		return ErrMinRFQImages
+	if len(rfq.ImageURLs) > maxRFQImages {
+		return ErrMaxRFQImages
 	}
 
 	if rfq.SubCategoryID != nil {

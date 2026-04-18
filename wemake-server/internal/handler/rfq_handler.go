@@ -70,7 +70,7 @@ func (h *RFQHandler) CreateRFQ(c *fiber.Ctx) error {
 	}
 
 	if err := h.service.Create(rfq); err != nil {
-		if err == service.ErrInvalidSubCategory || err == service.ErrInvalidShippingMethod || err == service.ErrMinRFQImages {
+		if err == service.ErrInvalidSubCategory || err == service.ErrInvalidShippingMethod || err == service.ErrMaxRFQImages {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create rfq"})
