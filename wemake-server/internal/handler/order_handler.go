@@ -46,7 +46,10 @@ func (h *OrderHandler) CreateOrder(c *fiber.Ctx) error {
 		if errors.Is(err, service.ErrOrderAlreadyExistsForQuote) {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error()})
 		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create order"})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":  "failed to create order",
+			"detail": err.Error(),
+		})
 	}
 	return c.Status(fiber.StatusCreated).JSON(order)
 }

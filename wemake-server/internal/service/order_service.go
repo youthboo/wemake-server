@@ -111,18 +111,18 @@ func (s *OrderService) CreateFromQuotation(quotationID, userID int64) (*domain.O
 		return nil, err
 	}
 
-	uid := userID
-	if err := s.repo.InsertActivityTx(tx, order.OrderID, &uid, "ORDER_CREATED", map[string]interface{}{
-		"status": order.Status, "quote_id": order.QuotationID,
-		"amount":         total,
-		"deposit_amount": deposit,
-	}); err != nil {
-		return nil, err
-	}
-
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
+
+	// Activity log is best-effort; order creation should not fail if audit table/schema lags behind.
+	uid := userID
+	_ = s.repo.InsertActivity(order.OrderID, &uid, "ORDER_CREATED", map[string]interface{}{
+		"status":         order.Status,
+		"quote_id":       order.QuotationID,
+		"amount":         total,
+		"deposit_amount": deposit,
+	})
 	return order, nil
 }
 
