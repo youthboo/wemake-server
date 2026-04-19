@@ -95,10 +95,10 @@ func (r *QuotationRepository) UpdateStatus(quotationID int64, status string) err
 		UPDATE quotations
 		SET status = $1,
 		    log_timestamp = NOW(),
-		    is_locked = CASE WHEN $1 = 'AC' THEN TRUE ELSE COALESCE(is_locked, false) END
-		WHERE quote_id = $2
+		    is_locked = CASE WHEN $2 = 'AC' THEN TRUE ELSE COALESCE(is_locked, false) END
+		WHERE quote_id = $3
 	`
-	_, err := r.db.Exec(query, status, quotationID)
+	_, err := r.db.Exec(query, status, status, quotationID)
 	return err
 }
 
@@ -108,10 +108,10 @@ func (r *QuotationRepository) UpdateStatusTx(tx *sqlx.Tx, quotationID int64, sta
 		UPDATE quotations
 		SET status = $1,
 		    log_timestamp = NOW(),
-		    is_locked = CASE WHEN $1 = 'AC' THEN TRUE ELSE COALESCE(is_locked, false) END
-		WHERE quote_id = $2
+		    is_locked = CASE WHEN $2 = 'AC' THEN TRUE ELSE COALESCE(is_locked, false) END
+		WHERE quote_id = $3
 	`
-	_, err := tx.Exec(query, status, quotationID)
+	_, err := tx.Exec(query, status, status, quotationID)
 	return err
 }
 
