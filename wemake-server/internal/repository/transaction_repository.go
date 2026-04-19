@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -107,4 +108,50 @@ func (r *TransactionRepository) PatchStatus(txID string, status string) error {
 	query := "UPDATE transactions SET status = $1, updated_at = NOW() WHERE tx_id = $2"
 	_, err := r.db.Exec(query, status, txID)
 	return err
+}
+
+func (r *TransactionRepository) GetByID(txID string) (*domain.Transaction, error) {
+	var item domain.Transaction
+	err := r.db.Get(&item, `
+		SELECT tx_id, wallet_id, order_id, type, amount, status, created_at, updated_at, uploaded_at
+		FROM transactions
+		WHERE tx_id = $1
+	`, txID)
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *TransactionRepository) GetByIDForUpdate(tx *sqlx.Tx, txID string) (*domain.Transaction, error) {
+	var item domain.Transaction
+	err := tx.Get(&item, `
+		SELECT tx_id, wallet_id, order_id, type, amount, status, created_at, updated_at, uploaded_at
+		FROM transactions
+		WHERE tx_id = $1
+		FOR UPDATE
+	`, txID)
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *TransactionRepository) PatchStatusTx(tx *sqlx.Tx, txID string, status string) error {
+	res, err := tx.Exec(`
+		UPDATE transactions
+		SET status = $1, updated_at = NOW()
+		WHERE tx_id = $2
+	`, status, txID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }

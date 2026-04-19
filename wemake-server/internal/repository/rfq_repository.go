@@ -78,6 +78,16 @@ func (r *RFQRepository) Cancel(userID, rfqID int64) error {
 	return err
 }
 
+// CloseOpenRFQForUserTx sets RFQ status from OP to CL when the customer awards an order (same transaction as order create).
+func (r *RFQRepository) CloseOpenRFQForUserTx(tx *sqlx.Tx, rfqID, userID int64) error {
+	_, err := tx.Exec(`
+		UPDATE rfqs
+		SET status = 'CL', updated_at = NOW()
+		WHERE rfq_id = $1 AND user_id = $2 AND status = 'OP'
+	`, rfqID, userID)
+	return err
+}
+
 func (r *RFQRepository) SubCategoryBelongsToCategory(subCategoryID, categoryID int64) (bool, error) {
 	var exists bool
 	query := `

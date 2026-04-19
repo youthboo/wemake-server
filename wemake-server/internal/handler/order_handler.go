@@ -37,7 +37,7 @@ func (h *OrderHandler) CreateOrder(c *fiber.Ctx) error {
 	}
 	order, err := h.service.CreateFromQuotation(req.QuotationID, userID)
 	if err != nil {
-		if err == service.ErrQuotationNotAccepted {
+		if errors.Is(err, service.ErrQuotationRejected) || errors.Is(err, service.ErrQuotationInvalidState) {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		if errors.Is(err, service.ErrInsufficientGoodFund) {
@@ -222,6 +222,75 @@ func (h *OrderHandler) MarkShipped(c *fiber.Ctx) error {
 	item, err := h.service.GetByID(int64(orderID), userID, u.Role)
 	if err != nil {
 		return c.JSON(fiber.Map{"message": "order marked as shipped"})
+	}
+	return c.JSON(item)
+}
+
+func (h *OrderHandler) CreatePayment(c *fiber.Ctx) error {
+	type reqBody struct {
+		Type   string  `json:"type"`
+		Amount float64 `json:"amount"`
+	}
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
+	}
+	u, err := h.auth.GetUserByID(userID)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "user not found"})
+	}
+	orderID, err := c.ParamsInt("order_id")
+	if err != nil || orderID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid order_id"})
+	}
+	var req reqBody
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	item, err := h.service.CreatePayment(int64(orderID), userID, u.Role, req.Type, req.Amount)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrPaymentTypeInvalid),
+			errors.Is(err, service.ErrPaymentAmountMismatch),
+			errors.Is(err, service.ErrPaymentAlreadyExists):
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		case repository.IsNotFoundError(err):
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "order not found"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create payment"})
+	}
+	return c.Status(fiber.StatusCreated).JSON(item)
+}
+
+func (h *OrderHandler) VerifyPayment(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
+	}
+	u, err := h.auth.GetUserByID(userID)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "user not found"})
+	}
+	orderID, err := c.ParamsInt("order_id")
+	if err != nil || orderID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid order_id"})
+	}
+	txID := strings.TrimSpace(c.Params("tx_id"))
+	if txID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid tx_id"})
+	}
+	item, err := h.service.VerifyPayment(int64(orderID), userID, u.Role, txID)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrPaymentTypeInvalid),
+			errors.Is(err, service.ErrPaymentAmountMismatch),
+			errors.Is(err, service.ErrPaymentStateInvalid),
+			errors.Is(err, service.ErrInsufficientGoodFund):
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		case repository.IsNotFoundError(err):
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "payment not found"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to verify payment"})
 	}
 	return c.JSON(item)
 }

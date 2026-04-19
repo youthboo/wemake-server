@@ -102,6 +102,33 @@ func (r *QuotationRepository) UpdateStatus(quotationID int64, status string) err
 	return err
 }
 
+// UpdateStatusTx updates quotation status inside a transaction (same rules as UpdateStatus).
+func (r *QuotationRepository) UpdateStatusTx(tx *sqlx.Tx, quotationID int64, status string) error {
+	query := `
+		UPDATE quotations
+		SET status = $1,
+		    log_timestamp = NOW(),
+		    is_locked = CASE WHEN $1 = 'AC' THEN TRUE ELSE COALESCE(is_locked, false) END
+		WHERE quote_id = $2
+	`
+	_, err := tx.Exec(query, status, quotationID)
+	return err
+}
+
+// RejectOtherPendingQuotationsTx sets status RJ for other PD quotations on the same RFQ (excluding acceptedQuoteID).
+func (r *QuotationRepository) RejectOtherPendingQuotationsTx(tx *sqlx.Tx, rfqID, acceptedQuoteID int64) error {
+	_, err := tx.Exec(`
+		UPDATE quotations
+		SET status = 'RJ',
+		    log_timestamp = NOW(),
+		    is_locked = COALESCE(is_locked, false)
+		WHERE rfq_id = $1
+		  AND quote_id <> $2
+		  AND status = 'PD'
+	`, rfqID, acceptedQuoteID)
+	return err
+}
+
 func (r *QuotationRepository) InsertHistory(entry *domain.QuotationHistoryEntry) error {
 	query := `
 		INSERT INTO quotation_history (quote_id, event_type, version_after, price_per_piece, mold_cost, lead_time_days, shipping_method_id, status, reason, edited_by)

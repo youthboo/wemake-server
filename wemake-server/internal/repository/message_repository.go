@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"fmt"
+
 	"github.com/jmoiron/sqlx"
 	"github.com/yourusername/wemake/internal/domain"
 )
@@ -24,8 +26,8 @@ func (r *MessageRepository) Create(item *domain.Message) error {
 	_, err := r.db.Exec(
 		query,
 		item.MessageID,
-		item.ReferenceType,
-		item.ReferenceID,
+		nullableMessageReferenceType(item.ReferenceType),
+		nullableMessageReferenceID(item.ReferenceID),
 		item.SenderID,
 		item.ReceiverID,
 		item.Content,
@@ -39,10 +41,35 @@ func (r *MessageRepository) Create(item *domain.Message) error {
 	return err
 }
 
+func (r *MessageRepository) ReferenceExists(referenceType string, referenceID int64) (bool, error) {
+	var exists bool
+	var query string
+	var args []interface{}
+
+	switch referenceType {
+	case "RQ":
+		query = `SELECT EXISTS (SELECT 1 FROM rfqs WHERE rfq_id = $1)`
+		args = []interface{}{referenceID}
+	case "OD":
+		query = `SELECT EXISTS (SELECT 1 FROM orders WHERE order_id = $1)`
+		args = []interface{}{referenceID}
+	case "PD", "PM", "ID":
+		query = `SELECT EXISTS (SELECT 1 FROM factory_showcases WHERE showcase_id = $1 AND content_type = $2)`
+		args = []interface{}{referenceID, referenceType}
+	default:
+		return false, fmt.Errorf("unsupported reference_type: %s", referenceType)
+	}
+
+	if err := r.db.Get(&exists, query, args...); err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
 func (r *MessageRepository) ListByReference(referenceType string, referenceID int64, userID int64) ([]domain.Message, error) {
 	var items []domain.Message
 	query := `
-		SELECT message_id, reference_type, reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, is_read
+		SELECT message_id, COALESCE(reference_type, '') AS reference_type, COALESCE(reference_id, 0) AS reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, is_read
 		FROM messages
 		WHERE reference_type = $1 AND reference_id = $2 AND (sender_id = $3 OR receiver_id = $3)
 		ORDER BY created_at ASC
@@ -54,7 +81,7 @@ func (r *MessageRepository) ListByReference(referenceType string, referenceID in
 func (r *MessageRepository) ListByConvID(convID int64) ([]domain.Message, error) {
 	var items []domain.Message
 	query := `
-		SELECT message_id, reference_type, reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, is_read
+		SELECT message_id, COALESCE(reference_type, '') AS reference_type, COALESCE(reference_id, 0) AS reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, is_read
 		FROM messages
 		WHERE conv_id = $1
 		ORDER BY created_at ASC
@@ -66,7 +93,10 @@ func (r *MessageRepository) ListByConvID(convID int64) ([]domain.Message, error)
 func (r *MessageRepository) ListThreads(userID int64) ([]domain.MessageThread, error) {
 	var items []domain.MessageThread
 	query := `
-		SELECT m.reference_type, m.reference_id, m.content AS last_message, m.created_at AS last_message_at
+		SELECT COALESCE(m.reference_type, '') AS reference_type,
+		       COALESCE(m.reference_id, 0) AS reference_id,
+		       m.content AS last_message,
+		       m.created_at AS last_message_at
 		FROM messages m
 		INNER JOIN (
 			SELECT reference_type, reference_id, MAX(created_at) AS max_created_at
@@ -81,4 +111,18 @@ func (r *MessageRepository) ListThreads(userID int64) ([]domain.MessageThread, e
 	`
 	err := r.db.Select(&items, query, userID)
 	return items, err
+}
+
+func nullableMessageReferenceType(referenceType string) interface{} {
+	if referenceType == "" {
+		return nil
+	}
+	return referenceType
+}
+
+func nullableMessageReferenceID(referenceID int64) interface{} {
+	if referenceID <= 0 {
+		return nil
+	}
+	return referenceID
 }

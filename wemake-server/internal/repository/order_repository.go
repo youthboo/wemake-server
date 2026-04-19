@@ -16,6 +16,7 @@ type OrderRepository struct {
 
 type QuotationOrderSource struct {
 	QuotationID   int64   `db:"quote_id"`
+	RFQID         int64   `db:"rfq_id"`
 	UserID        int64   `db:"user_id"`
 	FactoryID     int64   `db:"factory_id"`
 	PricePerPiece float64 `db:"price_per_piece"`
@@ -32,7 +33,7 @@ func NewOrderRepository(db *sqlx.DB) *OrderRepository {
 func (r *OrderRepository) GetOrderSourceByQuotationID(quotationID, userID int64) (*QuotationOrderSource, error) {
 	var src QuotationOrderSource
 	query := `
-		SELECT q.quote_id, rfq.user_id, q.factory_id, q.price_per_piece, rfq.quantity, q.mold_cost, q.lead_time_days, q.status
+		SELECT q.quote_id, q.rfq_id, rfq.user_id, q.factory_id, q.price_per_piece, rfq.quantity, q.mold_cost, q.lead_time_days, q.status
 		FROM quotations q
 		INNER JOIN rfqs rfq ON rfq.rfq_id = q.rfq_id
 		WHERE q.quote_id = $1 AND rfq.user_id = $2
@@ -98,7 +99,7 @@ func (r *OrderRepository) OrderExistsForQuoteTx(tx *sqlx.Tx, quoteID int64) (boo
 func (r *OrderRepository) GetOrderSourceByQuotationIDTx(tx *sqlx.Tx, quotationID, userID int64) (*QuotationOrderSource, error) {
 	var src QuotationOrderSource
 	query := `
-		SELECT q.quote_id, rfq.user_id, q.factory_id, q.price_per_piece, rfq.quantity, q.mold_cost, q.lead_time_days, q.status
+		SELECT q.quote_id, q.rfq_id, rfq.user_id, q.factory_id, q.price_per_piece, rfq.quantity, q.mold_cost, q.lead_time_days, q.status
 		FROM quotations q
 		INNER JOIN rfqs rfq ON rfq.rfq_id = q.rfq_id
 		WHERE q.quote_id = $1 AND rfq.user_id = $2
@@ -150,6 +151,11 @@ func (r *OrderRepository) GetByID(orderID, userID int64) (*domain.Order, error) 
 func (r *OrderRepository) UpdateStatus(orderID int64, status string) error {
 	query := "UPDATE orders SET status = $1, updated_at = NOW() WHERE order_id = $2"
 	_, err := r.db.Exec(query, status, orderID)
+	return err
+}
+
+func (r *OrderRepository) UpdateStatusTx(tx *sqlx.Tx, orderID int64, status string) error {
+	_, err := tx.Exec(`UPDATE orders SET status = $1, updated_at = NOW() WHERE order_id = $2`, status, orderID)
 	return err
 }
 
