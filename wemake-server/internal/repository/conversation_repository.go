@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"database/sql"
+
 	"github.com/jmoiron/sqlx"
 	"github.com/yourusername/wemake/internal/domain"
 )
@@ -59,4 +61,48 @@ func (r *ConversationRepository) Create(conv *domain.Conversation) error {
 	}
 	rows.Close()
 	return err
+}
+
+// MarkAsRead marks all messages in a conversation as read for the given user
+// and resets that user's unread counter on the conversation row.
+func (r *ConversationRepository) MarkAsRead(convID, userID int64) error {
+	tx, err := r.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var conv domain.Conversation
+	query := `SELECT conv_id, customer_id, factory_id FROM conversations WHERE conv_id = $1`
+	if err := tx.Get(&conv, query, convID); err != nil {
+		return err
+	}
+
+	var unreadField string
+	switch userID {
+	case conv.CustomerID:
+		unreadField = "unread_customer"
+	case conv.FactoryID:
+		unreadField = "unread_factory"
+	default:
+		return sql.ErrNoRows
+	}
+
+	if _, err := tx.Exec(`
+		UPDATE messages
+		SET is_read = TRUE
+		WHERE conv_id = $1 AND receiver_id = $2 AND is_read = FALSE
+	`, convID, userID); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(`
+		UPDATE conversations
+		SET `+unreadField+` = 0
+		WHERE conv_id = $1
+	`, convID); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }

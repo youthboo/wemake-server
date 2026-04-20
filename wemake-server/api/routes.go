@@ -240,6 +240,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	conversations.Get("/", conversationHandler.List)
 	conversations.Get("/:conv_id", conversationHandler.Get)
 	conversations.Post("/", conversationHandler.Create)
+	conversations.Patch("/:conv_id/read", conversationHandler.MarkAsRead)
 
 	notifications := api.Group("/notifications")
 	notifications.Get("/", notificationHandler.List)
