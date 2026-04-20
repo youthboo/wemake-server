@@ -10,6 +10,15 @@ import (
 	"github.com/yourusername/wemake/internal/domain"
 )
 
+func isSchemaDriftError(err error) bool {
+	var pqErr *pq.Error
+	if !errors.As(err, &pqErr) {
+		return false
+	}
+	// 42P01: undefined_table, 42703: undefined_column
+	return pqErr.Code == "42P01" || pqErr.Code == "42703"
+}
+
 type FactoryRepository struct {
 	db *sqlx.DB
 }
@@ -505,7 +514,10 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 			)
 		  )
 	`, factoryID); err != nil {
-		return nil, err
+		if !isSchemaDriftError(err) {
+			return nil, err
+		}
+		out.Counts.PendingRFQs = 0
 	}
 
 	if err := r.db.Get(&out.Counts.ActiveOrders, `
@@ -514,7 +526,10 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 		WHERE factory_id = $1
 		  AND status IN ('PR', 'QC', 'SH')
 	`, factoryID); err != nil {
-		return nil, err
+		if !isSchemaDriftError(err) {
+			return nil, err
+		}
+		out.Counts.ActiveOrders = 0
 	}
 
 	if err := r.db.Get(&out.Counts.PendingProductionUpdates, `
@@ -524,7 +539,10 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 		WHERE o.factory_id = $1
 		  AND pu.status = 'CR'
 	`, factoryID); err != nil {
-		return nil, err
+		if !isSchemaDriftError(err) {
+			return nil, err
+		}
+		out.Counts.PendingProductionUpdates = 0
 	}
 
 	if err := r.db.Get(&out.Counts.UnreadMessages, `
@@ -532,7 +550,10 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 		FROM conversations
 		WHERE factory_id = $1
 	`, factoryID); err != nil {
-		return nil, err
+		if !isSchemaDriftError(err) {
+			return nil, err
+		}
+		out.Counts.UnreadMessages = 0
 	}
 
 	if err := r.db.Get(&out.Counts.UnreadNotifications, `
@@ -541,7 +562,10 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 		WHERE user_id = $1
 		  AND is_read = FALSE
 	`, factoryID); err != nil {
-		return nil, err
+		if !isSchemaDriftError(err) {
+			return nil, err
+		}
+		out.Counts.UnreadNotifications = 0
 	}
 
 	if err := r.db.Get(&out.Wallet, `
@@ -551,9 +575,11 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 	`, factoryID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			out.Wallet = domain.FactoryDashboardWallet{}
-			return &out, nil
+		} else if isSchemaDriftError(err) {
+			out.Wallet = domain.FactoryDashboardWallet{}
+		} else {
+			return nil, err
 		}
-		return nil, err
 	}
 
 	if err := r.db.Select(&out.RecentMatchingRFQs, `
@@ -579,7 +605,10 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 		ORDER BY r.created_at DESC
 		LIMIT 5
 	`, factoryID); err != nil {
-		return nil, err
+		if !isSchemaDriftError(err) {
+			return nil, err
+		}
+		out.RecentMatchingRFQs = []domain.FactoryDashboardRFQItem{}
 	}
 
 	if err := r.db.Select(&out.RecentOrders, `
@@ -589,7 +618,23 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 		ORDER BY updated_at DESC, created_at DESC
 		LIMIT 5
 	`, factoryID); err != nil {
-		return nil, err
+		// Backward compatibility for schemas that do not have orders.updated_at.
+		if isSchemaDriftError(err) {
+			if err2 := r.db.Select(&out.RecentOrders, `
+				SELECT order_id, quote_id, user_id, status, total_amount, estimated_delivery, created_at
+				FROM orders
+				WHERE factory_id = $1
+				ORDER BY created_at DESC
+				LIMIT 5
+			`, factoryID); err2 != nil {
+				if !isSchemaDriftError(err2) {
+					return nil, err2
+				}
+				out.RecentOrders = []domain.FactoryDashboardOrderItem{}
+			}
+		} else {
+			return nil, err
+		}
 	}
 
 	if err := r.db.Select(&out.RecentQuotations, `
@@ -599,7 +644,10 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 		ORDER BY log_timestamp DESC, create_time DESC
 		LIMIT 5
 	`, factoryID); err != nil {
-		return nil, err
+		if !isSchemaDriftError(err) {
+			return nil, err
+		}
+		out.RecentQuotations = []domain.FactoryDashboardQuotationItem{}
 	}
 
 	if err := r.db.Select(&out.RecentShowcases, `
@@ -609,7 +657,10 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 		ORDER BY created_at DESC
 		LIMIT 5
 	`, factoryID); err != nil {
-		return nil, err
+		if !isSchemaDriftError(err) {
+			return nil, err
+		}
+		out.RecentShowcases = []domain.FactoryDashboardShowcaseItem{}
 	}
 
 	return &out, nil

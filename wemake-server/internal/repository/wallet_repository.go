@@ -20,6 +20,19 @@ func (r *WalletRepository) GetByUserID(userID int64) (*domain.Wallet, error) {
 	var wallet domain.Wallet
 	query := "SELECT wallet_id, user_id, good_fund, pending_fund FROM wallets WHERE user_id = $1"
 	if err := r.db.Get(&wallet, query, userID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			if _, ensureErr := r.db.Exec(`
+				INSERT INTO wallets (user_id, good_fund, pending_fund)
+				VALUES ($1, 0, 0)
+				ON CONFLICT (user_id) DO NOTHING
+			`, userID); ensureErr != nil {
+				return nil, ensureErr
+			}
+			if retryErr := r.db.Get(&wallet, query, userID); retryErr != nil {
+				return nil, retryErr
+			}
+			return &wallet, nil
+		}
 		return nil, err
 	}
 	return &wallet, nil
@@ -28,6 +41,19 @@ func (r *WalletRepository) GetByUserID(userID int64) (*domain.Wallet, error) {
 func (r *WalletRepository) GetWalletIDByUserID(userID int64) (*int64, error) {
 	var walletID int64
 	if err := r.db.Get(&walletID, "SELECT wallet_id FROM wallets WHERE user_id = $1", userID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			if _, ensureErr := r.db.Exec(`
+				INSERT INTO wallets (user_id, good_fund, pending_fund)
+				VALUES ($1, 0, 0)
+				ON CONFLICT (user_id) DO NOTHING
+			`, userID); ensureErr != nil {
+				return nil, ensureErr
+			}
+			if retryErr := r.db.Get(&walletID, "SELECT wallet_id FROM wallets WHERE user_id = $1", userID); retryErr != nil {
+				return nil, retryErr
+			}
+			return &walletID, nil
+		}
 		return nil, err
 	}
 	return &walletID, nil
