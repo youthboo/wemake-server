@@ -68,9 +68,13 @@ type ProductionUpdateResult struct {
 }
 
 type ProductionUpdatesList struct {
-	OrderID     int64              `json:"order_id"`
-	Updates     []ProductionUpdate `json:"updates"`
-	OrderStatus string             `json:"order_status"`
+	OrderID          int64                    `json:"order_id"`
+	Updates          []ProductionUpdate       `json:"updates"`
+	OrderStatus      string                   `json:"order_status"`
+	ProductionLocked bool                     `json:"production_locked"`
+	LockReason       string                   `json:"lock_reason,omitempty"`
+	LockContext      map[string]interface{}   `json:"lock_context,omitempty"`
+	TemplatePreview  []ProductionStepTemplate `json:"template_preview,omitempty"`
 }
 
 type DomainEvent struct {

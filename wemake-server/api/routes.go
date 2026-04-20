@@ -59,7 +59,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	walletService := service.NewWalletService(walletRepo, transactionRepo)
 	rfqService := service.NewRFQService(rfqRepo)
 	quotationService := service.NewQuotationService(quotationRepo, rfqRepo)
-	orderService := service.NewOrderService(db, orderRepo, walletRepo, transactionRepo, quotationRepo, rfqRepo)
+	orderService := service.NewOrderService(db, orderRepo, paymentScheduleRepo, walletRepo, transactionRepo, quotationRepo, rfqRepo)
 	productionService := service.NewProductionService(productionRepo)
 	messageService := service.NewMessageService(messageRepo, conversationRepo)
 	masterService := service.NewMasterService(masterRepo)

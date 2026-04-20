@@ -3,6 +3,7 @@
 package jobs
 
 import (
+	"encoding/json"
 	"log"
 	"time"
 
@@ -28,10 +29,12 @@ func runExpiration(db *sqlx.DB) {
 	// Run once immediately on start, then every hour.
 	expireRFQs(db)
 	expireQuotations(db)
+	expirePendingDeposits(db)
 
 	for range ticker.C {
 		expireRFQs(db)
 		expireQuotations(db)
+		expirePendingDeposits(db)
 	}
 }
 
@@ -71,6 +74,50 @@ func expireQuotations(db *sqlx.DB) {
 	n, _ := res.RowsAffected()
 	if n > 0 {
 		log.Printf("[jobs/expiration] expired %d quotation(s)", n)
+	}
+}
+
+func expirePendingDeposits(db *sqlx.DB) {
+	type orderRow struct {
+		OrderID int64 `db:"order_id"`
+	}
+
+	var rows []orderRow
+	err := db.Select(&rows, `
+		WITH expired_orders AS (
+			SELECT o.order_id
+			FROM orders o
+			WHERE o.status = 'PP'
+			  AND COALESCE(
+				(
+					SELECT ps.due_date::timestamp + TIME '23:59:59'
+					FROM payment_schedules ps
+					WHERE ps.order_id = o.order_id
+					ORDER BY ps.installment_no ASC, ps.schedule_id ASC
+					LIMIT 1
+				),
+				o.created_at + INTERVAL '3 days'
+			  ) < NOW()
+		)
+		UPDATE orders o
+		SET status = 'PE',
+		    updated_at = NOW()
+		FROM expired_orders e
+		WHERE o.order_id = e.order_id
+		RETURNING o.order_id
+	`)
+	if err != nil {
+		log.Printf("[jobs/expiration] expirePendingDeposits error: %v", err)
+		return
+	}
+	for _, row := range rows {
+		payload, _ := json.Marshal(map[string]interface{}{"order_id": row.OrderID})
+		if _, err := db.Exec(`INSERT INTO domain_events (event_type, payload) VALUES ($1, $2)`, "order.deposit_expired", payload); err != nil {
+			log.Printf("[jobs/expiration] deposit_expired event error (order %d): %v", row.OrderID, err)
+		}
+	}
+	if len(rows) > 0 {
+		log.Printf("[jobs/expiration] expired %d pending deposit order(s)", len(rows))
 	}
 }
 

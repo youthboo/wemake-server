@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/yourusername/wemake/internal/domain"
@@ -24,6 +25,12 @@ type QuotationOrderSource struct {
 	MoldCost      float64 `db:"mold_cost"`
 	LeadTimeDays  int64   `db:"lead_time_days"`
 	Status        string  `db:"status"`
+}
+
+type OrderDetailRow struct {
+	domain.Order
+	FactoryName        string     `db:"factory_name"`
+	DepositScheduleDue *time.Time `db:"deposit_schedule_due"`
 }
 
 func NewOrderRepository(db *sqlx.DB) *OrderRepository {
@@ -204,6 +211,50 @@ func (r *OrderRepository) GetByParticipant(orderID, userID int64, role string) (
 		}
 	}
 	return &order, nil
+}
+
+func (r *OrderRepository) GetDetailByParticipant(orderID, userID int64, role string) (*OrderDetailRow, error) {
+	var item OrderDetailRow
+	query := `
+		SELECT
+			o.order_id,
+			o.quote_id,
+			o.user_id,
+			o.factory_id,
+			o.total_amount,
+			o.deposit_amount,
+			o.status,
+			o.estimated_delivery,
+			o.tracking_no,
+			o.courier,
+			o.shipped_at,
+			o.created_at,
+			o.updated_at,
+			COALESCE(fp.factory_name, '') AS factory_name,
+			(
+				SELECT ps.due_date::timestamp
+				FROM payment_schedules ps
+				WHERE ps.order_id = o.order_id
+				ORDER BY ps.installment_no ASC, ps.schedule_id ASC
+				LIMIT 1
+			) AS deposit_schedule_due
+		FROM orders o
+		LEFT JOIN factory_profiles fp ON fp.user_id = o.factory_id
+		WHERE o.order_id = $1
+	`
+	if err := r.db.Get(&item, query, orderID); err != nil {
+		return nil, err
+	}
+	if role == "FT" {
+		if item.FactoryID != userID {
+			return nil, sql.ErrNoRows
+		}
+	} else if role != "AD" && role != "ADMIN" {
+		if item.UserID != userID {
+			return nil, sql.ErrNoRows
+		}
+	}
+	return &item, nil
 }
 
 func (r *OrderRepository) InsertActivity(orderID int64, actorUserID *int64, eventCode string, payload map[string]interface{}) error {

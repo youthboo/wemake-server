@@ -84,14 +84,28 @@ func (s *ProductionService) ListByOrderID(orderID, userID int64) (*domain.Produc
 	if err != nil {
 		return nil, err
 	}
+	status := normalizeProductionOrderStatus(order.OrderStatus)
+	if isLockedProductionReadStatus(status) {
+		lockReason := deriveProductionLockReason(status)
+		return &domain.ProductionUpdatesList{
+			OrderID:          orderID,
+			Updates:          []domain.ProductionUpdate{},
+			OrderStatus:      status,
+			ProductionLocked: true,
+			LockReason:       lockReason,
+			LockContext:      buildProductionLockContext(order, lockReason),
+			TemplatePreview:  steps,
+		}, nil
+	}
 	persisted, err := s.repo.ListByOrderID(orderID)
 	if err != nil {
 		return nil, err
 	}
 	return &domain.ProductionUpdatesList{
-		OrderID:     orderID,
-		Updates:     s.repo.InflateUpdates(orderID, steps, persisted),
-		OrderStatus: order.OrderStatus,
+		OrderID:          orderID,
+		Updates:          s.repo.InflateUpdates(orderID, steps, persisted),
+		OrderStatus:      status,
+		ProductionLocked: false,
 	}, nil
 }
 
@@ -401,8 +415,17 @@ func normalizeUserRole(role string) string {
 }
 
 func isLockedOrderStatus(status string) bool {
-	switch strings.ToUpper(strings.TrimSpace(status)) {
-	case "CL", "CN", "CP", "CC":
+	switch normalizeProductionOrderStatus(status) {
+	case "PP", "PE", "CN", "CP":
+		return true
+	default:
+		return false
+	}
+}
+
+func isLockedProductionReadStatus(status string) bool {
+	switch normalizeProductionOrderStatus(status) {
+	case "PP", "PE", "CN":
 		return true
 	default:
 		return false
@@ -428,6 +451,77 @@ func equalStringArrays(a, b domain.StringArray) bool {
 		}
 	}
 	return true
+}
+
+func normalizeProductionOrderStatus(status string) string {
+	switch strings.ToUpper(strings.TrimSpace(status)) {
+	case "CC":
+		return "CN"
+	default:
+		return strings.ToUpper(strings.TrimSpace(status))
+	}
+}
+
+func deriveProductionLockReason(status string) string {
+	switch normalizeProductionOrderStatus(status) {
+	case "PP":
+		return "PENDING_DEPOSIT"
+	case "PE":
+		return "DEPOSIT_EXPIRED"
+	case "CN":
+		return "ORDER_CANCELLED"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func buildProductionLockContext(order *repository.ProductionOrderContext, reason string) map[string]interface{} {
+	depositAmount := roundCurrency(orderDepositAmountFallback(order))
+	depositPercent := percentOf(depositAmount, order.TotalAmount)
+	switch reason {
+	case "PENDING_DEPOSIT":
+		dueDate := depositDueDateForProduction(order)
+		return map[string]interface{}{
+			"deposit_amount":   depositAmount,
+			"deposit_currency": "THB",
+			"deposit_due_date": dueDate,
+			"deposit_percent":  depositPercent,
+			"payment_url":      fmt.Sprintf("/orders/%d/payment?stage=deposit", order.OrderID),
+		}
+	case "DEPOSIT_EXPIRED":
+		expiredAt := depositDueDateForProduction(order)
+		graceEnds := expiredAt.AddDate(0, 0, 3)
+		return map[string]interface{}{
+			"deposit_amount":      depositAmount,
+			"deposit_currency":    "THB",
+			"expired_at":          expiredAt,
+			"grace_period_ends":   graceEnds,
+			"payment_url":         fmt.Sprintf("/orders/%d/payment?stage=deposit", order.OrderID),
+			"contact_factory_url": fmt.Sprintf("/chat?factory_id=%d&order_id=%d", order.FactoryID, order.OrderID),
+		}
+	case "ORDER_CANCELLED":
+		cancelledAt := order.CreatedAt.In(thailandLocation)
+		return map[string]interface{}{
+			"cancelled_at":       cancelledAt,
+			"cancelled_by_actor": "SYSTEM",
+			"refund_status":      "NOT_APPLICABLE",
+			"refund_amount":      0.0,
+		}
+	default:
+		return map[string]interface{}{"support_url": "/support"}
+	}
+}
+
+func depositDueDateForProduction(order *repository.ProductionOrderContext) time.Time {
+	due := order.CreatedAt.In(thailandLocation).AddDate(0, 0, 3)
+	return time.Date(due.Year(), due.Month(), due.Day(), 23, 59, 59, 0, thailandLocation)
+}
+
+func orderDepositAmountFallback(order *repository.ProductionOrderContext) float64 {
+	if order.DepositAmount > 0 {
+		return order.DepositAmount
+	}
+	return roundCurrency(order.TotalAmount * 0.3)
 }
 
 func AsProductionRuleError(err error) (*ProductionRuleError, bool) {

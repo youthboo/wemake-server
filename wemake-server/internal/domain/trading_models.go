@@ -62,6 +62,44 @@ type Order struct {
 	UpdatedAt         time.Time  `db:"updated_at" json:"updated_at"`
 }
 
+type OrderFactorySummary struct {
+	FactoryID int64  `json:"factory_id"`
+	Name      string `json:"name"`
+}
+
+type OrderNextAction struct {
+	Actor      string     `json:"actor"`
+	Type       string     `json:"type"`
+	Amount     float64    `json:"amount"`
+	Currency   string     `json:"currency"`
+	DueDate    *time.Time `json:"due_date,omitempty"`
+	CTAURL     string     `json:"cta_url,omitempty"`
+	CTALabelTH string     `json:"cta_label_th,omitempty"`
+}
+
+// OrderDetailResponse extends the legacy order payload with FE-ready action state.
+type OrderDetailResponse struct {
+	OrderID           int64                      `json:"order_id"`
+	QuotationID       int64                      `json:"quote_id"`
+	UserID            int64                      `json:"user_id"`
+	FactoryID         int64                      `json:"factory_id"`
+	TotalAmount       float64                    `json:"total_amount"`
+	DepositAmount     float64                    `json:"deposit_amount"`
+	Status            string                     `json:"status"`
+	StatusLabelTH     string                     `json:"status_label_th"`
+	Currency          string                     `json:"currency"`
+	Factory           OrderFactorySummary        `json:"factory"`
+	CustomerUserID    int64                      `json:"customer_user_id"`
+	EstimatedDelivery *time.Time                 `json:"estimated_delivery,omitempty"`
+	TrackingNo        *string                    `json:"tracking_no,omitempty"`
+	Courier           *string                    `json:"courier,omitempty"`
+	ShippedAt         *time.Time                 `json:"shipped_at,omitempty"`
+	CreatedAt         time.Time                  `json:"created_at"`
+	UpdatedAt         time.Time                  `json:"updated_at"`
+	NextAction        *OrderNextAction           `json:"next_action"`
+	PaymentSchedule   []OrderPaymentScheduleItem `json:"payment_schedule"`
+}
+
 type ProductionUpdate struct {
 	UpdateID        int64       `db:"update_id" json:"update_id"`
 	OrderID         int64       `db:"order_id" json:"order_id"`

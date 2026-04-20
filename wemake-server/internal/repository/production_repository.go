@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/yourusername/wemake/internal/domain"
@@ -15,10 +16,13 @@ type ProductionRepository struct {
 }
 
 type ProductionOrderContext struct {
-	OrderID     int64  `db:"order_id"`
-	UserID      int64  `db:"user_id"`
-	FactoryID   int64  `db:"factory_id"`
-	OrderStatus string `db:"status"`
+	OrderID       int64     `db:"order_id"`
+	UserID        int64     `db:"user_id"`
+	FactoryID     int64     `db:"factory_id"`
+	OrderStatus   string    `db:"status"`
+	DepositAmount float64   `db:"deposit_amount"`
+	TotalAmount   float64   `db:"total_amount"`
+	CreatedAt     time.Time `db:"created_at"`
 }
 
 type ProductionUpdateContext struct {
@@ -91,7 +95,7 @@ func (r *ProductionRepository) ListActiveStepsTx(tx *sqlx.Tx) ([]domain.Producti
 
 func (r *ProductionRepository) GetOrderByID(orderID int64) (*ProductionOrderContext, error) {
 	var item ProductionOrderContext
-	err := r.db.Get(&item, `SELECT order_id, user_id, factory_id, status FROM orders WHERE order_id = $1`, orderID)
+	err := r.db.Get(&item, `SELECT order_id, user_id, factory_id, status, deposit_amount, total_amount, created_at FROM orders WHERE order_id = $1`, orderID)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +104,7 @@ func (r *ProductionRepository) GetOrderByID(orderID int64) (*ProductionOrderCont
 
 func (r *ProductionRepository) GetOrderForUpdateTx(tx *sqlx.Tx, orderID int64) (*ProductionOrderContext, error) {
 	var item ProductionOrderContext
-	err := tx.Get(&item, `SELECT order_id, user_id, factory_id, status FROM orders WHERE order_id = $1 FOR UPDATE`, orderID)
+	err := tx.Get(&item, `SELECT order_id, user_id, factory_id, status, deposit_amount, total_amount, created_at FROM orders WHERE order_id = $1 FOR UPDATE`, orderID)
 	if err != nil {
 		return nil, err
 	}

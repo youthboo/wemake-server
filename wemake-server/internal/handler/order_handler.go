@@ -98,14 +98,14 @@ func (h *OrderHandler) GetOrder(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid order_id"})
 	}
-	item, err := h.service.GetByID(int64(orderID), userID, u.Role)
+	detail, err := h.service.GetDetailByID(int64(orderID), userID, u.Role)
 	if err != nil {
 		if repository.IsNotFoundError(err) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "order not found"})
 		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch order"})
 	}
-	return c.JSON(item)
+	return c.JSON(detail)
 }
 
 func (h *OrderHandler) ListActivity(c *fiber.Ctx) error {
@@ -253,6 +253,14 @@ func (h *OrderHandler) CreatePayment(c *fiber.Ctx) error {
 	item, err := h.service.CreatePayment(int64(orderID), userID, u.Role, req.Type, req.Amount)
 	if err != nil {
 		switch {
+		case errors.Is(err, service.ErrDepositAlreadyPaid):
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{
+				"error": fiber.Map{"code": "DEPOSIT_ALREADY_PAID", "message": "deposit already recorded"},
+			})
+		case errors.Is(err, service.ErrDepositExpired):
+			return c.Status(fiber.StatusGone).JSON(fiber.Map{
+				"error": fiber.Map{"code": "DEPOSIT_EXPIRED", "message": "deposit payment window has expired"},
+			})
 		case errors.Is(err, service.ErrPaymentTypeInvalid),
 			errors.Is(err, service.ErrPaymentAmountMismatch),
 			errors.Is(err, service.ErrPaymentAlreadyExists):
@@ -285,6 +293,14 @@ func (h *OrderHandler) VerifyPayment(c *fiber.Ctx) error {
 	item, err := h.service.VerifyPayment(int64(orderID), userID, u.Role, txID)
 	if err != nil {
 		switch {
+		case errors.Is(err, service.ErrDepositAlreadyPaid):
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{
+				"error": fiber.Map{"code": "DEPOSIT_ALREADY_PAID", "message": "deposit already recorded"},
+			})
+		case errors.Is(err, service.ErrDepositExpired):
+			return c.Status(fiber.StatusGone).JSON(fiber.Map{
+				"error": fiber.Map{"code": "DEPOSIT_EXPIRED", "message": "deposit payment window has expired"},
+			})
 		case errors.Is(err, service.ErrPaymentTypeInvalid),
 			errors.Is(err, service.ErrPaymentAmountMismatch),
 			errors.Is(err, service.ErrPaymentStateInvalid),
