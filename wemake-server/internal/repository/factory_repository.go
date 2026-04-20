@@ -514,9 +514,7 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 			)
 		  )
 	`, factoryID); err != nil {
-		if !isSchemaDriftError(err) {
-			return nil, err
-		}
+		// Keep dashboard available even when this section query fails (schema/data drift).
 		out.Counts.PendingRFQs = 0
 	}
 
@@ -526,9 +524,7 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 		WHERE factory_id = $1
 		  AND status IN ('PR', 'QC', 'SH')
 	`, factoryID); err != nil {
-		if !isSchemaDriftError(err) {
-			return nil, err
-		}
+		// Keep dashboard available even when this section query fails (schema/data drift).
 		out.Counts.ActiveOrders = 0
 	}
 
@@ -539,9 +535,7 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 		WHERE o.factory_id = $1
 		  AND pu.status = 'CR'
 	`, factoryID); err != nil {
-		if !isSchemaDriftError(err) {
-			return nil, err
-		}
+		// Keep dashboard available even when this section query fails (schema/data drift).
 		out.Counts.PendingProductionUpdates = 0
 	}
 
@@ -550,9 +544,7 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 		FROM conversations
 		WHERE factory_id = $1
 	`, factoryID); err != nil {
-		if !isSchemaDriftError(err) {
-			return nil, err
-		}
+		// Keep dashboard available even when this section query fails (schema/data drift).
 		out.Counts.UnreadMessages = 0
 	}
 
@@ -562,9 +554,7 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 		WHERE user_id = $1
 		  AND is_read = FALSE
 	`, factoryID); err != nil {
-		if !isSchemaDriftError(err) {
-			return nil, err
-		}
+		// Keep dashboard available even when this section query fails (schema/data drift).
 		out.Counts.UnreadNotifications = 0
 	}
 
@@ -575,10 +565,9 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 	`, factoryID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			out.Wallet = domain.FactoryDashboardWallet{}
-		} else if isSchemaDriftError(err) {
-			out.Wallet = domain.FactoryDashboardWallet{}
 		} else {
-			return nil, err
+			// Keep dashboard available even when wallet row/schema is not ready.
+			out.Wallet = domain.FactoryDashboardWallet{}
 		}
 	}
 
@@ -605,9 +594,7 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 		ORDER BY r.created_at DESC
 		LIMIT 5
 	`, factoryID); err != nil {
-		if !isSchemaDriftError(err) {
-			return nil, err
-		}
+		// Keep dashboard available even when this section query fails (schema/data drift).
 		out.RecentMatchingRFQs = []domain.FactoryDashboardRFQItem{}
 	}
 
@@ -627,13 +614,12 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 				ORDER BY created_at DESC
 				LIMIT 5
 			`, factoryID); err2 != nil {
-				if !isSchemaDriftError(err2) {
-					return nil, err2
-				}
+				// Keep dashboard available even when fallback query also fails.
 				out.RecentOrders = []domain.FactoryDashboardOrderItem{}
 			}
 		} else {
-			return nil, err
+			// Keep dashboard available even when this section query fails (schema/data drift).
+			out.RecentOrders = []domain.FactoryDashboardOrderItem{}
 		}
 	}
 
@@ -644,9 +630,7 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 		ORDER BY log_timestamp DESC, create_time DESC
 		LIMIT 5
 	`, factoryID); err != nil {
-		if !isSchemaDriftError(err) {
-			return nil, err
-		}
+		// Keep dashboard available even when this section query fails (schema/data drift).
 		out.RecentQuotations = []domain.FactoryDashboardQuotationItem{}
 	}
 
@@ -657,9 +641,7 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 		ORDER BY created_at DESC
 		LIMIT 5
 	`, factoryID); err != nil {
-		if !isSchemaDriftError(err) {
-			return nil, err
-		}
+		// Keep dashboard available even when this section query fails (schema/data drift).
 		out.RecentShowcases = []domain.FactoryDashboardShowcaseItem{}
 	}
 
