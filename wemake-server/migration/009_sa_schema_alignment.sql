@@ -140,6 +140,11 @@ ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_reference_type_check;
 
 UPDATE messages SET reference_type = 'RQ' WHERE UPPER(TRIM(reference_type::text)) IN ('RFQ', 'RQ');
 UPDATE messages SET reference_type = 'OD' WHERE UPPER(TRIM(reference_type::text)) IN ('ORDER', 'OD');
+UPDATE messages SET reference_type = NULL WHERE reference_type IS NOT NULL AND TRIM(reference_type::text) = '';
+UPDATE messages
+SET reference_type = NULL
+WHERE reference_type IS NOT NULL
+  AND UPPER(TRIM(reference_type::text)) NOT IN ('RFQ', 'RQ', 'ORDER', 'OD');
 
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS reference_id_num BIGINT;
 
@@ -155,8 +160,12 @@ ALTER TABLE messages RENAME COLUMN reference_id_num TO reference_id;
 ALTER TABLE messages
     ALTER COLUMN reference_type TYPE VARCHAR(2) USING UPPER(SUBSTRING(TRIM(reference_type::text) FROM 1 FOR 2));
 
+UPDATE messages
+SET reference_id = NULL
+WHERE reference_type IS NULL;
+
 ALTER TABLE messages
-    ADD CONSTRAINT messages_reference_type_check CHECK (reference_type IN ('RQ', 'OD'));
+    ADD CONSTRAINT messages_reference_type_check CHECK (reference_type IS NULL OR reference_type IN ('RQ', 'OD'));
 
 -- 11) Drop deprecated / duplicate tables (SA)
 DROP TABLE IF EXISTS lbi_product_categories CASCADE;
