@@ -63,14 +63,21 @@ type Order struct {
 }
 
 type ProductionUpdate struct {
-	UpdateID    int64     `db:"update_id" json:"update_id"`
-	OrderID     int64     `db:"order_id" json:"order_id"`
-	StepID      int64     `db:"step_id" json:"step_id"`
-	Status      string    `db:"status" json:"status"`
-	Description string    `db:"description" json:"description"`
-	ImageURL    string    `db:"image_url" json:"image_url,omitempty"`
-	UpdateDate  time.Time `db:"update_date" json:"update_date"`
-	CreatedAt   time.Time `db:"created_at" json:"created_at"`
+	UpdateID        int64       `db:"update_id" json:"update_id"`
+	OrderID         int64       `db:"order_id" json:"order_id"`
+	StepID          int64       `db:"step_id" json:"step_id"`
+	StepCode        string      `db:"step_code" json:"step_code"`
+	StepNameTH      string      `db:"step_name_th" json:"step_name_th"`
+	StepNameEN      string      `db:"step_name_en" json:"step_name_en"`
+	SortOrder       int64       `db:"sort_order" json:"sort_order"`
+	Status          string      `db:"status" json:"status"`
+	Description     string      `db:"description" json:"description"`
+	ImageURLs       StringArray `db:"image_urls" json:"image_urls"`
+	CompletedAt     *time.Time  `db:"completed_at" json:"completed_at,omitempty"`
+	RejectedReason  *string     `db:"rejected_reason" json:"rejected_reason,omitempty"`
+	UpdatedByUserID *int64      `db:"updated_by_user_id" json:"updated_by_user_id,omitempty"`
+	LastUpdatedAt   *time.Time  `db:"last_updated_at" json:"last_updated_at,omitempty"`
+	CreatedAt       time.Time   `db:"created_at" json:"created_at"`
 }
 
 type Message struct {

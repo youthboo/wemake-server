@@ -18,7 +18,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	app := fiber.New()
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: cfg.CORSOrigins,
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-User-ID",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-User-ID, X-Confirm-Payment-Trigger",
 		AllowMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS",
 	}))
 
@@ -205,8 +205,11 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	orders.Post("/:order_id/production-updates", productionHandler.CreateUpdate)
 	orders.Get("/:order_id/production-updates", productionHandler.ListUpdates)
 
+	production := api.Group("/production")
+	production.Get("/steps", productionHandler.ListSteps)
+
 	productionUpdates := api.Group("/production-updates")
-	productionUpdates.Patch("/:update_id", productionHandler.PatchUpdate)
+	productionUpdates.Patch("/:update_id/reject", productionHandler.RejectUpdate)
 
 	messages := api.Group("/messages")
 	messages.Post("/", messageHandler.CreateMessage)
