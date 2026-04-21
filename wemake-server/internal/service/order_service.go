@@ -387,11 +387,30 @@ func (s *OrderService) GetDetailByID(orderID, userID int64, role string) (*domai
 	if err != nil {
 		return nil, err
 	}
+	if row.UserID != userID && row.FactoryID != userID {
+		return nil, domain.ErrForbidden
+	}
+	images, err := s.repo.GetRfqImages(row.RFQID)
+	if err != nil {
+		return nil, err
+	}
 	depositDueDate := deriveDepositDueDate(row)
 	nowTH := time.Now().In(thailandLocation)
 	depositPaidAt := s.depositPaidAt(row.OrderID)
 	finalPaidAt := s.finalPaymentPaidAt(row.OrderID)
 	statusCode := normalizeOrderStatus(row.Status)
+	rfqDetails := ""
+	if row.RFQDetails != nil {
+		rfqDetails = *row.RFQDetails
+	}
+	rfqCategoryName := ""
+	if row.RFQCategoryName != nil {
+		rfqCategoryName = *row.RFQCategoryName
+	}
+	rfqUnitName := ""
+	if row.RFQUnitName != nil {
+		rfqUnitName = *row.RFQUnitName
+	}
 
 	return &domain.OrderDetailResponse{
 		OrderID:           row.OrderID,
@@ -402,6 +421,7 @@ func (s *OrderService) GetDetailByID(orderID, userID int64, role string) (*domai
 		DepositAmount:     row.DepositAmount,
 		Status:            statusCode,
 		StatusLabelTH:     orderStatusLabelTH(statusCode),
+		PaymentType:       row.PaymentType,
 		Currency:          "THB",
 		Factory:           domain.OrderFactorySummary{FactoryID: row.FactoryID, Name: row.FactoryName},
 		CustomerUserID:    row.UserID,
@@ -413,6 +433,25 @@ func (s *OrderService) GetDetailByID(orderID, userID int64, role string) (*domai
 		UpdatedAt:         row.UpdatedAt.In(thailandLocation),
 		NextAction:        buildNextAction(row, statusCode, depositDueDate, depositPaidAt, finalPaidAt, nowTH),
 		PaymentSchedule:   buildPaymentSchedule(row, statusCode, depositDueDate, depositPaidAt, finalPaidAt),
+		RFQ: domain.RfqNested{
+			RfqID:          row.RFQID,
+			Title:          row.RFQTitle,
+			Details:        rfqDetails,
+			Quantity:       row.RFQQuantity,
+			UnitName:       rfqUnitName,
+			BudgetPerPiece: row.RFQBudget,
+			CategoryID:     row.RFQCategoryID,
+			CategoryName:   rfqCategoryName,
+			DeadlineDate:   timePtrInTH(row.RFQDeadline),
+			CreatedAt:      row.RFQCreatedAt.In(thailandLocation),
+			Images:         images,
+		},
+		Quotation: domain.QuoteNested{
+			QuoteID:       row.QuotationID,
+			PricePerPiece: row.PricePerPiece,
+			MoldCost:      row.MoldCost,
+			LeadTimeDays:  row.LeadTimeDays,
+		},
 	}, nil
 }
 

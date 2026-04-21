@@ -100,6 +100,9 @@ func (h *OrderHandler) GetOrder(c *fiber.Ctx) error {
 	}
 	detail, err := h.service.GetDetailByID(int64(orderID), userID, u.Role)
 	if err != nil {
+		if errors.Is(err, domain.ErrForbidden) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
+		}
 		if repository.IsNotFoundError(err) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "order not found"})
 		}
@@ -122,6 +125,9 @@ func (h *OrderHandler) ListActivity(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid order_id"})
 	}
 	if _, err := h.service.GetByID(int64(orderID), userID, u.Role); err != nil {
+		if errors.Is(err, domain.ErrForbidden) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
+		}
 		if repository.IsNotFoundError(err) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "order not found"})
 		}

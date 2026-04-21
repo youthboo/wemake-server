@@ -45,7 +45,7 @@ type messageRepository interface {
 }
 
 type conversationRepository interface {
-	GetByID(convID int64) (*domain.Conversation, error)
+	GetByID(convID int64) (*domain.ConversationRow, error)
 }
 
 type MessageService struct {

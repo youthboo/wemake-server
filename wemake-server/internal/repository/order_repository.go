@@ -31,6 +31,21 @@ type OrderDetailRow struct {
 	domain.Order
 	FactoryName        string     `db:"factory_name"`
 	DepositScheduleDue *time.Time `db:"deposit_schedule_due"`
+	PaymentType        *string    `db:"payment_type"`
+	PricePerPiece      float64    `db:"price_per_piece"`
+	MoldCost           float64    `db:"mold_cost"`
+	LeadTimeDays       int64      `db:"lead_time_days"`
+	RFQID              int64      `db:"rfq_id"`
+	RFQTitle           string     `db:"rfq_title"`
+	RFQDetails         *string    `db:"rfq_details"`
+	RFQQuantity        int64      `db:"rfq_quantity"`
+	RFQBudget          float64    `db:"rfq_budget"`
+	RFQDeadline        *time.Time `db:"rfq_deadline"`
+	RFQCreatedAt       time.Time  `db:"rfq_created_at"`
+	RFQCategoryID      int64      `db:"rfq_category_id"`
+	RFQCategoryName    *string    `db:"rfq_category_name"`
+	RFQUnitID          int64      `db:"rfq_unit_id"`
+	RFQUnitName        *string    `db:"rfq_unit_name"`
 }
 
 func NewOrderRepository(db *sqlx.DB) *OrderRepository {
@@ -224,6 +239,7 @@ func (r *OrderRepository) GetDetailByParticipant(orderID, userID int64, role str
 			o.total_amount,
 			o.deposit_amount,
 			o.status,
+			o.payment_type,
 			o.estimated_delivery,
 			o.tracking_no,
 			o.courier,
@@ -231,6 +247,20 @@ func (r *OrderRepository) GetDetailByParticipant(orderID, userID int64, role str
 			o.created_at,
 			o.updated_at,
 			COALESCE(fp.factory_name, '') AS factory_name,
+			q.price_per_piece,
+			q.mold_cost,
+			q.lead_time_days,
+			r.rfq_id,
+			COALESCE(r.title, '') AS rfq_title,
+			r.details AS rfq_details,
+			r.quantity AS rfq_quantity,
+			r.budget_per_piece AS rfq_budget,
+			r.deadline_date AS rfq_deadline,
+			r.created_at AS rfq_created_at,
+			r.category_id AS rfq_category_id,
+			cat.name AS rfq_category_name,
+			r.unit_id AS rfq_unit_id,
+			un.name AS rfq_unit_name,
 			(
 				SELECT ps.due_date::timestamp
 				FROM payment_schedules ps
@@ -239,22 +269,28 @@ func (r *OrderRepository) GetDetailByParticipant(orderID, userID int64, role str
 				LIMIT 1
 			) AS deposit_schedule_due
 		FROM orders o
+		INNER JOIN quotations q ON q.quote_id = o.quote_id
+		INNER JOIN rfqs r ON r.rfq_id = q.rfq_id
+		LEFT JOIN categories cat ON cat.category_id = r.category_id
+		LEFT JOIN units un ON un.unit_id = r.unit_id
 		LEFT JOIN factory_profiles fp ON fp.user_id = o.factory_id
 		WHERE o.order_id = $1
 	`
 	if err := r.db.Get(&item, query, orderID); err != nil {
 		return nil, err
 	}
-	if role == "FT" {
-		if item.FactoryID != userID {
-			return nil, sql.ErrNoRows
-		}
-	} else if role != "AD" && role != "ADMIN" {
-		if item.UserID != userID {
-			return nil, sql.ErrNoRows
-		}
-	}
 	return &item, nil
+}
+
+func (r *OrderRepository) GetRfqImages(rfqID int64) ([]domain.RfqImage, error) {
+	var items []domain.RfqImage
+	err := r.db.Select(&items, `
+		SELECT image_id, image_url
+		FROM rfq_images
+		WHERE rfq_id = $1
+		ORDER BY image_id
+	`, rfqID)
+	return items, err
 }
 
 func (r *OrderRepository) InsertActivity(orderID int64, actorUserID *int64, eventCode string, payload map[string]interface{}) error {

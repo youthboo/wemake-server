@@ -77,6 +77,32 @@ type OrderNextAction struct {
 	CTALabelTH string     `json:"cta_label_th,omitempty"`
 }
 
+type RfqImage struct {
+	ImageID  string `db:"image_id" json:"image_id"`
+	ImageURL string `db:"image_url" json:"image_url"`
+}
+
+type RfqNested struct {
+	RfqID          int64      `json:"rfq_id"`
+	Title          string     `json:"title"`
+	Details        string     `json:"details"`
+	Quantity       int64      `json:"quantity"`
+	UnitName       string     `json:"unit_name"`
+	BudgetPerPiece float64    `json:"budget_per_piece"`
+	CategoryID     int64      `json:"category_id"`
+	CategoryName   string     `json:"category_name"`
+	DeadlineDate   *time.Time `json:"deadline_date,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	Images         []RfqImage `json:"images"`
+}
+
+type QuoteNested struct {
+	QuoteID       int64   `json:"quote_id"`
+	PricePerPiece float64 `json:"price_per_piece"`
+	MoldCost      float64 `json:"mold_cost"`
+	LeadTimeDays  int64   `json:"lead_time_days"`
+}
+
 // OrderDetailResponse extends the legacy order payload with FE-ready action state.
 type OrderDetailResponse struct {
 	OrderID           int64                      `json:"order_id"`
@@ -87,6 +113,7 @@ type OrderDetailResponse struct {
 	DepositAmount     float64                    `json:"deposit_amount"`
 	Status            string                     `json:"status"`
 	StatusLabelTH     string                     `json:"status_label_th"`
+	PaymentType       *string                    `json:"payment_type,omitempty"`
 	Currency          string                     `json:"currency"`
 	Factory           OrderFactorySummary        `json:"factory"`
 	CustomerUserID    int64                      `json:"customer_user_id"`
@@ -98,6 +125,8 @@ type OrderDetailResponse struct {
 	UpdatedAt         time.Time                  `json:"updated_at"`
 	NextAction        *OrderNextAction           `json:"next_action"`
 	PaymentSchedule   []OrderPaymentScheduleItem `json:"payment_schedule"`
+	RFQ               RfqNested                  `json:"rfq"`
+	Quotation         QuoteNested                `json:"quotation"`
 }
 
 type ProductionUpdate struct {

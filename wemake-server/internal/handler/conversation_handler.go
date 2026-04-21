@@ -29,12 +29,19 @@ func (h *ConversationHandler) List(c *fiber.Ctx) error {
 }
 
 func (h *ConversationHandler) Get(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+	}
 	convID, err := c.ParamsInt("conv_id")
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid conv_id"})
 	}
-	item, err := h.service.GetByID(int64(convID))
+	item, err := h.service.GetByID(int64(convID), userID)
 	if err != nil {
+		if errors.Is(err, service.ErrConversationForbidden) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
+		}
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "conversation not found"})
 	}
 	return c.JSON(item)

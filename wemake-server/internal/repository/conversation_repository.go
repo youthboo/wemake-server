@@ -15,20 +15,27 @@ func NewConversationRepository(db *sqlx.DB) *ConversationRepository {
 	return &ConversationRepository{db: db}
 }
 
-// conversationSelect lists columns explicitly: last_message is nullable in DB but domain uses string.
-const conversationSelect = `conv_id, customer_id, factory_id,
-		COALESCE(fp.factory_name, '') AS factory_name,
-		COALESCE(fp.image_url, '') AS factory_image,
-		COALESCE(last_message, '') AS last_message,
-		COALESCE(unread_customer, 0) AS unread_customer,
-		COALESCE(unread_factory, 0) AS unread_factory,
-		COALESCE(has_quote, false) AS has_quote,
-		updated_at`
+const conversationPartySelect = `
+		c.conv_id,
+		c.customer_id,
+		c.factory_id,
+		c.last_message,
+		COALESCE(c.unread_customer, 0) AS unread_customer,
+		COALESCE(c.unread_factory, 0) AS unread_factory,
+		COALESCE(c.has_quote, false) AS has_quote,
+		c.updated_at,
+		cust.first_name AS customer_first_name,
+		cust.last_name AS customer_last_name,
+		fp.factory_name AS factory_name,
+		fp.image_url AS factory_image_url,
+		fp.is_verified AS factory_is_verified,
+		fp.specialization AS factory_specialization`
 
-func (r *ConversationRepository) ListByUserID(userID int64) ([]domain.Conversation, error) {
-	var items []domain.Conversation
-	query := `SELECT ` + conversationSelect + `
+func (r *ConversationRepository) ListByUserID(userID int64) ([]domain.ConversationRow, error) {
+	var items []domain.ConversationRow
+	query := `SELECT ` + conversationPartySelect + `
 		FROM conversations c
+		LEFT JOIN customers cust ON cust.user_id = c.customer_id
 		LEFT JOIN factory_profiles fp ON fp.user_id = c.factory_id
 		WHERE c.customer_id = $1 OR c.factory_id = $1
 		ORDER BY c.updated_at DESC`
@@ -36,10 +43,11 @@ func (r *ConversationRepository) ListByUserID(userID int64) ([]domain.Conversati
 	return items, err
 }
 
-func (r *ConversationRepository) GetByID(convID int64) (*domain.Conversation, error) {
-	var item domain.Conversation
-	query := `SELECT ` + conversationSelect + `
+func (r *ConversationRepository) GetByID(convID int64) (*domain.ConversationRow, error) {
+	var item domain.ConversationRow
+	query := `SELECT ` + conversationPartySelect + `
 		FROM conversations c
+		LEFT JOIN customers cust ON cust.user_id = c.customer_id
 		LEFT JOIN factory_profiles fp ON fp.user_id = c.factory_id
 		WHERE c.conv_id = $1`
 	err := r.db.Get(&item, query, convID)
