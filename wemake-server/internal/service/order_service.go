@@ -544,16 +544,7 @@ func buildNextAction(row *repository.OrderDetailRow, status string, depositDueDa
 			CTALabelTH: "ชำระเงินมัดจำ",
 		}
 	case "PR", "QC":
-		if finalPaidAt == nil {
-			return &domain.OrderNextAction{
-				Actor:      "CUSTOMER",
-				Type:       "PAY_PRODUCTION",
-				Amount:     roundCurrency(row.TotalAmount * 0.4),
-				Currency:   "THB",
-				CTAURL:     fmt.Sprintf("/orders/%d/payment?stage=production", row.OrderID),
-				CTALabelTH: "ชำระเงินงวดผลิต",
-			}
-		}
+		return nil
 	case "SH":
 		if finalPaidAt == nil {
 			return &domain.OrderNextAction{
