@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -19,6 +20,7 @@ type ProductionOrderContext struct {
 	OrderID       int64     `db:"order_id"`
 	UserID        int64     `db:"user_id"`
 	FactoryID     int64     `db:"factory_id"`
+	FactoryTypeID *int64    `db:"factory_type_id"`
 	OrderStatus   string    `db:"status"`
 	DepositAmount float64   `db:"deposit_amount"`
 	TotalAmount   float64   `db:"total_amount"`
@@ -48,6 +50,10 @@ func (r *ProductionRepository) GetUserRole(userID int64) (string, error) {
 }
 
 func (r *ProductionRepository) ListActiveSteps() ([]domain.ProductionStepTemplate, error) {
+	return r.ListActiveStepsByFactoryType(nil)
+}
+
+func (r *ProductionRepository) ListActiveStepsByFactoryType(factoryTypeID *int64) ([]domain.ProductionStepTemplate, error) {
 	var items []domain.ProductionStepTemplate
 	query := `
 		SELECT
@@ -64,13 +70,22 @@ func (r *ProductionRepository) ListActiveSteps() ([]domain.ProductionStepTemplat
 			COALESCE(is_active, FALSE) AS is_active
 		FROM lbi_production
 		WHERE COALESCE(is_active, FALSE) = TRUE
-		ORDER BY COALESCE(sort_order, sequence), step_id
+	ORDER BY COALESCE(sort_order, sequence), step_id
 	`
-	err := r.db.Select(&items, query)
+	args := []interface{}{}
+	if factoryTypeID != nil && *factoryTypeID > 0 {
+		query = strings.Replace(query, "WHERE COALESCE(is_active, FALSE) = TRUE", "WHERE COALESCE(is_active, FALSE) = TRUE AND factory_type_id = $1", 1)
+		args = append(args, *factoryTypeID)
+	}
+	err := r.db.Select(&items, query, args...)
 	return items, err
 }
 
 func (r *ProductionRepository) ListActiveStepsTx(tx *sqlx.Tx) ([]domain.ProductionStepTemplate, error) {
+	return r.ListActiveStepsByFactoryTypeTx(tx, nil)
+}
+
+func (r *ProductionRepository) ListActiveStepsByFactoryTypeTx(tx *sqlx.Tx, factoryTypeID *int64) ([]domain.ProductionStepTemplate, error) {
 	var items []domain.ProductionStepTemplate
 	query := `
 		SELECT
@@ -89,13 +104,23 @@ func (r *ProductionRepository) ListActiveStepsTx(tx *sqlx.Tx) ([]domain.Producti
 		WHERE COALESCE(is_active, FALSE) = TRUE
 		ORDER BY COALESCE(sort_order, sequence), step_id
 	`
-	err := tx.Select(&items, query)
+	args := []interface{}{}
+	if factoryTypeID != nil && *factoryTypeID > 0 {
+		query = strings.Replace(query, "WHERE COALESCE(is_active, FALSE) = TRUE", "WHERE COALESCE(is_active, FALSE) = TRUE AND factory_type_id = $1", 1)
+		args = append(args, *factoryTypeID)
+	}
+	err := tx.Select(&items, query, args...)
 	return items, err
 }
 
 func (r *ProductionRepository) GetOrderByID(orderID int64) (*ProductionOrderContext, error) {
 	var item ProductionOrderContext
-	err := r.db.Get(&item, `SELECT order_id, user_id, factory_id, status, deposit_amount, total_amount, created_at FROM orders WHERE order_id = $1`, orderID)
+	err := r.db.Get(&item, `
+		SELECT o.order_id, o.user_id, o.factory_id, fp.factory_type_id, o.status, o.deposit_amount, o.total_amount, o.created_at
+		FROM orders o
+		LEFT JOIN factory_profiles fp ON fp.user_id = o.factory_id
+		WHERE o.order_id = $1
+	`, orderID)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +129,13 @@ func (r *ProductionRepository) GetOrderByID(orderID int64) (*ProductionOrderCont
 
 func (r *ProductionRepository) GetOrderForUpdateTx(tx *sqlx.Tx, orderID int64) (*ProductionOrderContext, error) {
 	var item ProductionOrderContext
-	err := tx.Get(&item, `SELECT order_id, user_id, factory_id, status, deposit_amount, total_amount, created_at FROM orders WHERE order_id = $1 FOR UPDATE`, orderID)
+	err := tx.Get(&item, `
+		SELECT o.order_id, o.user_id, o.factory_id, fp.factory_type_id, o.status, o.deposit_amount, o.total_amount, o.created_at
+		FROM orders o
+		LEFT JOIN factory_profiles fp ON fp.user_id = o.factory_id
+		WHERE o.order_id = $1
+		FOR UPDATE OF o
+	`, orderID)
 	if err != nil {
 		return nil, err
 	}

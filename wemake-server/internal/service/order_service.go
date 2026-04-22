@@ -352,12 +352,12 @@ func (s *OrderService) VerifyPayment(orderID, userID int64, role, txID string) (
 	return paymentTx, nil
 }
 
-func (s *OrderService) List(userID int64, role string, status string) ([]domain.Order, error) {
+func (s *OrderService) List(userID int64, role string, status string) ([]domain.OrderListItem, error) {
 	st := strings.TrimSpace(strings.ToUpper(status))
 	if role == domain.RoleFactory {
-		return s.repo.ListByFactoryID(userID, st)
+		return s.repo.ListEnrichedByFactoryID(userID, st)
 	}
-	return s.repo.ListByUserID(userID, st)
+	return s.repo.ListEnrichedByUserID(userID, st)
 }
 
 func (s *OrderService) GetByID(orderID, userID int64, role string) (*domain.Order, error) {

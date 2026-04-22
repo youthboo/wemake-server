@@ -2,9 +2,11 @@ package handler
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/yourusername/wemake/internal/domain"
@@ -18,7 +20,7 @@ var showcaseTypeQueryAllowed = map[string]struct{}{
 
 // showcaseStatusAllowed are valid values for the status field.
 var showcaseStatusAllowed = map[string]struct{}{
-	"AC": {}, "DR": {}, "HI": {},
+	"AC": {}, "DR": {}, "HI": {}, "AR": {},
 }
 
 const (
@@ -27,7 +29,7 @@ const (
 	errFetchShowcases     = "failed to fetch showcases"
 	errInvalidPayload     = "invalid payload"
 	errNotYourShowcase    = "not your showcase"
-	errInvalidStatus      = "invalid status: use AC, DR, or HI"
+	errInvalidStatus      = "invalid status: use AC, DR, HI, or AR"
 	errInvalidTypeQuery   = "invalid query type: use PD (product), PM (promotion), or ID (idea); omit type for all showcases"
 	errInvalidTypeFactory = "invalid query type: use PD, PM, or ID; omit type for all showcases for this factory"
 )
@@ -38,6 +40,97 @@ type ShowcaseHandler struct {
 
 func NewShowcaseHandler(service *service.ShowcaseService) *ShowcaseHandler {
 	return &ShowcaseHandler{service: service}
+}
+
+type showcaseWriteRequest struct {
+	Type               *string   `json:"type"`
+	ContentType        *string   `json:"content_type"`
+	Status             *string   `json:"status"`
+	Title              *string   `json:"title"`
+	CategoryID         *int64    `json:"category_id"`
+	SubCategoryID      *int64    `json:"sub_category_id"`
+	MOQ                *int      `json:"moq"`
+	ProductionCapacity *int      `json:"production_capacity"`
+	LeadTimeDays       *int      `json:"lead_time_days"`
+	BasePrice          *float64  `json:"base_price"`
+	PromoPrice         *float64  `json:"promo_price"`
+	StartDate          *string   `json:"start_date"`
+	EndDate            *string   `json:"end_date"`
+	SampleAvailable    *bool     `json:"sample_available"`
+	Content            *string   `json:"content"`
+	Images             *[]string `json:"images"`
+	LinkedShowcases    *[]int64  `json:"linked_showcases"`
+	Excerpt            *string   `json:"excerpt"`
+	Description        *string   `json:"description"`
+	ImageURL           *string   `json:"image_url"`
+	PriceRange         *string   `json:"price_range"`
+}
+
+func parseShowcaseDate(raw *string, field string) (*time.Time, *domain.ShowcaseValidationDetail) {
+	if raw == nil {
+		return nil, nil
+	}
+	trimmed := strings.TrimSpace(*raw)
+	if trimmed == "" {
+		return nil, nil
+	}
+	t, err := time.Parse("2006-01-02", trimmed)
+	if err != nil {
+		return nil, &domain.ShowcaseValidationDetail{Field: field, Message: "must use YYYY-MM-DD format"}
+	}
+	return &t, nil
+}
+
+func (r showcaseWriteRequest) toInput() (domain.ShowcaseWriteInput, []domain.ShowcaseValidationDetail) {
+	var details []domain.ShowcaseValidationDetail
+	typeValue := r.Type
+	if typeValue == nil {
+		typeValue = r.ContentType
+	}
+	startDate, detail := parseShowcaseDate(r.StartDate, "start_date")
+	if detail != nil {
+		details = append(details, *detail)
+	}
+	endDate, detail := parseShowcaseDate(r.EndDate, "end_date")
+	if detail != nil {
+		details = append(details, *detail)
+	}
+	return domain.ShowcaseWriteInput{
+		Type:               typeValue,
+		Status:             r.Status,
+		Title:              r.Title,
+		CategoryID:         r.CategoryID,
+		SubCategoryID:      r.SubCategoryID,
+		MOQ:                r.MOQ,
+		ProductionCapacity: r.ProductionCapacity,
+		LeadTimeDays:       r.LeadTimeDays,
+		BasePrice:          r.BasePrice,
+		PromoPrice:         r.PromoPrice,
+		StartDate:          startDate,
+		EndDate:            endDate,
+		SampleAvailable:    r.SampleAvailable,
+		Content:            r.Content,
+		Images:             r.Images,
+		LinkedShowcases:    r.LinkedShowcases,
+		Excerpt:            r.Excerpt,
+		Description:        r.Description,
+		ImageURL:           r.ImageURL,
+		PriceRange:         r.PriceRange,
+	}, details
+}
+
+func writeShowcaseError(c *fiber.Ctx, err error, fallback string) error {
+	var validationErr domain.ShowcaseValidationError
+	if errors.As(err, &validationErr) {
+		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{
+			"error":   "VALIDATION_ERROR",
+			"details": validationErr.Details,
+		})
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": errShowcaseNotFound})
+	}
+	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fallback})
 }
 
 // parseContentTypeQuery validates the ?type= query param (shared by List handlers).
@@ -80,10 +173,53 @@ func (h *ShowcaseHandler) List(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
-	if factoryParam := strings.TrimSpace(c.Query("factory_id", "")); factoryParam != "" {
-		return h.listByFactoryParam(c, factoryParam, contentType)
+	status := strings.TrimSpace(strings.ToUpper(c.Query("status", "")))
+	if status != "" {
+		if _, ok := showcaseStatusAllowed[status]; !ok {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": errInvalidStatus})
+		}
 	}
-	items, err := h.service.ListExplore(contentType)
+	var factoryID *int64
+	if factoryParam := strings.TrimSpace(c.Query("factory_id", "")); factoryParam != "" {
+		if strings.EqualFold(factoryParam, "me") {
+			userID, err := getUserIDFromHeader(c)
+			if err != nil {
+				return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+			}
+			factoryID = &userID
+		} else {
+			parsed, err := strconv.ParseInt(factoryParam, 10, 64)
+			if err != nil || parsed <= 0 {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid factory_id"})
+			}
+			factoryID = &parsed
+		}
+	}
+	var categoryID *int64
+	if raw := strings.TrimSpace(c.Query("category_id", "")); raw != "" {
+		parsed, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || parsed <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid category_id"})
+		}
+		categoryID = &parsed
+	}
+	var subCategoryID *int64
+	if raw := strings.TrimSpace(c.Query("sub_category_id", "")); raw != "" {
+		parsed, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || parsed <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid sub_category_id"})
+		}
+		subCategoryID = &parsed
+	}
+	viewerID, _ := getUserIDFromHeader(c)
+	items, err := h.service.ListStructured(domain.ShowcaseListFilter{
+		Type:          contentType,
+		FactoryID:     factoryID,
+		Status:        status,
+		CategoryID:    categoryID,
+		SubCategoryID: subCategoryID,
+		ViewerID:      viewerID,
+	})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": errFetchShowcases})
 	}
@@ -134,23 +270,30 @@ func (h *ShowcaseHandler) Create(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
 	}
-	var req domain.FactoryShowcase
-	if err := c.BodyParser(&req); err != nil {
+	var req showcaseWriteRequest
+	if err := json.Unmarshal(c.Body(), &req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": errInvalidPayload})
 	}
-	if req.Status != "" {
-		if _, ok := showcaseStatusAllowed[req.Status]; !ok {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": errInvalidStatus})
-		}
+	input, details := req.toInput()
+	if len(details) > 0 {
+		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "VALIDATION_ERROR", "details": details})
 	}
-	req.FactoryID = userID
-	if err := h.service.Create(&req); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create showcase"})
+	out, err := h.service.CreateStructured(userID, input)
+	if err != nil {
+		return writeShowcaseError(c, err, "failed to create showcase")
 	}
-	return c.Status(fiber.StatusCreated).JSON(req)
+	return c.Status(fiber.StatusCreated).JSON(out)
 }
 
 func (h *ShowcaseHandler) Patch(c *fiber.Ctx) error {
+	return h.updateStructured(c, false)
+}
+
+func (h *ShowcaseHandler) Put(c *fiber.Ctx) error {
+	return h.updateStructured(c, true)
+}
+
+func (h *ShowcaseHandler) updateStructured(c *fiber.Ctx, replace bool) error {
 	userID, err := getUserIDFromHeader(c)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
@@ -159,26 +302,46 @@ func (h *ShowcaseHandler) Patch(c *fiber.Ctx) error {
 	if err != nil || showcaseID <= 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": errInvalidShowcaseID})
 	}
-	var req domain.FactoryShowcase
-	if err := c.BodyParser(&req); err != nil {
+	var req showcaseWriteRequest
+	if err := json.Unmarshal(c.Body(), &req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": errInvalidPayload})
 	}
-	if req.Status != "" {
-		if _, ok := showcaseStatusAllowed[req.Status]; !ok {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": errInvalidStatus})
-		}
+	input, details := req.toInput()
+	if len(details) > 0 {
+		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "VALIDATION_ERROR", "details": details})
 	}
-	req.ShowcaseID = showcaseID
-	req.FactoryID = userID
-	if err := h.service.Update(&req); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": errShowcaseNotFound})
-		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update showcase"})
+	out, err := h.service.UpdateStructured(showcaseID, userID, input, replace)
+	if err != nil {
+		return writeShowcaseError(c, err, "failed to update showcase")
+	}
+	return c.JSON(out)
+}
+
+func (h *ShowcaseHandler) PatchStatus(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+	}
+	showcaseID, err := strconv.ParseInt(c.Params("showcase_id"), 10, 64)
+	if err != nil || showcaseID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": errInvalidShowcaseID})
+	}
+	var req struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(c.Body(), &req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": errInvalidPayload})
+	}
+	status := strings.TrimSpace(strings.ToUpper(req.Status))
+	if _, ok := showcaseStatusAllowed[status]; !ok {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": errInvalidStatus})
+	}
+	if err := h.service.UpdateStatus(showcaseID, userID, status); err != nil {
+		return writeShowcaseError(c, err, "failed to update showcase status")
 	}
 	out, err := h.service.GetByID(showcaseID, userID)
 	if err != nil {
-		return c.JSON(req)
+		return c.JSON(fiber.Map{"showcase_id": showcaseID, "status": status})
 	}
 	return c.JSON(out)
 }

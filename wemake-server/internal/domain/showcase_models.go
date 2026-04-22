@@ -3,47 +3,70 @@ package domain
 import "time"
 
 type FactoryShowcase struct {
-	ShowcaseID    int64     `db:"showcase_id" json:"showcase_id"`
-	FactoryID     int64     `db:"factory_id" json:"factory_id"`
-	ContentType   string    `db:"content_type" json:"content_type"`
-	Title         string    `db:"title" json:"title"`
-	Excerpt       *string   `db:"excerpt" json:"excerpt,omitempty"`
-	Description   *string   `db:"description" json:"description,omitempty"`
-	ImageURL      *string   `db:"image_url" json:"image_url,omitempty"`
-	CategoryID    *int64    `db:"category_id" json:"category_id,omitempty"`
-	SubCategoryID *int64    `db:"sub_category_id" json:"sub_category_id,omitempty"`
-	MinOrder      *int      `db:"min_order" json:"min_order,omitempty"`
-	LeadTimeDays  *int      `db:"lead_time_days" json:"lead_time_days,omitempty"`
-	PriceRange    *string   `db:"price_range" json:"price_range,omitempty"`
-	LikesCount    int       `db:"likes_count" json:"likes_count"`
-	ViewCount     int64     `db:"view_count" json:"view_count"`
-	Status        string    `db:"status" json:"status"`
-	CreatedAt     time.Time `db:"created_at" json:"created_at"`
+	ShowcaseID         int64           `db:"showcase_id" json:"showcase_id"`
+	FactoryID          int64           `db:"factory_id" json:"factory_id"`
+	ContentType        string          `db:"content_type" json:"content_type"`
+	Type               string          `db:"-" json:"type,omitempty"`
+	Title              string          `db:"title" json:"title"`
+	Excerpt            *string         `db:"excerpt" json:"excerpt,omitempty"`
+	Description        *string         `db:"description" json:"description,omitempty"`
+	ImageURL           *string         `db:"image_url" json:"image_url,omitempty"`
+	CategoryID         *int64          `db:"category_id" json:"category_id,omitempty"`
+	SubCategoryID      *int64          `db:"sub_category_id" json:"sub_category_id,omitempty"`
+	MinOrder           *int            `db:"min_order" json:"min_order,omitempty"`
+	MOQ                *int            `db:"moq" json:"moq,omitempty"`
+	ProductionCapacity *int            `db:"production_capacity" json:"production_capacity,omitempty"`
+	LeadTimeDays       *int            `db:"lead_time_days" json:"lead_time_days,omitempty"`
+	BasePrice          *float64        `db:"base_price" json:"base_price,omitempty"`
+	PromoPrice         *float64        `db:"promo_price" json:"promo_price,omitempty"`
+	StartDate          *time.Time      `db:"start_date" json:"start_date,omitempty"`
+	EndDate            *time.Time      `db:"end_date" json:"end_date,omitempty"`
+	SampleAvailable    bool            `db:"sample_available" json:"sample_available"`
+	Content            *string         `db:"content" json:"content,omitempty"`
+	Images             JSONStringArray `db:"images" json:"images"`
+	LinkedShowcases    JSONInt64Array  `db:"linked_showcases" json:"linked_showcases"`
+	PriceRange         *string         `db:"price_range" json:"price_range,omitempty"`
+	LikesCount         int             `db:"likes_count" json:"likes_count"`
+	ViewCount          int64           `db:"view_count" json:"view_count"`
+	Status             string          `db:"status" json:"status"`
+	CreatedAt          time.Time       `db:"created_at" json:"created_at"`
+	UpdatedAt          time.Time       `db:"updated_at" json:"updated_at"`
+	PublishedAt        *time.Time      `db:"published_at" json:"published_at,omitempty"`
 }
 
 // ShowcaseExploreItem is the list payload for GET /showcases (Explore / FE normShowcase).
 type ShowcaseExploreItem struct {
-	ShowcaseID      int64     `db:"showcase_id" json:"showcase_id"`
-	FactoryID       int64     `db:"factory_id" json:"factory_id"`
-	ContentType     string    `db:"content_type" json:"content_type"`
-	Title           string    `db:"title" json:"title"`
-	Excerpt         *string   `db:"excerpt" json:"excerpt,omitempty"`
-	ImageURL        *string   `db:"image_url" json:"image_url,omitempty"`
-	CategoryID      *int64    `db:"category_id" json:"category_id,omitempty"`
-	SubCategoryID   *int64    `db:"sub_category_id" json:"sub_category_id,omitempty"`
-	MinOrder        *int      `db:"min_order" json:"min_order,omitempty"`
-	LeadTimeDays    *int      `db:"lead_time_days" json:"lead_time_days,omitempty"`
-	PriceRange      *string   `db:"price_range" json:"price_range,omitempty"`
-	LikesCount      int       `db:"likes_count" json:"likes_count"`
-	ViewCount       int64     `db:"view_count" json:"view_count"`
-	Status          string    `db:"status" json:"status"`
-	CreatedAt       time.Time `db:"created_at" json:"created_at"`
-	FactoryName     string    `db:"factory_name" json:"factory_name"`
-	FactoryImageURL *string   `db:"factory_image_url" json:"factory_image_url,omitempty"`
-	FactoryRating   *float64  `db:"factory_rating" json:"factory_rating,omitempty"`
-	FactoryVerified bool      `db:"factory_verified" json:"factory_verified"`
-	CategoryName    *string   `db:"category_name" json:"category_name,omitempty"`
-	SubCategoryName *string   `db:"sub_category_name" json:"sub_category_name,omitempty"`
+	ShowcaseID         int64           `db:"showcase_id" json:"showcase_id"`
+	FactoryID          int64           `db:"factory_id" json:"factory_id"`
+	ContentType        string          `db:"content_type" json:"content_type"`
+	Type               string          `db:"type" json:"type"`
+	Title              string          `db:"title" json:"title"`
+	Excerpt            *string         `db:"excerpt" json:"excerpt,omitempty"`
+	ImageURL           *string         `db:"image_url" json:"image_url,omitempty"`
+	CategoryID         *int64          `db:"category_id" json:"category_id,omitempty"`
+	SubCategoryID      *int64          `db:"sub_category_id" json:"sub_category_id,omitempty"`
+	MinOrder           *int            `db:"min_order" json:"min_order,omitempty"`
+	LeadTimeDays       *int            `db:"lead_time_days" json:"lead_time_days,omitempty"`
+	MOQ                *int            `db:"moq" json:"moq,omitempty"`
+	ProductionCapacity *int            `db:"production_capacity" json:"production_capacity,omitempty"`
+	BasePrice          *float64        `db:"base_price" json:"base_price,omitempty"`
+	PromoPrice         *float64        `db:"promo_price" json:"promo_price,omitempty"`
+	StartDate          *time.Time      `db:"start_date" json:"start_date,omitempty"`
+	EndDate            *time.Time      `db:"end_date" json:"end_date,omitempty"`
+	Images             JSONStringArray `db:"images" json:"images"`
+	PriceRange         *string         `db:"price_range" json:"price_range,omitempty"`
+	LikesCount         int             `db:"likes_count" json:"likes_count"`
+	ViewCount          int64           `db:"view_count" json:"view_count"`
+	Status             string          `db:"status" json:"status"`
+	CreatedAt          time.Time       `db:"created_at" json:"created_at"`
+	UpdatedAt          time.Time       `db:"updated_at" json:"updated_at"`
+	PublishedAt        *time.Time      `db:"published_at" json:"published_at,omitempty"`
+	FactoryName        string          `db:"factory_name" json:"factory_name"`
+	FactoryImageURL    *string         `db:"factory_image_url" json:"factory_image_url,omitempty"`
+	FactoryRating      *float64        `db:"factory_rating" json:"factory_rating,omitempty"`
+	FactoryVerified    bool            `db:"factory_verified" json:"factory_verified"`
+	CategoryName       *string         `db:"category_name" json:"category_name,omitempty"`
+	SubCategoryName    *string         `db:"sub_category_name" json:"sub_category_name,omitempty"`
 }
 
 // ShowcaseByFactoryItem is the list payload for GET /factories/:id/showcases.
@@ -111,40 +134,99 @@ type ShowcaseSection struct {
 
 // ShowcaseDetail is the full detail payload for GET /showcases/:id.
 type ShowcaseDetail struct {
-	ShowcaseID            int64     `db:"showcase_id" json:"showcase_id"`
-	FactoryID             int64     `db:"factory_id" json:"factory_id"`
-	ContentType           string    `db:"content_type" json:"content_type"`
-	Title                 string    `db:"title" json:"title"`
-	Excerpt               *string   `db:"excerpt" json:"excerpt,omitempty"`
-	Description           *string   `db:"description" json:"description,omitempty"`
-	ImageURL              *string   `db:"image_url" json:"image_url,omitempty"`
-	CategoryID            *int64    `db:"category_id" json:"category_id,omitempty"`
-	SubCategoryID         *int64    `db:"sub_category_id" json:"sub_category_id,omitempty"`
-	MinOrder              *int      `db:"min_order" json:"min_order,omitempty"`
-	LeadTimeDays          *int      `db:"lead_time_days" json:"lead_time_days,omitempty"`
-	PriceRange            *string   `db:"price_range" json:"price_range,omitempty"`
-	LikesCount            int       `db:"likes_count" json:"likes_count"`
-	Status                string    `db:"status" json:"status"`
-	CreatedAt             time.Time `db:"created_at" json:"created_at"`
-	FactoryName           string    `db:"factory_name" json:"factory_name"`
-	FactoryImageURL       *string   `db:"factory_image_url" json:"factory_image_url,omitempty"`
-	FactoryRating         *float64  `db:"factory_rating" json:"factory_rating,omitempty"`
-	FactoryVerified       bool      `db:"factory_verified" json:"factory_verified"`
-	FactorySpecialization *string   `db:"factory_specialization" json:"factory_specialization,omitempty"`
-	FactoryReviewCount    *int      `db:"factory_review_count" json:"factory_review_count,omitempty"`
-	ProvinceName          *string   `db:"province_name" json:"province_name,omitempty"`
-	CategoryName          *string   `db:"category_name" json:"category_name,omitempty"`
-	SubCategoryName       *string   `db:"sub_category_name" json:"sub_category_name,omitempty"`
-	Images   []ShowcaseImage   `db:"-" json:"images"`
-	Specs    []ShowcaseSpec    `db:"-" json:"specs"`
-	Sections []ShowcaseSection `db:"-" json:"sections"`
+	ShowcaseID            int64                 `db:"showcase_id" json:"showcase_id"`
+	FactoryID             int64                 `db:"factory_id" json:"factory_id"`
+	ContentType           string                `db:"content_type" json:"content_type"`
+	Type                  string                `db:"type" json:"type"`
+	Title                 string                `db:"title" json:"title"`
+	Excerpt               *string               `db:"excerpt" json:"excerpt,omitempty"`
+	Description           *string               `db:"description" json:"description,omitempty"`
+	ImageURL              *string               `db:"image_url" json:"image_url,omitempty"`
+	CategoryID            *int64                `db:"category_id" json:"category_id,omitempty"`
+	SubCategoryID         *int64                `db:"sub_category_id" json:"sub_category_id,omitempty"`
+	MinOrder              *int                  `db:"min_order" json:"min_order,omitempty"`
+	MOQ                   *int                  `db:"moq" json:"moq,omitempty"`
+	ProductionCapacity    *int                  `db:"production_capacity" json:"production_capacity,omitempty"`
+	LeadTimeDays          *int                  `db:"lead_time_days" json:"lead_time_days,omitempty"`
+	BasePrice             *float64              `db:"base_price" json:"base_price,omitempty"`
+	PromoPrice            *float64              `db:"promo_price" json:"promo_price,omitempty"`
+	StartDate             *time.Time            `db:"start_date" json:"start_date,omitempty"`
+	EndDate               *time.Time            `db:"end_date" json:"end_date,omitempty"`
+	SampleAvailable       bool                  `db:"sample_available" json:"sample_available"`
+	Content               *string               `db:"content" json:"content,omitempty"`
+	StructuredImages      JSONStringArray       `db:"images" json:"images"`
+	LinkedShowcases       JSONInt64Array        `db:"linked_showcases" json:"linked_showcases"`
+	PriceRange            *string               `db:"price_range" json:"price_range,omitempty"`
+	LikesCount            int                   `db:"likes_count" json:"likes_count"`
+	Status                string                `db:"status" json:"status"`
+	CreatedAt             time.Time             `db:"created_at" json:"created_at"`
+	UpdatedAt             time.Time             `db:"updated_at" json:"updated_at"`
+	PublishedAt           *time.Time            `db:"published_at" json:"published_at,omitempty"`
+	FactoryName           string                `db:"factory_name" json:"factory_name"`
+	FactoryImageURL       *string               `db:"factory_image_url" json:"factory_image_url,omitempty"`
+	FactoryRating         *float64              `db:"factory_rating" json:"factory_rating,omitempty"`
+	FactoryVerified       bool                  `db:"factory_verified" json:"factory_verified"`
+	FactorySpecialization *string               `db:"factory_specialization" json:"factory_specialization,omitempty"`
+	FactoryReviewCount    *int                  `db:"factory_review_count" json:"factory_review_count,omitempty"`
+	ProvinceName          *string               `db:"province_name" json:"province_name,omitempty"`
+	CategoryName          *string               `db:"category_name" json:"category_name,omitempty"`
+	SubCategoryName       *string               `db:"sub_category_name" json:"sub_category_name,omitempty"`
+	Images                []ShowcaseImage       `db:"-" json:"gallery_images,omitempty"`
+	Specs                 []ShowcaseSpec        `db:"-" json:"specs"`
+	Sections              []ShowcaseSection     `db:"-" json:"sections"`
+	LinkedShowcaseCards   []ShowcaseExploreItem `db:"-" json:"linked_showcase_cards,omitempty"`
+}
+
+type ShowcaseValidationDetail struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
+}
+
+type ShowcaseValidationError struct {
+	Details []ShowcaseValidationDetail
+}
+
+func (e ShowcaseValidationError) Error() string {
+	return "showcase validation failed"
+}
+
+type ShowcaseWriteInput struct {
+	Type               *string
+	Status             *string
+	Title              *string
+	CategoryID         *int64
+	SubCategoryID      *int64
+	MOQ                *int
+	ProductionCapacity *int
+	LeadTimeDays       *int
+	BasePrice          *float64
+	PromoPrice         *float64
+	StartDate          *time.Time
+	EndDate            *time.Time
+	SampleAvailable    *bool
+	Content            *string
+	Images             *[]string
+	LinkedShowcases    *[]int64
+	Excerpt            *string
+	Description        *string
+	ImageURL           *string
+	PriceRange         *string
+}
+
+type ShowcaseListFilter struct {
+	Type          string
+	FactoryID     *int64
+	Status        string
+	CategoryID    *int64
+	SubCategoryID *int64
+	ViewerID      int64
 }
 
 // ShowcaseSectionInput is the write model for PUT /showcases/:id/sections.
 type ShowcaseSectionInput struct {
-	SectionType  string                    `json:"section_type"`
-	SectionTitle string                    `json:"section_title"`
-	SortOrder    int                       `json:"sort_order"`
+	SectionType  string                     `json:"section_type"`
+	SectionTitle string                     `json:"section_title"`
+	SortOrder    int                        `json:"sort_order"`
 	Items        []ShowcaseSectionItemInput `json:"items"`
 }
 

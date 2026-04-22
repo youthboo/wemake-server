@@ -24,7 +24,11 @@ var (
 	ErrProductionInsufficientEvidence   = errors.New("INSUFFICIENT_EVIDENCE")
 	ErrProductionPaymentConfirmRequired = errors.New("PAYMENT_CONFIRMATION_REQUIRED")
 	ErrProductionInvalidStep            = errors.New("INVALID_STEP")
+	ErrProductionStepIDRequired         = errors.New("STEP_ID_REQUIRED")
+	ErrProductionInvalidStatus          = errors.New("INVALID_STATUS")
 	ErrProductionInvalidImageURL        = errors.New("INVALID_IMAGE_URL")
+	ErrProductionInvalidImageFormat     = errors.New("INVALID_IMAGE_FORMAT")
+	ErrProductionMaxImages              = errors.New("MAX_5_IMAGES")
 	ErrProductionDescriptionTooLong     = errors.New("DESCRIPTION_TOO_LONG")
 	ErrProductionReasonRequired         = errors.New("REASON_REQUIRED")
 )
@@ -65,8 +69,8 @@ func NewProductionService(repo *repository.ProductionRepository) *ProductionServ
 	return &ProductionService{repo: repo}
 }
 
-func (s *ProductionService) ListSteps() ([]domain.ProductionStepTemplate, error) {
-	return s.repo.ListActiveSteps()
+func (s *ProductionService) ListSteps(factoryTypeID *int64) ([]domain.ProductionStepTemplate, error) {
+	return s.repo.ListActiveStepsByFactoryType(factoryTypeID)
 }
 
 func (s *ProductionService) ListByOrderID(orderID, userID int64) (*domain.ProductionUpdatesList, error) {
@@ -80,7 +84,7 @@ func (s *ProductionService) ListByOrderID(orderID, userID int64) (*domain.Produc
 		}
 		return nil, &ProductionRuleError{Err: ErrProductionNotOrderCustomer}
 	}
-	steps, err := s.repo.ListActiveSteps()
+	steps, err := s.repo.ListActiveStepsByFactoryType(order.FactoryTypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -112,11 +116,14 @@ func (s *ProductionService) ListByOrderID(orderID, userID int64) (*domain.Produc
 func (s *ProductionService) Upsert(orderID, userID int64, input ProductionWriteInput) (*domain.ProductionUpdateResult, error) {
 	input.Status = strings.ToUpper(strings.TrimSpace(input.Status))
 	input.Description = strings.TrimSpace(input.Description)
-	if len(input.Description) > 500 {
+	if input.StepID <= 0 {
+		return nil, &ProductionRuleError{Err: ErrProductionStepIDRequired}
+	}
+	if len(input.Description) > 2000 {
 		return nil, &ProductionRuleError{Err: ErrProductionDescriptionTooLong}
 	}
 	if input.Status != "IP" && input.Status != "CD" {
-		return nil, &ProductionRuleError{Err: ErrProductionInvalidStateTransition}
+		return nil, &ProductionRuleError{Err: ErrProductionInvalidStatus}
 	}
 	if err := validateImageURLs(input.ImageURLs); err != nil {
 		return nil, err
@@ -148,7 +155,7 @@ func (s *ProductionService) Upsert(orderID, userID int64, input ProductionWriteI
 		return nil, &ProductionRuleError{Err: ErrProductionOrderLocked}
 	}
 
-	steps, err := s.repo.ListActiveStepsTx(tx)
+	steps, err := s.repo.ListActiveStepsByFactoryTypeTx(tx, order.FactoryTypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -384,21 +391,24 @@ func (s *ProductionService) Reject(updateID, userID int64, reason string) (*doma
 }
 
 func validateImageURLs(items []string) error {
-	if len(items) > 6 {
-		return &ProductionRuleError{Err: ErrProductionInvalidImageURL}
+	if len(items) > 5 {
+		return &ProductionRuleError{
+			Err:     ErrProductionMaxImages,
+			Details: map[string]interface{}{"max": 5, "provided": len(items)},
+		}
 	}
 	seen := make(map[string]struct{}, len(items))
 	for _, raw := range items {
 		v := strings.TrimSpace(raw)
 		if v == "" || len(v) > 2048 {
-			return &ProductionRuleError{Err: ErrProductionInvalidImageURL}
+			return &ProductionRuleError{Err: ErrProductionInvalidImageFormat}
 		}
 		u, err := url.Parse(v)
 		if err != nil || strings.ToLower(u.Scheme) != "https" || u.Host == "" {
 			return &ProductionRuleError{Err: ErrProductionInvalidImageURL}
 		}
 		if _, ok := seen[v]; ok {
-			return &ProductionRuleError{Err: ErrProductionInvalidImageURL}
+			return &ProductionRuleError{Err: ErrProductionInvalidImageFormat}
 		}
 		seen[v] = struct{}{}
 	}
@@ -604,6 +614,14 @@ func ExplainProductionError(err error) string {
 		return "payment confirmation required"
 	case errors.Is(err, ErrProductionInvalidStep):
 		return "invalid production step"
+	case errors.Is(err, ErrProductionStepIDRequired):
+		return "step_id is required"
+	case errors.Is(err, ErrProductionInvalidStatus):
+		return "invalid production update status"
+	case errors.Is(err, ErrProductionMaxImages):
+		return "too many image urls"
+	case errors.Is(err, ErrProductionInvalidImageFormat):
+		return "invalid image url format"
 	case errors.Is(err, ErrProductionInvalidImageURL):
 		return "invalid image urls"
 	case errors.Is(err, ErrProductionDescriptionTooLong):

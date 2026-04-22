@@ -263,6 +263,8 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	showcases.Get("/:showcase_id/sections", showcaseHandler.GetSections)
 	showcases.Put("/:showcase_id/sections", showcaseHandler.BulkReplaceSections)
 	showcases.Delete("/:showcase_id/sections/:section_id", showcaseHandler.DeleteSection)
+	showcases.Patch("/:showcase_id/status", showcaseHandler.PatchStatus)
+	showcases.Put("/:showcase_id", showcaseHandler.Put)
 	showcases.Patch("/:showcase_id", showcaseHandler.Patch)
 	showcases.Delete("/:showcase_id", showcaseHandler.Delete)
 	showcases.Get("/:showcase_id", showcaseHandler.GetDetail)

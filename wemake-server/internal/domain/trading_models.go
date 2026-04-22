@@ -62,6 +62,49 @@ type Order struct {
 	UpdatedAt         time.Time  `db:"updated_at" json:"updated_at"`
 }
 
+type OrderListRFQSummary struct {
+	RFQID    int64  `json:"rfq_id"`
+	Title    string `json:"title"`
+	Quantity int64  `json:"quantity"`
+	UnitName string `json:"unit_name"`
+}
+
+type OrderListCustomerSummary struct {
+	UserID      int64  `json:"user_id"`
+	DisplayName string `json:"display_name"`
+}
+
+type OrderProductionSummary struct {
+	CurrentStepID       *int64     `json:"current_step_id"`
+	CurrentStepNameTH   *string    `json:"current_step_name_th"`
+	CurrentUpdateStatus *string    `json:"current_update_status"`
+	CompletedCount      int64      `json:"completed_count"`
+	TotalCount          int64      `json:"total_count"`
+	LastUpdatedAt       *time.Time `json:"last_updated_at,omitempty"`
+	HasRejected         bool       `json:"has_rejected"`
+}
+
+type OrderListItem struct {
+	OrderID             int64                    `json:"order_id"`
+	QuotationID         int64                    `json:"quote_id"`
+	UserID              int64                    `json:"user_id"`
+	FactoryID           int64                    `json:"factory_id"`
+	Status              string                   `json:"status"`
+	TotalAmount         float64                  `json:"total_amount"`
+	DepositAmount       float64                  `json:"deposit_amount"`
+	EstimatedDelivery   *time.Time               `json:"estimated_delivery,omitempty"`
+	CreatedAt           time.Time                `json:"created_at"`
+	UpdatedAt           time.Time                `json:"updated_at"`
+	RFQ                 OrderListRFQSummary      `json:"rfq"`
+	Customer            OrderListCustomerSummary `json:"customer"`
+	ProductionSummary   OrderProductionSummary   `json:"production_summary"`
+	RFQID               int64                    `json:"rfq_id"`
+	RFQTitle            string                   `json:"rfq_title"`
+	RFQQuantity         int64                    `json:"rfq_quantity"`
+	UnitName            string                   `json:"unit_name"`
+	CustomerDisplayName string                   `json:"customer_display_name"`
+}
+
 type OrderFactorySummary struct {
 	FactoryID int64  `json:"factory_id"`
 	Name      string `json:"name"`

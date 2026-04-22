@@ -22,17 +22,28 @@ const showcaseExploreBaseSQL = `
 		fs.showcase_id,
 		fs.factory_id,
 		fs.content_type,
+		fs.content_type AS type,
 		fs.title,
 		fs.excerpt,
 		fs.image_url,
 		fs.category_id,
 		fs.sub_category_id,
 		fs.min_order,
+		fs.moq,
+		fs.production_capacity,
 		fs.lead_time_days,
+		fs.base_price,
+		fs.promo_price,
+		fs.start_date,
+		fs.end_date,
+		fs.images,
 		fs.price_range,
 		fs.likes_count,
+		fs.view_count,
 		fs.status,
 		fs.created_at,
+		fs.updated_at,
+		fs.published_at,
 		fp.factory_name,
 		fp.image_url AS factory_image_url,
 		fp.rating::float8 AS factory_rating,
@@ -70,6 +81,52 @@ func (r *ShowcaseRepository) ListExploreByFactory(factoryID int64, contentType s
 		argPos++
 	}
 	query := showcaseExploreBaseSQL + ` WHERE ` + strings.Join(clauses, " AND ") + ` ORDER BY fs.created_at DESC`
+	err := r.db.Select(&items, query, args...)
+	return items, err
+}
+
+func (r *ShowcaseRepository) ListStructured(filter domain.ShowcaseListFilter) ([]domain.ShowcaseExploreItem, error) {
+	var items []domain.ShowcaseExploreItem
+	clauses := []string{}
+	args := []interface{}{}
+	argPos := 1
+
+	if filter.FactoryID != nil {
+		clauses = append(clauses, fmt.Sprintf("fs.factory_id = $%d", argPos))
+		args = append(args, *filter.FactoryID)
+		argPos++
+	}
+	if filter.Type != "" {
+		clauses = append(clauses, fmt.Sprintf("fs.content_type = $%d", argPos))
+		args = append(args, filter.Type)
+		argPos++
+	}
+	if filter.Status != "" {
+		clauses = append(clauses, fmt.Sprintf("fs.status = $%d", argPos))
+		args = append(args, filter.Status)
+		argPos++
+		if filter.Status != "AC" && (filter.FactoryID == nil || filter.ViewerID == 0 || *filter.FactoryID != filter.ViewerID) {
+			clauses = append(clauses, "1 = 0")
+		}
+	} else if filter.FactoryID == nil || filter.ViewerID == 0 || *filter.FactoryID != filter.ViewerID {
+		clauses = append(clauses, "fs.status = 'AC'")
+	}
+	if filter.CategoryID != nil {
+		clauses = append(clauses, fmt.Sprintf("fs.category_id = $%d", argPos))
+		args = append(args, *filter.CategoryID)
+		argPos++
+	}
+	if filter.SubCategoryID != nil {
+		clauses = append(clauses, fmt.Sprintf("fs.sub_category_id = $%d", argPos))
+		args = append(args, *filter.SubCategoryID)
+		argPos++
+	}
+
+	query := showcaseExploreBaseSQL
+	if len(clauses) > 0 {
+		query += ` WHERE ` + strings.Join(clauses, " AND ")
+	}
+	query += ` ORDER BY fs.updated_at DESC, fs.created_at DESC`
 	err := r.db.Select(&items, query, args...)
 	return items, err
 }
@@ -177,10 +234,14 @@ func (r *ShowcaseRepository) GetDetail(showcaseID int64) (*domain.ShowcaseDetail
 	err := r.db.Get(&s, `
 		SELECT
 			fs.showcase_id, fs.factory_id, fs.content_type,
+			fs.content_type AS type,
 			fs.title, fs.excerpt, fs.description,
 			fs.image_url, fs.category_id, fs.sub_category_id,
-			fs.min_order, fs.lead_time_days, fs.price_range,
-			fs.likes_count, fs.status, fs.created_at,
+			fs.min_order, fs.moq, fs.production_capacity, fs.lead_time_days,
+			fs.base_price, fs.promo_price, fs.start_date, fs.end_date,
+			fs.sample_available, fs.content, fs.images, fs.linked_showcases,
+			fs.price_range, fs.likes_count, fs.status, fs.created_at,
+			fs.updated_at, fs.published_at,
 			fp.factory_name,
 			fp.image_url         AS factory_image_url,
 			fp.rating::float8    AS factory_rating,
@@ -253,6 +314,14 @@ func (r *ShowcaseRepository) GetDetail(showcaseID int64) (*domain.ShowcaseDetail
 	}
 	s.Specs = specs
 
+	if len(s.LinkedShowcases) > 0 {
+		cards, err := r.ListLinkedShowcaseCards(s.LinkedShowcases)
+		if err != nil {
+			return nil, err
+		}
+		s.LinkedShowcaseCards = cards
+	}
+
 	return &s, nil
 }
 
@@ -260,19 +329,26 @@ func (r *ShowcaseRepository) Create(showcase *domain.FactoryShowcase) error {
 	query := `
 		INSERT INTO factory_showcases
 			(factory_id, content_type, title, excerpt, description, image_url,
-			 category_id, sub_category_id, min_order, lead_time_days, price_range, status)
+			 category_id, sub_category_id, min_order, moq, production_capacity,
+			 lead_time_days, base_price, promo_price, start_date, end_date,
+			 sample_available, content, images, linked_showcases, price_range, status,
+			 published_at, updated_at)
 		VALUES
 			(:factory_id, :content_type, :title, :excerpt, :description, :image_url,
-			 :category_id, :sub_category_id, :min_order, :lead_time_days, :price_range,
-			 COALESCE(NULLIF(:status, ''), 'AC'))
-		RETURNING showcase_id, created_at, likes_count, status
+			 :category_id, :sub_category_id, :min_order, :moq, :production_capacity,
+			 :lead_time_days, :base_price, :promo_price, :start_date, :end_date,
+			 :sample_available, :content, :images, :linked_showcases, :price_range,
+			 COALESCE(NULLIF(:status, ''), 'DR'),
+			 CASE WHEN COALESCE(NULLIF(:status, ''), 'DR') = 'AC' THEN NOW() ELSE NULL END,
+			 NOW())
+		RETURNING showcase_id, created_at, updated_at, published_at, likes_count, status
 	`
 	rows, err := r.db.NamedQuery(query, showcase)
 	if err != nil {
 		return err
 	}
 	if rows.Next() {
-		err = rows.Scan(&showcase.ShowcaseID, &showcase.CreatedAt, &showcase.LikesCount, &showcase.Status)
+		err = rows.Scan(&showcase.ShowcaseID, &showcase.CreatedAt, &showcase.UpdatedAt, &showcase.PublishedAt, &showcase.LikesCount, &showcase.Status)
 	}
 	rows.Close()
 	return err
@@ -284,6 +360,7 @@ func (r *ShowcaseRepository) GetByID(showcaseID, factoryID int64) (*domain.Facto
 	if err != nil {
 		return nil, err
 	}
+	s.Type = s.ContentType
 	return &s, nil
 }
 
@@ -328,9 +405,24 @@ func (r *ShowcaseRepository) Update(s *domain.FactoryShowcase) error {
 		    category_id     = :category_id,
 		    sub_category_id = :sub_category_id,
 		    min_order       = :min_order,
+		    moq             = :moq,
+		    production_capacity = :production_capacity,
 		    lead_time_days  = :lead_time_days,
+		    base_price      = :base_price,
+		    promo_price     = :promo_price,
+		    start_date      = :start_date,
+		    end_date        = :end_date,
+		    sample_available = :sample_available,
+		    content         = :content,
+		    images          = :images,
+		    linked_showcases = :linked_showcases,
 		    price_range     = :price_range,
-		    status          = CASE WHEN :status = '' THEN status ELSE :status END
+		    status          = CASE WHEN :status = '' THEN status ELSE :status END,
+		    published_at    = CASE
+		                        WHEN :status = 'AC' AND published_at IS NULL THEN NOW()
+		                        ELSE published_at
+		                      END,
+		    updated_at      = NOW()
 		WHERE showcase_id = :showcase_id AND factory_id = :factory_id
 	`
 	res, err := r.db.NamedExec(query, s)
@@ -345,6 +437,81 @@ func (r *ShowcaseRepository) Update(s *domain.FactoryShowcase) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func (r *ShowcaseRepository) UpdateStatus(showcaseID, factoryID int64, status string) error {
+	res, err := r.db.Exec(`
+		UPDATE factory_showcases
+		SET status = $1,
+		    published_at = CASE WHEN $1 = 'AC' AND published_at IS NULL THEN NOW() ELSE published_at END,
+		    updated_at = NOW()
+		WHERE showcase_id = $2 AND factory_id = $3
+	`, status, showcaseID, factoryID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (r *ShowcaseRepository) CategoryExists(categoryID int64) (bool, error) {
+	var ok bool
+	err := r.db.Get(&ok, `SELECT EXISTS(SELECT 1 FROM categories WHERE category_id = $1)`, categoryID)
+	return ok, err
+}
+
+func (r *ShowcaseRepository) SubCategoryBelongsToCategory(subCategoryID, categoryID int64) (bool, error) {
+	var ok bool
+	err := r.db.Get(&ok, `
+		SELECT EXISTS(
+			SELECT 1 FROM lbi_sub_categories WHERE sub_category_id = $1 AND category_id = $2
+		)
+	`, subCategoryID, categoryID)
+	return ok, err
+}
+
+type LinkedShowcaseCheckRow struct {
+	ShowcaseID int64  `db:"showcase_id"`
+	FactoryID  int64  `db:"factory_id"`
+	Type       string `db:"content_type"`
+}
+
+func (r *ShowcaseRepository) CheckLinkedShowcases(ids []int64) ([]LinkedShowcaseCheckRow, error) {
+	if len(ids) == 0 {
+		return []LinkedShowcaseCheckRow{}, nil
+	}
+	query, args, err := sqlx.In(`
+		SELECT showcase_id, factory_id, content_type
+		FROM factory_showcases
+		WHERE showcase_id IN (?)
+	`, ids)
+	if err != nil {
+		return nil, err
+	}
+	query = r.db.Rebind(query)
+	var rows []LinkedShowcaseCheckRow
+	err = r.db.Select(&rows, query, args...)
+	return rows, err
+}
+
+func (r *ShowcaseRepository) ListLinkedShowcaseCards(ids []int64) ([]domain.ShowcaseExploreItem, error) {
+	if len(ids) == 0 {
+		return []domain.ShowcaseExploreItem{}, nil
+	}
+	query, args, err := sqlx.In(showcaseExploreBaseSQL+` WHERE fs.showcase_id IN (?) ORDER BY fs.showcase_id`, ids)
+	if err != nil {
+		return nil, err
+	}
+	query = r.db.Rebind(query)
+	var items []domain.ShowcaseExploreItem
+	err = r.db.Select(&items, query, args...)
+	return items, err
 }
 
 func (r *ShowcaseRepository) IncrementViewCount(showcaseID int64) error {
