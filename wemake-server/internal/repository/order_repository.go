@@ -260,7 +260,7 @@ func (r *OrderRepository) GetDetailByParticipant(orderID, userID int64, role str
 			r.category_id AS rfq_category_id,
 			cat.name AS rfq_category_name,
 			r.unit_id AS rfq_unit_id,
-			un.name AS rfq_unit_name,
+			un.unit_name_th AS rfq_unit_name,
 			(
 				SELECT ps.due_date::timestamp
 				FROM payment_schedules ps
@@ -272,7 +272,7 @@ func (r *OrderRepository) GetDetailByParticipant(orderID, userID int64, role str
 		INNER JOIN quotations q ON q.quote_id = o.quote_id
 		INNER JOIN rfqs r ON r.rfq_id = q.rfq_id
 		LEFT JOIN categories cat ON cat.category_id = r.category_id
-		LEFT JOIN units un ON un.unit_id = r.unit_id
+		LEFT JOIN lbi_units un ON un.unit_id = r.unit_id
 		LEFT JOIN factory_profiles fp ON fp.user_id = o.factory_id
 		WHERE o.order_id = $1
 	`
