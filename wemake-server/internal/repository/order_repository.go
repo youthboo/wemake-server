@@ -283,14 +283,28 @@ func (r *OrderRepository) GetDetailByParticipant(orderID, userID int64, role str
 }
 
 func (r *OrderRepository) GetRfqImages(rfqID int64) ([]domain.RfqImage, error) {
-	var items []domain.RfqImage
-	err := r.db.Select(&items, `
-		SELECT image_id, image_url
-		FROM rfq_images
+	var raw string
+	err := r.db.Get(&raw, `
+		SELECT COALESCE(image_urls, '[]'::jsonb)::text
+		FROM rfqs
 		WHERE rfq_id = $1
-		ORDER BY image_id
 	`, rfqID)
-	return items, err
+	if err != nil {
+		return nil, err
+	}
+
+	var urls []string
+	if err := json.Unmarshal([]byte(raw), &urls); err != nil {
+		return nil, err
+	}
+	items := make([]domain.RfqImage, 0, len(urls))
+	for i, url := range urls {
+		items = append(items, domain.RfqImage{
+			ImageID:  fmt.Sprintf("rfq-%d-image-%d", rfqID, i+1),
+			ImageURL: url,
+		})
+	}
+	return items, nil
 }
 
 func (r *OrderRepository) InsertActivity(orderID int64, actorUserID *int64, eventCode string, payload map[string]interface{}) error {
