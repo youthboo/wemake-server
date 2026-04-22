@@ -67,6 +67,69 @@ func (h *FactoryHandler) GetByID(c *fiber.Ctx) error {
 	return c.JSON(item)
 }
 
+func (h *FactoryHandler) PatchProfile(c *fiber.Ctx) error {
+	type patchFactoryProfileRequest struct {
+		FactoryName   *string `json:"factory_name"`
+		TaxID         *string `json:"tax_id"`
+		Description   *string `json:"description"`
+		FactoryTypeID *int64  `json:"factory_type_id"`
+	}
+
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+	}
+	factoryID, err := c.ParamsInt("factory_id")
+	if err != nil || factoryID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": errMsgInvalidFactoryID})
+	}
+	if int64(factoryID) != userID {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
+	}
+
+	var req patchFactoryProfileRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+
+	fields := map[string]interface{}{}
+	if req.FactoryName != nil {
+		name := strings.TrimSpace(*req.FactoryName)
+		if name == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "factory_name cannot be empty"})
+		}
+		fields["factory_name"] = name
+	}
+	if req.TaxID != nil {
+		fields["tax_id"] = strings.TrimSpace(*req.TaxID)
+	}
+	if req.Description != nil {
+		fields["description"] = strings.TrimSpace(*req.Description)
+	}
+	if req.FactoryTypeID != nil {
+		if *req.FactoryTypeID <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "factory_type_id must be positive"})
+		}
+		fields["factory_type_id"] = *req.FactoryTypeID
+	}
+
+	if err := h.service.PatchProfile(int64(factoryID), fields); err != nil {
+		if repository.IsNotFoundError(err) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "factory profile not found"})
+		}
+		if errors.Is(err, repository.ErrInvalidFactoryType) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid factory_type_id"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update factory"})
+	}
+
+	item, err := h.service.GetPublicDetail(int64(factoryID))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "factory updated but failed to fetch latest data"})
+	}
+	return c.JSON(item)
+}
+
 func (h *FactoryHandler) ListCategories(c *fiber.Ctx) error {
 	factoryID, err := c.ParamsInt("factory_id")
 	if err != nil || factoryID <= 0 {

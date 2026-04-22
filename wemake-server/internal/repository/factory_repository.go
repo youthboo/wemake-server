@@ -3,6 +3,8 @@ package repository
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -32,6 +34,9 @@ var ErrDuplicateFactoryCategory = errors.New("factory already has this category"
 
 // ErrInvalidFactoryCategory is returned when category_id is not a valid FK.
 var ErrInvalidFactoryCategory = errors.New("invalid category_id")
+
+// ErrInvalidFactoryType is returned when factory_type_id is not a valid FK.
+var ErrInvalidFactoryType = errors.New("invalid factory_type_id")
 
 func (r *FactoryRepository) ListPublicVerified() ([]domain.FactoryListItem, error) {
 	var items []domain.FactoryListItem
@@ -309,6 +314,63 @@ func (r *FactoryRepository) GetPublicDetail(factoryID int64) (*domain.FactoryPub
 	out.Reviews = reviews
 
 	return out, nil
+}
+
+func (r *FactoryRepository) PatchProfile(factoryID int64, fields map[string]interface{}) error {
+	if len(fields) == 0 {
+		return nil
+	}
+
+	allowed := map[string]bool{
+		"factory_name":    true,
+		"tax_id":          true,
+		"description":     true,
+		"factory_type_id": true,
+		"specialization":  true,
+		"min_order":       true,
+		"lead_time_desc":  true,
+		"image_url":       true,
+		"price_range":     true,
+		"province_id":     true,
+	}
+
+	setClauses := make([]string, 0, len(fields))
+	args := make([]interface{}, 0, len(fields)+1)
+	i := 1
+	for key, value := range fields {
+		if !allowed[key] {
+			continue
+		}
+		setClauses = append(setClauses, fmt.Sprintf("%s = $%d", key, i))
+		args = append(args, value)
+		i++
+	}
+	if len(setClauses) == 0 {
+		return nil
+	}
+
+	args = append(args, factoryID)
+	query := fmt.Sprintf(
+		"UPDATE factory_profiles SET %s WHERE user_id = $%d",
+		strings.Join(setClauses, ", "),
+		i,
+	)
+	res, err := r.db.Exec(query, args...)
+	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23503" {
+			return ErrInvalidFactoryType
+		}
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 // ListFactoryCategories returns categories linked to the factory (map_factory_categories).

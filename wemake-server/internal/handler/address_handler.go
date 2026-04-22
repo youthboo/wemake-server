@@ -18,6 +18,16 @@ func NewAddressHandler(service *service.AddressService) *AddressHandler {
 	return &AddressHandler{service: service}
 }
 
+func normalizeAddressType(raw string) (string, bool) {
+	typ := strings.TrimSpace(strings.ToUpper(raw))
+	switch typ {
+	case "B", "S", "C", "M":
+		return typ, true
+	default:
+		return typ, false
+	}
+}
+
 func (h *AddressHandler) ListAddresses(c *fiber.Ctx) error {
 	userID, err := getUserIDFromHeader(c)
 	if err != nil {
@@ -55,10 +65,14 @@ func (h *AddressHandler) CreateAddress(c *fiber.Ctx) error {
 	if strings.TrimSpace(req.AddressType) == "" || strings.TrimSpace(req.AddressDetail) == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "address_type and address_detail are required"})
 	}
+	addressType, ok := normalizeAddressType(req.AddressType)
+	if !ok {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "address_type must be one of B, S, C, M"})
+	}
 
 	address := &domain.Address{
 		UserID:        userID,
-		AddressType:   strings.TrimSpace(strings.ToUpper(req.AddressType)),
+		AddressType:   addressType,
 		AddressDetail: strings.TrimSpace(req.AddressDetail),
 		SubDistrictID: req.SubDistrictID,
 		DistrictID:    req.DistrictID,
@@ -101,7 +115,11 @@ func (h *AddressHandler) PatchAddress(c *fiber.Ctx) error {
 
 	fields := map[string]interface{}{}
 	if req.AddressType != nil {
-		fields["address_type"] = strings.TrimSpace(strings.ToUpper(*req.AddressType))
+		addressType, ok := normalizeAddressType(*req.AddressType)
+		if !ok {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "address_type must be one of B, S, C, M"})
+		}
+		fields["address_type"] = addressType
 	}
 	if req.AddressDetail != nil {
 		fields["address_detail"] = strings.TrimSpace(*req.AddressDetail)

@@ -21,6 +21,10 @@ func (s *FactoryService) GetPublicDetail(factoryID int64) (*domain.FactoryPublic
 	return s.repo.GetPublicDetail(factoryID)
 }
 
+func (s *FactoryService) PatchProfile(factoryID int64, fields map[string]interface{}) error {
+	return s.repo.PatchProfile(factoryID, fields)
+}
+
 func (s *FactoryService) FactoryExistsActive(factoryID int64) (bool, error) {
 	return s.repo.FactoryExistsActive(factoryID)
 }
