@@ -5,6 +5,33 @@
 -- ============================================================
 -- 1. ALTER factory_showcases — add description, price_range, status
 -- ============================================================
+DO $$
+BEGIN
+  IF to_regclass('public.factory_showcases') IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'factory_showcases'
+          AND column_name = 'content_type'
+     ) THEN
+    ALTER TABLE factory_showcases ADD COLUMN content_type CHAR(2);
+
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = 'factory_showcases'
+         AND column_name = 'type'
+    ) THEN
+      EXECUTE 'UPDATE factory_showcases SET content_type = COALESCE("type", ''PD'')';
+    ELSE
+      UPDATE factory_showcases SET content_type = 'PD';
+    END IF;
+
+    ALTER TABLE factory_showcases ALTER COLUMN content_type SET DEFAULT 'PD';
+    ALTER TABLE factory_showcases ALTER COLUMN content_type SET NOT NULL;
+  END IF;
+END $$;
+
 ALTER TABLE factory_showcases
   ADD COLUMN IF NOT EXISTS description TEXT,
   ADD COLUMN IF NOT EXISTS price_range VARCHAR(100),

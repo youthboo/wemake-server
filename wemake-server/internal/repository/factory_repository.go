@@ -697,7 +697,7 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 	}
 
 	if err := r.db.Select(&out.RecentShowcases, `
-		SELECT showcase_id, content_type, title, category_id, sub_category_id, created_at
+		SELECT showcase_id, "type" AS content_type, title, category_id, sub_category_id, created_at
 		FROM factory_showcases
 		WHERE factory_id = $1
 		ORDER BY created_at DESC

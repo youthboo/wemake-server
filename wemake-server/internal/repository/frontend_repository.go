@@ -571,13 +571,13 @@ func (r *FrontendRepository) GetProducts(limit int, categoryID string) ([]domain
 		SELECT
 			showcase_id::text AS id,
 			title,
-			COALESCE(excerpt, '-') AS price,
-			COALESCE(image_url, '') AS image_url,
+			COALESCE(base_price::text, '-') AS price,
+			COALESCE(images->>0, '') AS image_url,
 			NULL::text AS discount,
 			factory_id::text AS factory_id,
 			category_id::text AS category_id
 		FROM factory_showcases
-		WHERE content_type = 'PD'
+		WHERE "type" = 'PD'
 	`
 	var err error
 	if categoryID != "" {
@@ -600,13 +600,13 @@ func (r *FrontendRepository) GetPromotions(limit int) ([]domain.Promotion, error
 		SELECT
 			showcase_id::text AS id,
 			title,
-			COALESCE(excerpt, '') AS description,
-			COALESCE(min_order::text, '-') AS price,
-			COALESCE(image_url, '') AS image_url,
+			COALESCE(content, '') AS description,
+			COALESCE(promo_price::text, base_price::text, '-') AS price,
+			COALESCE(images->>0, '') AS image_url,
 			'' AS tag,
 			factory_id::text AS factory_id
 		FROM factory_showcases
-		WHERE content_type = 'PM'
+		WHERE "type" = 'PM'
 		ORDER BY created_at DESC
 		LIMIT $1
 	`

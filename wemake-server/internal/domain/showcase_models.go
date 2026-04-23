@@ -5,8 +5,8 @@ import "time"
 type FactoryShowcase struct {
 	ShowcaseID         int64           `db:"showcase_id" json:"showcase_id"`
 	FactoryID          int64           `db:"factory_id" json:"factory_id"`
-	ContentType        string          `db:"content_type" json:"content_type"`
-	Type               string          `db:"-" json:"type,omitempty"`
+	ContentType        string          `db:"-" json:"content_type,omitempty"`
+	Type               string          `db:"type" json:"type"`
 	Title              string          `db:"title" json:"title"`
 	Excerpt            *string         `db:"excerpt" json:"excerpt,omitempty"`
 	Description        *string         `db:"description" json:"description,omitempty"`
@@ -38,7 +38,7 @@ type FactoryShowcase struct {
 type ShowcaseExploreItem struct {
 	ShowcaseID         int64           `db:"showcase_id" json:"showcase_id"`
 	FactoryID          int64           `db:"factory_id" json:"factory_id"`
-	ContentType        string          `db:"content_type" json:"content_type"`
+	ContentType        string          `db:"-" json:"content_type,omitempty"`
 	Type               string          `db:"type" json:"type"`
 	Title              string          `db:"title" json:"title"`
 	Excerpt            *string         `db:"excerpt" json:"excerpt,omitempty"`
@@ -73,7 +73,8 @@ type ShowcaseExploreItem struct {
 // Does not include factory info (caller already knows the factory context).
 type ShowcaseByFactoryItem struct {
 	ShowcaseID      int64     `db:"showcase_id" json:"showcase_id"`
-	ContentType     string    `db:"content_type" json:"content_type"`
+	ContentType     string    `db:"-" json:"content_type,omitempty"`
+	Type            string    `db:"type" json:"type"`
 	Title           string    `db:"title" json:"title"`
 	Excerpt         *string   `db:"excerpt" json:"excerpt,omitempty"`
 	ImageURL        *string   `db:"image_url" json:"image_url,omitempty"`
@@ -136,7 +137,7 @@ type ShowcaseSection struct {
 type ShowcaseDetail struct {
 	ShowcaseID            int64                 `db:"showcase_id" json:"showcase_id"`
 	FactoryID             int64                 `db:"factory_id" json:"factory_id"`
-	ContentType           string                `db:"content_type" json:"content_type"`
+	ContentType           string                `db:"-" json:"content_type,omitempty"`
 	Type                  string                `db:"type" json:"type"`
 	Title                 string                `db:"title" json:"title"`
 	Excerpt               *string               `db:"excerpt" json:"excerpt,omitempty"`
@@ -251,7 +252,8 @@ type ShowcaseAnalytics struct {
 	ShowcaseID      int64   `json:"showcase_id"`
 	FactoryID       int64   `json:"factory_id"`
 	Title           string  `json:"title"`
-	ContentType     string  `json:"content_type"`
+	ContentType     string  `json:"content_type,omitempty"`
+	Type            string  `json:"type"`
 	LikesCount      int     `json:"likes_count"`
 	ViewCount       int64   `json:"view_count"`
 	EngagementScore float64 `json:"engagement_score"`

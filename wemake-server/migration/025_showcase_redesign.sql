@@ -1,5 +1,33 @@
 BEGIN;
 
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'factory_showcases'
+          AND column_name = 'type'
+    ) THEN
+        ALTER TABLE factory_showcases ADD COLUMN "type" CHAR(2);
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'factory_showcases'
+          AND column_name = 'content_type'
+    ) THEN
+        UPDATE factory_showcases
+           SET "type" = COALESCE("type", content_type, 'PD');
+    ELSE
+        UPDATE factory_showcases
+           SET "type" = COALESCE("type", 'PD');
+    END IF;
+
+    ALTER TABLE factory_showcases ALTER COLUMN "type" SET DEFAULT 'PD';
+    ALTER TABLE factory_showcases ALTER COLUMN "type" SET NOT NULL;
+END $$;
+
 ALTER TABLE factory_showcases
     ADD COLUMN IF NOT EXISTS moq INT,
     ADD COLUMN IF NOT EXISTS production_capacity INT,
@@ -14,29 +42,83 @@ ALTER TABLE factory_showcases
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     ADD COLUMN IF NOT EXISTS published_at TIMESTAMP;
 
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'factory_showcases'
+          AND column_name = 'min_order'
+    ) THEN
+        UPDATE factory_showcases SET moq = COALESCE(moq, min_order);
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'factory_showcases'
+          AND column_name = 'description'
+    ) THEN
+        UPDATE factory_showcases SET content = COALESCE(content, description);
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'factory_showcases'
+          AND column_name = 'image_url'
+    ) THEN
+        UPDATE factory_showcases
+           SET images = CASE
+               WHEN images = '[]'::jsonb AND COALESCE(image_url, '') <> ''
+                   THEN jsonb_build_array(image_url)
+               ELSE images
+           END;
+    END IF;
+END $$;
+
 UPDATE factory_showcases
-SET moq = COALESCE(moq, min_order),
-    content = COALESCE(content, description),
-    images = CASE
-        WHEN images = '[]'::jsonb AND COALESCE(image_url, '') <> ''
-            THEN jsonb_build_array(image_url)
-        ELSE images
-    END,
-    published_at = CASE
-        WHEN status = 'AC' AND published_at IS NULL THEN created_at
-        ELSE published_at
-    END;
+SET published_at = CASE
+    WHEN status = 'AC' AND published_at IS NULL THEN created_at
+    ELSE published_at
+END;
 
 ALTER TABLE factory_showcases
     DROP CONSTRAINT IF EXISTS factory_showcases_content_type_check,
+    DROP CONSTRAINT IF EXISTS factory_showcases_type_check,
     DROP CONSTRAINT IF EXISTS factory_showcases_status_check;
 
 ALTER TABLE factory_showcases
-    ADD CONSTRAINT factory_showcases_content_type_check CHECK (content_type IN ('PD', 'PM', 'ID')),
+    ADD CONSTRAINT factory_showcases_type_check CHECK ("type" IN ('PD', 'PM', 'ID')),
     ADD CONSTRAINT factory_showcases_status_check CHECK (status IN ('DR', 'AC', 'HI', 'AR'));
 
+ALTER TABLE factory_showcases
+    DROP CONSTRAINT IF EXISTS factory_showcases_images_max_5,
+    DROP CONSTRAINT IF EXISTS factory_showcases_linked_showcases_max_5,
+    DROP CONSTRAINT IF EXISTS factory_showcases_promo_date_order,
+    DROP CONSTRAINT IF EXISTS factory_showcases_promo_price_order,
+    DROP CONSTRAINT IF EXISTS factory_showcases_non_negative_values;
+
+ALTER TABLE factory_showcases
+    ADD CONSTRAINT factory_showcases_images_max_5
+        CHECK (jsonb_typeof(images) = 'array' AND jsonb_array_length(images) <= 5),
+    ADD CONSTRAINT factory_showcases_linked_showcases_max_5
+        CHECK (jsonb_typeof(linked_showcases) = 'array' AND jsonb_array_length(linked_showcases) <= 5),
+    ADD CONSTRAINT factory_showcases_promo_date_order
+        CHECK (start_date IS NULL OR end_date IS NULL OR end_date >= start_date),
+    ADD CONSTRAINT factory_showcases_promo_price_order
+        CHECK (base_price IS NULL OR promo_price IS NULL OR promo_price <= base_price),
+    ADD CONSTRAINT factory_showcases_non_negative_values
+        CHECK (
+            (moq IS NULL OR moq >= 0)
+            AND (production_capacity IS NULL OR production_capacity >= 0)
+            AND (lead_time_days IS NULL OR lead_time_days >= 0)
+            AND (base_price IS NULL OR base_price >= 0)
+            AND (promo_price IS NULL OR promo_price >= 0)
+        );
+
 CREATE INDEX IF NOT EXISTS idx_factory_showcases_type_status
-    ON factory_showcases(content_type, status);
+    ON factory_showcases("type", status);
 
 CREATE INDEX IF NOT EXISTS idx_factory_showcases_category
     ON factory_showcases(category_id, sub_category_id);
