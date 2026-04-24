@@ -150,6 +150,8 @@ func NewFrontendRepository(db *sqlx.DB) *FrontendRepository {
 
 func (r *FrontendRepository) GetCurrentUser(userID int64) (*FrontendCurrentUserRow, error) {
 	var item FrontendCurrentUserRow
+	// LIMIT 1 ป้องกัน db.Get() panic เมื่อ LEFT JOIN คืนหลาย row
+	// (เช่น factory_profiles หรือ wallets มีหลาย record ต่อ user_id)
 	query := `
 		SELECT
 			u.user_id AS id,
@@ -167,6 +169,7 @@ func (r *FrontendRepository) GetCurrentUser(userID int64) (*FrontendCurrentUserR
 		LEFT JOIN factory_profiles fp ON fp.user_id = u.user_id
 		LEFT JOIN wallets w ON w.user_id = u.user_id
 		WHERE u.user_id = $1
+		LIMIT 1
 	`
 	if err := r.db.Get(&item, query, userID); err != nil {
 		return nil, err

@@ -21,12 +21,25 @@ func NewFrontendService(repo *repository.FrontendRepository) *FrontendService {
 }
 
 func (s *FrontendService) GetBootstrap(userID int64) (*domain.FrontendBootstrapResponse, error) {
+	// anonymous request → return public data only
 	if userID <= 0 {
 		return s.getGuestBootstrap()
 	}
-	currentUser, err := s.GetCurrentUser(userID)
-	if err != nil {
-		return nil, err
+
+	// authenticated request — currentUser อาจเป็น nil ถ้า user ไม่พบในฐานข้อมูล
+	// (เช่น db.Get() fail เพราะ LEFT JOIN คืนหลาย row)
+	// ในกรณีนั้นยังโหลด public data + user-specific data ต่อได้
+	var currentUser *domain.FrontendCurrentUser
+	{
+		cu, err := s.GetCurrentUser(userID)
+		if err != nil {
+			if !repository.IsNotFoundError(err) {
+				return nil, err
+			}
+			// user not found → currentUser stays nil, load data as guest
+		} else {
+			currentUser = cu
+		}
 	}
 
 	categoryRows, err := s.repo.ListCategories()
@@ -37,17 +50,20 @@ func (s *FrontendService) GetBootstrap(userID int64) (*domain.FrontendBootstrapR
 	if err != nil {
 		return nil, err
 	}
-	rfqRows, err := s.repo.ListRFQsByUserID(userID)
-	if err != nil {
-		return nil, err
-	}
-	orderRows, err := s.repo.ListOrdersByUserID(userID)
-	if err != nil {
-		return nil, err
-	}
-	threadRows, err := s.repo.ListMessageThreads(userID)
-	if err != nil {
-		return nil, err
+
+	var rfqRows []repository.FrontendRFQRow
+	var orderRows []repository.FrontendOrderRow
+	var threadRows []repository.FrontendMessageThreadRow
+	if userID > 0 {
+		if rows, e := s.repo.ListRFQsByUserID(userID); e == nil {
+			rfqRows = rows
+		}
+		if rows, e := s.repo.ListOrdersByUserID(userID); e == nil {
+			orderRows = rows
+		}
+		if rows, e := s.repo.ListMessageThreads(userID); e == nil {
+			threadRows = rows
+		}
 	}
 
 	response := &domain.FrontendBootstrapResponse{
@@ -1164,9 +1180,33 @@ func (s *FrontendService) GetExploreData(userID int64) (*domain.ExploreData, err
 		}, nil
 	}
 
-	mockData, err := s.GetMockData(userID)
-	if err != nil {
-		return nil, err
+	// GetMockData ต้องการ userID สำหรับ currentUser แต่ Explore ไม่ต้องใช้
+	// ถ้า GetMockData fail (user not found ฯลฯ) ให้ fallback เป็น factories+categories จาก repo โดยตรง
+	mockData, mockErr := s.GetMockData(userID)
+	if mockErr != nil {
+		factoryRows, fErr := s.repo.ListFactories()
+		factories := make([]domain.MockFactory, 0)
+		if fErr == nil {
+			for idx, row := range factoryRows {
+				factories = append(factories, mapMockFactory(row))
+				_ = idx
+			}
+		}
+		categoryRows, cErr := s.repo.ListCategories()
+		categories := make([]domain.MockCategory, 0)
+		if cErr == nil {
+			for _, row := range categoryRows {
+				categories = append(categories, mapMockCategory(row))
+			}
+		}
+		return &domain.ExploreData{
+			Products:     products,
+			Promotions:   promotions,
+			PromoCodes:   promoCodes,
+			Factories:    factories,
+			IdeaArticles: []domain.MockIdeaArticle{},
+			Categories:   categories,
+		}, nil
 	}
 
 	return &domain.ExploreData{
