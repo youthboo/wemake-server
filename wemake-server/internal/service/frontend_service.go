@@ -440,26 +440,42 @@ func (s *FrontendService) GetMockData(userID int64) (*domain.FrontendMockDataRes
 }
 
 func (s *FrontendService) buildThreads(rows []repository.FrontendMessageThreadRow) ([]domain.FrontendMessageThread, error) {
+	log.Printf("[DEBUG] buildThreads: %d rows", len(rows))
 	items := make([]domain.FrontendMessageThread, 0, len(rows))
-	for _, item := range rows {
+	for idx, item := range rows {
+		log.Printf("[DEBUG] buildThreads: processing row %d, counterpartID=%d, refType=%s, refID=%d",
+			idx, item.CounterpartID, item.ReferenceType, item.ReferenceID)
+
+		// Graceful handling: use default values if data not found
+		counterpartName := fmt.Sprintf("User %d", item.CounterpartID)
 		userLabel, err := s.repo.GetUserLabel(item.CounterpartID)
-		if err != nil {
-			return nil, err
+		if err == nil {
+			counterpartName = userLabel.Name
+		} else {
+			log.Printf("[WARN] GetUserLabel failed for counterpartID=%d: %v (using default)", item.CounterpartID, err)
 		}
+
+		projectName := item.ReferenceType
+		hasQuote := false
 		reference, err := s.repo.GetReferenceLabel(item.ReferenceType, item.ReferenceID)
-		if err != nil {
-			return nil, err
+		if err == nil {
+			projectName = reference.ProjectName
+			hasQuote = reference.HasQuote
+		} else {
+			log.Printf("[WARN] GetReferenceLabel failed for refType=%s, refID=%d: %v (using default)",
+				item.ReferenceType, item.ReferenceID, err)
 		}
+
 		items = append(items, domain.FrontendMessageThread{
 			ReferenceType: item.ReferenceType,
 			ReferenceID:   fmt.Sprintf("%d", item.ReferenceID),
 			CounterpartID: item.CounterpartID,
-			Counterpart:   userLabel.Name,
-			ProjectName:   reference.ProjectName,
+			Counterpart:   counterpartName,
+			ProjectName:   projectName,
 			LastMessage:   item.LastMessage,
 			LastMessageAt: item.LastMessageAt,
 			Unread:        0,
-			HasQuote:      reference.HasQuote,
+			HasQuote:      hasQuote,
 			Avatar:        "",
 		})
 	}
