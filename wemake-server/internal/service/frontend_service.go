@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"log"
 	"net/url"
 	"sort"
 	"strconv"
@@ -21,8 +22,11 @@ func NewFrontendService(repo *repository.FrontendRepository) *FrontendService {
 }
 
 func (s *FrontendService) GetBootstrap(userID int64) (*domain.FrontendBootstrapResponse, error) {
+	log.Printf("[DEBUG] GetBootstrap service: userID=%d", userID)
+
 	// anonymous request → return public data only
 	if userID <= 0 {
+		log.Printf("[DEBUG] GetBootstrap: anonymous request (userID=%d), returning guest data", userID)
 		return s.getGuestBootstrap()
 	}
 
@@ -33,11 +37,14 @@ func (s *FrontendService) GetBootstrap(userID int64) (*domain.FrontendBootstrapR
 	{
 		cu, err := s.GetCurrentUser(userID)
 		if err != nil {
+			log.Printf("[WARN] GetCurrentUser failed: %v (type: %T), continuing with nil currentUser", err, err)
 			if !repository.IsNotFoundError(err) {
+				log.Printf("[ERROR] GetCurrentUser non-notfound error: %v", err)
 				return nil, err
 			}
 			// user not found → currentUser stays nil, load data as guest
 		} else {
+			log.Printf("[DEBUG] GetCurrentUser success: id=%d, name=%s", cu.ID, cu.Name)
 			currentUser = cu
 		}
 	}
