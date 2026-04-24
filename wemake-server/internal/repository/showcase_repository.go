@@ -33,6 +33,7 @@ const showcaseExploreBaseSQL = `
 		fs.promo_price,
 		fs.start_date,
 		fs.end_date,
+		fs.linked_showcases,
 		COALESCE(fs.tags, '[]'::jsonb) AS tags,
 		fs.likes_count,
 		fs.view_count,

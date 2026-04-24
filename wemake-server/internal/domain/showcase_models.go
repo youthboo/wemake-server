@@ -44,6 +44,7 @@ type ShowcaseExploreItem struct {
 	PromoPrice      *float64        `db:"promo_price" json:"promo_price,omitempty"`
 	StartDate       *time.Time      `db:"start_date" json:"start_date,omitempty"`
 	EndDate         *time.Time      `db:"end_date" json:"end_date,omitempty"`
+	LinkedShowcases JSONLinkArray   `db:"linked_showcases" json:"linked_showcases"`
 	Tags            JSONStringArray `db:"tags" json:"tags"`
 	LikesCount      int             `db:"likes_count" json:"likes_count"`
 	ViewCount       int64           `db:"view_count" json:"view_count"`

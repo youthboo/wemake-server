@@ -21,6 +21,9 @@ func NewFrontendService(repo *repository.FrontendRepository) *FrontendService {
 }
 
 func (s *FrontendService) GetBootstrap(userID int64) (*domain.FrontendBootstrapResponse, error) {
+	if userID <= 0 {
+		return s.getGuestBootstrap()
+	}
 	currentUser, err := s.GetCurrentUser(userID)
 	if err != nil {
 		return nil, err
@@ -78,6 +81,35 @@ func (s *FrontendService) GetBootstrap(userID int64) (*domain.FrontendBootstrapR
 	}
 	response.Threads = threads
 
+	return response, nil
+}
+
+func (s *FrontendService) getGuestBootstrap() (*domain.FrontendBootstrapResponse, error) {
+	categoryRows, err := s.repo.ListCategories()
+	if err != nil {
+		return nil, err
+	}
+	factoryRows, err := s.repo.ListFactories()
+	if err != nil {
+		return nil, err
+	}
+	response := &domain.FrontendBootstrapResponse{
+		CurrentUser: nil,
+		Categories:  make([]domain.FrontendCategory, 0, len(categoryRows)),
+		Factories:   make([]domain.FrontendFactoryCard, 0, len(factoryRows)),
+		RFQs:        []domain.FrontendRFQCard{},
+		Orders:      []domain.FrontendOrderCard{},
+		Threads:     []domain.FrontendMessageThread{},
+	}
+	for _, item := range categoryRows {
+		response.Categories = append(response.Categories, domain.FrontendCategory{
+			ID:   item.ID,
+			Name: item.Name,
+		})
+	}
+	for _, item := range factoryRows {
+		response.Factories = append(response.Factories, mapFactoryCard(item))
+	}
 	return response, nil
 }
 
@@ -1101,6 +1133,35 @@ func (s *FrontendService) GetExploreData(userID int64) (*domain.ExploreData, err
 	promoCodes, err := s.GetPromoCodes()
 	if err != nil {
 		promoCodes = []domain.PromoCode{}
+	}
+	if userID <= 0 {
+		factoryRows, err := s.repo.ListFactories()
+		if err != nil {
+			return nil, err
+		}
+		categoryRows, err := s.repo.ListCategories()
+		if err != nil {
+			return nil, err
+		}
+		factories := make([]domain.MockFactory, 0, len(factoryRows))
+		ideaArticles := make([]domain.MockIdeaArticle, 0, len(factoryRows))
+		for index, row := range factoryRows {
+			factory := mapMockFactory(row)
+			factories = append(factories, factory)
+			ideaArticles = append(ideaArticles, buildMockIdeaArticle(factory, index))
+		}
+		categories := make([]domain.MockCategory, 0, len(categoryRows))
+		for _, item := range categoryRows {
+			categories = append(categories, mapMockCategory(item))
+		}
+		return &domain.ExploreData{
+			Products:     products,
+			Promotions:   promotions,
+			PromoCodes:   promoCodes,
+			Factories:    factories,
+			IdeaArticles: ideaArticles,
+			Categories:   categories,
+		}, nil
 	}
 
 	mockData, err := s.GetMockData(userID)

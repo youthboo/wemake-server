@@ -21,3 +21,11 @@ func getUserIDFromHeader(c *fiber.Ctx) (int64, error) {
 	userIDStr := c.Get("X-User-ID")
 	return strconv.ParseInt(userIDStr, 10, 64)
 }
+
+func getOptionalUserIDFromHeader(c *fiber.Ctx) int64 {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return 0
+	}
+	return userID
+}

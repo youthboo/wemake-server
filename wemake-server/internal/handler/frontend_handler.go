@@ -15,14 +15,10 @@ func NewFrontendHandler(service *service.FrontendService) *FrontendHandler {
 }
 
 func (h *FrontendHandler) GetBootstrap(c *fiber.Ctx) error {
-	userID, err := getUserIDFromHeader(c)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid user context"})
-	}
-
+	userID := getOptionalUserIDFromHeader(c)
 	item, err := h.service.GetBootstrap(userID)
 	if err != nil {
-		if repository.IsNotFoundError(err) {
+		if userID > 0 && repository.IsNotFoundError(err) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
 		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch bootstrap data"})
@@ -173,14 +169,10 @@ func (h *FrontendHandler) GetPromoCodes(c *fiber.Ctx) error {
 }
 
 func (h *FrontendHandler) GetExplore(c *fiber.Ctx) error {
-	userID, err := getUserIDFromHeader(c)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid user context"})
-	}
-
+	userID := getOptionalUserIDFromHeader(c)
 	item, err := h.service.GetExploreData(userID)
 	if err != nil {
-		if repository.IsNotFoundError(err) {
+		if userID > 0 && repository.IsNotFoundError(err) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
 		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch explore data"})
