@@ -51,6 +51,8 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	disputeRepo := repository.NewDisputeRepository(db)
 	quotationTemplateRepo := repository.NewQuotationTemplateRepository(db)
 	paymentScheduleRepo := repository.NewPaymentScheduleRepository(db)
+	platformConfigRepo := repository.NewPlatformConfigRepository(db)
+	quotationItemRepo := repository.NewQuotationItemRepository(db)
 
 	// Initialize services
 	authService := service.NewAuthService(authRepo, cfg.JWTSecret)
@@ -58,8 +60,10 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	addressService := service.NewAddressService(addressRepo)
 	walletService := service.NewWalletService(walletRepo, transactionRepo)
 	rfqService := service.NewRFQService(rfqRepo)
-	quotationService := service.NewQuotationService(quotationRepo, rfqRepo)
 	orderService := service.NewOrderService(db, orderRepo, paymentScheduleRepo, walletRepo, transactionRepo, quotationRepo, rfqRepo)
+	commissionService := service.NewCommissionService(platformConfigRepo)
+	platformConfigService := service.NewPlatformConfigService(db, platformConfigRepo)
+	quotationService := service.NewQuotationService(db, quotationRepo, rfqRepo, quotationItemRepo, commissionService, orderService)
 	orderPaymentService := service.NewOrderPaymentService(db)
 	productionService := service.NewProductionService(productionRepo)
 	messageService := service.NewMessageService(messageRepo, conversationRepo)
@@ -113,6 +117,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	disputeHandler := handler.NewDisputeHandler(disputeService)
 	quotationTemplateHandler := handler.NewQuotationTemplateHandler(quotationTemplateService)
 	paymentScheduleHandler := handler.NewPaymentScheduleHandler(paymentScheduleService)
+	platformConfigHandler := handler.NewPlatformConfigHandler(platformConfigService, authService)
 
 	// Health check route
 	app.Get("/health", func(c *fiber.Ctx) error {
@@ -122,6 +127,12 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	// Factory routes
 	api := app.Group("/api/v1")
 	api.Use(middleware.AuthContext(cfg.JWTSecret))
+
+	admin := app.Group("/api/admin")
+	admin.Use(middleware.AuthContext(cfg.JWTSecret))
+	admin.Get("/platform-config", platformConfigHandler.GetActive)
+	admin.Post("/platform-config", platformConfigHandler.Create)
+	admin.Get("/platform-config/history", platformConfigHandler.ListHistory)
 
 	auth := api.Group("/auth")
 	auth.Post("/register", authHandler.Register)
@@ -170,15 +181,21 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	rfqs.Get("/matching", rfqHandler.ListMatching)
 	rfqs.Get("/", rfqHandler.ListRFQs)
 	rfqs.Get("/:rfq_id", rfqHandler.GetRFQ)
+	rfqs.Patch("/:rfq_id", rfqHandler.PatchRFQ)
 	rfqs.Patch("/:rfq_id/cancel", rfqHandler.CancelRFQ)
 	rfqs.Post("/:rfq_id/quotations", quotationHandler.CreateQuotation)
 	rfqs.Get("/:rfq_id/quotations", quotationHandler.ListQuotationsByRFQ)
 
 	quotations := api.Group("/quotations")
+	quotations.Post("/preview", quotationHandler.Preview)
+	quotations.Post("/", quotationHandler.CreateDetailed)
 	quotations.Get("/", quotationHandler.ListCollection)
 	quotations.Get("/me", quotationHandler.ListMine)
 	quotations.Get("/:quotation_id/history", quotationHandler.ListHistory)
 	quotations.Get("/:quotation_id", quotationHandler.GetQuotation)
+	quotations.Post("/:quotation_id/revision", quotationHandler.CreateRevision)
+	quotations.Post("/:quotation_id/accept", quotationHandler.Accept)
+	quotations.Post("/:quotation_id/reject", quotationHandler.Reject)
 	quotations.Patch("/:quotation_id", quotationHandler.PatchQuotation)
 	quotations.Patch("/:quotation_id/status", quotationHandler.PatchQuotationStatus)
 

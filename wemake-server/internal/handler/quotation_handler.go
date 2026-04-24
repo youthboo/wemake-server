@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/yourusername/wemake/internal/domain"
@@ -171,11 +172,176 @@ func (h *QuotationHandler) ListHistory(c *fiber.Ctx) error {
 	if !ok {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "not authorized"})
 	}
-	items, err := h.service.ListHistory(int64(quotationID))
+	items, err := h.service.ListRevisionChain(int64(quotationID))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch history"})
 	}
 	return c.JSON(items)
+}
+
+func (h *QuotationHandler) Preview(c *fiber.Ctx) error {
+	type reqBody struct {
+		Items           []domain.QuotationItem `json:"items"`
+		DiscountAmount  float64                `json:"discount_amount"`
+		ShippingCost    float64                `json:"shipping_cost"`
+		PackagingCost   float64                `json:"packaging_cost"`
+		ToolingMoldCost float64                `json:"tooling_mold_cost"`
+	}
+	if _, err := getUserIDFromHeader(c); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
+	}
+	var req reqBody
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	item, err := h.service.Preview(req.Items, req.DiscountAmount, req.ShippingCost, req.PackagingCost, req.ToolingMoldCost)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(item)
+}
+
+func (h *QuotationHandler) CreateDetailed(c *fiber.Ctx) error {
+	type reqBody struct {
+		RFQID                int64                  `json:"rfq_id"`
+		Items                []domain.QuotationItem `json:"items"`
+		DiscountAmount       float64                `json:"discount_amount"`
+		ShippingCost         float64                `json:"shipping_cost"`
+		ShippingMethod       *string                `json:"shipping_method"`
+		PackagingCost        float64                `json:"packaging_cost"`
+		ToolingMoldCost      float64                `json:"tooling_mold_cost"`
+		LeadTimeDays         *int64                 `json:"lead_time_days"`
+		ProductionStartDate  *string                `json:"production_start_date"`
+		DeliveryDate         *string                `json:"delivery_date"`
+		Incoterms            *string                `json:"incoterms"`
+		PaymentTerms         *string                `json:"payment_terms"`
+		ValidityDays         int                    `json:"validity_days"`
+		WarrantyPeriodMonths *int                   `json:"warranty_period_months"`
+	}
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
+	}
+	var req reqBody
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	item := &domain.Quotation{
+		RFQID:                req.RFQID,
+		FactoryID:            userID,
+		Items:                req.Items,
+		DiscountAmount:       req.DiscountAmount,
+		ShippingCost:         req.ShippingCost,
+		ShippingMethod:       req.ShippingMethod,
+		PackagingCost:        req.PackagingCost,
+		ToolingMoldCost:      req.ToolingMoldCost,
+		Incoterms:            req.Incoterms,
+		PaymentTerms:         req.PaymentTerms,
+		ValidityDays:         req.ValidityDays,
+		WarrantyPeriodMonths: req.WarrantyPeriodMonths,
+	}
+	if req.LeadTimeDays != nil {
+		item.LeadTimeDays = *req.LeadTimeDays
+	}
+	if req.ProductionStartDate != nil && strings.TrimSpace(*req.ProductionStartDate) != "" {
+		d, err := time.Parse("2006-01-02", strings.TrimSpace(*req.ProductionStartDate))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "production_start_date must be YYYY-MM-DD"})
+		}
+		item.ProductionStartDate = &d
+	}
+	if req.DeliveryDate != nil && strings.TrimSpace(*req.DeliveryDate) != "" {
+		d, err := time.Parse("2006-01-02", strings.TrimSpace(*req.DeliveryDate))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "delivery_date must be YYYY-MM-DD"})
+		}
+		item.DeliveryDate = &d
+	}
+	if err := h.service.CreateDetailed(item); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.Status(fiber.StatusCreated).JSON(item)
+}
+
+func (h *QuotationHandler) CreateRevision(c *fiber.Ctx) error {
+	parentID, err := c.ParamsInt("quotation_id")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid quotation_id"})
+	}
+	type reqBody struct {
+		Items                []domain.QuotationItem `json:"items"`
+		DiscountAmount       float64                `json:"discount_amount"`
+		ShippingCost         float64                `json:"shipping_cost"`
+		ShippingMethod       *string                `json:"shipping_method"`
+		PackagingCost        float64                `json:"packaging_cost"`
+		ToolingMoldCost      float64                `json:"tooling_mold_cost"`
+		LeadTimeDays         *int64                 `json:"lead_time_days"`
+		ProductionStartDate  *string                `json:"production_start_date"`
+		DeliveryDate         *string                `json:"delivery_date"`
+		Incoterms            *string                `json:"incoterms"`
+		PaymentTerms         *string                `json:"payment_terms"`
+		ValidityDays         int                    `json:"validity_days"`
+		WarrantyPeriodMonths *int                   `json:"warranty_period_months"`
+	}
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
+	}
+	var req reqBody
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	item := &domain.Quotation{
+		FactoryID:            userID,
+		Items:                req.Items,
+		DiscountAmount:       req.DiscountAmount,
+		ShippingCost:         req.ShippingCost,
+		ShippingMethod:       req.ShippingMethod,
+		PackagingCost:        req.PackagingCost,
+		ToolingMoldCost:      req.ToolingMoldCost,
+		Incoterms:            req.Incoterms,
+		PaymentTerms:         req.PaymentTerms,
+		ValidityDays:         req.ValidityDays,
+		WarrantyPeriodMonths: req.WarrantyPeriodMonths,
+	}
+	if req.LeadTimeDays != nil {
+		item.LeadTimeDays = *req.LeadTimeDays
+	}
+	if err := h.service.CreateRevision(int64(parentID), userID, item); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.Status(fiber.StatusCreated).JSON(item)
+}
+
+func (h *QuotationHandler) Accept(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
+	}
+	quotationID, err := c.ParamsInt("quotation_id")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid quotation_id"})
+	}
+	order, err := h.service.Accept(int64(quotationID), userID)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(order)
+}
+
+func (h *QuotationHandler) Reject(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
+	}
+	quotationID, err := c.ParamsInt("quotation_id")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid quotation_id"})
+	}
+	if err := h.service.Reject(int64(quotationID), userID); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(fiber.Map{"message": "quotation rejected"})
 }
 
 func (h *QuotationHandler) PatchQuotation(c *fiber.Ctx) error {

@@ -21,17 +21,36 @@ func NewRFQHandler(rfqService *service.RFQService, authService *service.AuthServ
 
 func (h *RFQHandler) CreateRFQ(c *fiber.Ctx) error {
 	type createRFQRequest struct {
-		CategoryID       int64    `json:"category_id"`
-		SubCategoryID    *int64   `json:"sub_category_id"`
-		Title            string   `json:"title"`
-		Quantity         int64    `json:"quantity"`
-		UnitID           int64    `json:"unit_id"`
-		BudgetPerPiece   float64  `json:"budget_per_piece"`
-		Details          string   `json:"details"`
-		AddressID        int64    `json:"address_id"`
-		ShippingMethodID *int64   `json:"shipping_method_id"`
-		DeadlineDate     *string  `json:"deadline_date"`
-		ImageURLs        []string `json:"image_urls"`
+		CategoryID             int64         `json:"category_id"`
+		SubCategoryID          *int64        `json:"sub_category_id"`
+		Title                  string        `json:"title"`
+		Quantity               int64         `json:"quantity"`
+		UnitID                 int64         `json:"unit_id"`
+		BudgetPerPiece         float64       `json:"budget_per_piece"`
+		Details                string        `json:"details"`
+		AddressID              int64         `json:"address_id"`
+		ShippingMethodID       *int64        `json:"shipping_method_id"`
+		DeadlineDate           *string       `json:"deadline_date"`
+		ImageURLs              []string      `json:"image_urls"`
+		MaterialGrade          *string       `json:"material_grade"`
+		Tolerance              *string       `json:"tolerance"`
+		ColorFinish            *string       `json:"color_finish"`
+		DimensionSpec          *domain.JSONB `json:"dimension_spec"`
+		WeightTargetG          *float64      `json:"weight_target_g"`
+		PackagingSpec          *string       `json:"packaging_spec"`
+		TargetUnitPrice        *float64      `json:"target_unit_price"`
+		TargetLeadTimeDays     *int          `json:"target_lead_time_days"`
+		RequiredDeliveryDate   *string       `json:"required_delivery_date"`
+		Incoterms              *string       `json:"incoterms"`
+		PaymentTerms           *string       `json:"payment_terms"`
+		DeliveryAddressID      *int64        `json:"delivery_address_id"`
+		CertificationsRequired []string      `json:"certifications_required"`
+		SampleRequired         bool          `json:"sample_required"`
+		SampleQty              *int          `json:"sample_qty"`
+		InspectionType         *string       `json:"inspection_type"`
+		TechDrawingURL         *string       `json:"tech_drawing_url"`
+		ReferenceImages        []string      `json:"reference_images"`
+		SpecSheetURL           *string       `json:"spec_sheet_url"`
 	}
 
 	userID, err := getUserIDFromHeader(c)
@@ -49,17 +68,35 @@ func (h *RFQHandler) CreateRFQ(c *fiber.Ctx) error {
 	}
 
 	rfq := &domain.RFQ{
-		UserID:           userID,
-		CategoryID:       req.CategoryID,
-		SubCategoryID:    req.SubCategoryID,
-		Title:            req.Title,
-		Quantity:         req.Quantity,
-		UnitID:           req.UnitID,
-		BudgetPerPiece:   req.BudgetPerPiece,
-		Details:          req.Details,
-		AddressID:        req.AddressID,
-		ShippingMethodID: req.ShippingMethodID,
-		ImageURLs:        domain.JSONStringArray(req.ImageURLs),
+		UserID:                 userID,
+		CategoryID:             req.CategoryID,
+		SubCategoryID:          req.SubCategoryID,
+		Title:                  req.Title,
+		Quantity:               req.Quantity,
+		UnitID:                 req.UnitID,
+		BudgetPerPiece:         req.BudgetPerPiece,
+		Details:                req.Details,
+		AddressID:              req.AddressID,
+		ShippingMethodID:       req.ShippingMethodID,
+		ImageURLs:              domain.JSONStringArray(req.ImageURLs),
+		MaterialGrade:          req.MaterialGrade,
+		Tolerance:              req.Tolerance,
+		ColorFinish:            req.ColorFinish,
+		DimensionSpec:          req.DimensionSpec,
+		WeightTargetG:          req.WeightTargetG,
+		PackagingSpec:          req.PackagingSpec,
+		TargetUnitPrice:        req.TargetUnitPrice,
+		TargetLeadTimeDays:     req.TargetLeadTimeDays,
+		Incoterms:              req.Incoterms,
+		PaymentTerms:           req.PaymentTerms,
+		DeliveryAddressID:      req.DeliveryAddressID,
+		CertificationsRequired: req.CertificationsRequired,
+		SampleRequired:         req.SampleRequired,
+		SampleQty:              req.SampleQty,
+		InspectionType:         req.InspectionType,
+		TechDrawingURL:         req.TechDrawingURL,
+		ReferenceImages:        req.ReferenceImages,
+		SpecSheetURL:           req.SpecSheetURL,
 	}
 	if req.DeadlineDate != nil && strings.TrimSpace(*req.DeadlineDate) != "" {
 		d, err := time.Parse("2006-01-02", strings.TrimSpace(*req.DeadlineDate))
@@ -68,14 +105,97 @@ func (h *RFQHandler) CreateRFQ(c *fiber.Ctx) error {
 		}
 		rfq.DeadlineDate = &d
 	}
+	if req.RequiredDeliveryDate != nil && strings.TrimSpace(*req.RequiredDeliveryDate) != "" {
+		d, err := time.Parse("2006-01-02", strings.TrimSpace(*req.RequiredDeliveryDate))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "required_delivery_date must be YYYY-MM-DD"})
+		}
+		rfq.RequiredDeliveryDate = &d
+	}
 
 	if err := h.service.Create(rfq); err != nil {
-		if err == service.ErrInvalidSubCategory || err == service.ErrInvalidShippingMethod || err == service.ErrMaxRFQImages {
+		if err == service.ErrInvalidSubCategory || err == service.ErrInvalidShippingMethod || err == service.ErrMaxRFQImages || err == service.ErrRFQIncotermsInvalid || err == service.ErrRFQPaymentTermsInvalid || err == service.ErrRFQInspectionInvalid {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create rfq"})
 	}
 	return c.Status(fiber.StatusCreated).JSON(rfq)
+}
+
+func (h *RFQHandler) PatchRFQ(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
+	}
+	rfqID, err := c.ParamsInt("rfq_id")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid rfq_id"})
+	}
+	type patchRFQRequest struct {
+		CategoryID             int64         `json:"category_id"`
+		SubCategoryID          *int64        `json:"sub_category_id"`
+		Title                  string        `json:"title"`
+		Quantity               int64         `json:"quantity"`
+		UnitID                 int64         `json:"unit_id"`
+		BudgetPerPiece         float64       `json:"budget_per_piece"`
+		Details                string        `json:"details"`
+		AddressID              int64         `json:"address_id"`
+		ShippingMethodID       *int64        `json:"shipping_method_id"`
+		DeadlineDate           *string       `json:"deadline_date"`
+		ImageURLs              []string      `json:"image_urls"`
+		MaterialGrade          *string       `json:"material_grade"`
+		Tolerance              *string       `json:"tolerance"`
+		ColorFinish            *string       `json:"color_finish"`
+		DimensionSpec          *domain.JSONB `json:"dimension_spec"`
+		WeightTargetG          *float64      `json:"weight_target_g"`
+		PackagingSpec          *string       `json:"packaging_spec"`
+		TargetUnitPrice        *float64      `json:"target_unit_price"`
+		TargetLeadTimeDays     *int          `json:"target_lead_time_days"`
+		RequiredDeliveryDate   *string       `json:"required_delivery_date"`
+		Incoterms              *string       `json:"incoterms"`
+		PaymentTerms           *string       `json:"payment_terms"`
+		DeliveryAddressID      *int64        `json:"delivery_address_id"`
+		CertificationsRequired []string      `json:"certifications_required"`
+		SampleRequired         bool          `json:"sample_required"`
+		SampleQty              *int          `json:"sample_qty"`
+		InspectionType         *string       `json:"inspection_type"`
+		TechDrawingURL         *string       `json:"tech_drawing_url"`
+		ReferenceImages        []string      `json:"reference_images"`
+		SpecSheetURL           *string       `json:"spec_sheet_url"`
+	}
+	var req patchRFQRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	rfq := &domain.RFQ{
+		CategoryID: req.CategoryID, SubCategoryID: req.SubCategoryID, Title: req.Title, Quantity: req.Quantity,
+		UnitID: req.UnitID, BudgetPerPiece: req.BudgetPerPiece, Details: req.Details, AddressID: req.AddressID,
+		ShippingMethodID: req.ShippingMethodID, ImageURLs: domain.JSONStringArray(req.ImageURLs),
+		MaterialGrade: req.MaterialGrade, Tolerance: req.Tolerance, ColorFinish: req.ColorFinish, DimensionSpec: req.DimensionSpec,
+		WeightTargetG: req.WeightTargetG, PackagingSpec: req.PackagingSpec, TargetUnitPrice: req.TargetUnitPrice,
+		TargetLeadTimeDays: req.TargetLeadTimeDays, Incoterms: req.Incoterms, PaymentTerms: req.PaymentTerms,
+		DeliveryAddressID: req.DeliveryAddressID, CertificationsRequired: req.CertificationsRequired, SampleRequired: req.SampleRequired,
+		SampleQty: req.SampleQty, InspectionType: req.InspectionType, TechDrawingURL: req.TechDrawingURL, ReferenceImages: req.ReferenceImages,
+		SpecSheetURL: req.SpecSheetURL,
+	}
+	if req.DeadlineDate != nil && strings.TrimSpace(*req.DeadlineDate) != "" {
+		d, err := time.Parse("2006-01-02", strings.TrimSpace(*req.DeadlineDate))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "deadline_date must be YYYY-MM-DD"})
+		}
+		rfq.DeadlineDate = &d
+	}
+	if req.RequiredDeliveryDate != nil && strings.TrimSpace(*req.RequiredDeliveryDate) != "" {
+		d, err := time.Parse("2006-01-02", strings.TrimSpace(*req.RequiredDeliveryDate))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "required_delivery_date must be YYYY-MM-DD"})
+		}
+		rfq.RequiredDeliveryDate = &d
+	}
+	if err := h.service.Patch(userID, int64(rfqID), rfq); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(rfq)
 }
 
 func (h *RFQHandler) ListRFQs(c *fiber.Ctx) error {

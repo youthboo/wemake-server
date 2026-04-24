@@ -13,9 +13,12 @@ import (
 const maxRFQImages = 5
 
 var (
-	ErrMaxRFQImages          = errors.New("at most 5 image_urls are allowed")
-	ErrInvalidSubCategory    = errors.New("sub_category_id is invalid for the selected category")
-	ErrInvalidShippingMethod = errors.New("shipping_method_id is invalid")
+	ErrMaxRFQImages           = errors.New("at most 5 image_urls are allowed")
+	ErrInvalidSubCategory     = errors.New("sub_category_id is invalid for the selected category")
+	ErrInvalidShippingMethod  = errors.New("shipping_method_id is invalid")
+	ErrRFQIncotermsInvalid    = errors.New("incoterms is invalid")
+	ErrRFQPaymentTermsInvalid = errors.New("payment_terms is invalid")
+	ErrRFQInspectionInvalid   = errors.New("inspection_type is invalid")
 )
 
 type RFQService struct {
@@ -76,6 +79,9 @@ func (s *RFQService) Create(rfq *domain.RFQ) error {
 			return ErrInvalidShippingMethod
 		}
 	}
+	if err := validateRFQEnums(rfq); err != nil {
+		return err
+	}
 
 	return s.repo.Create(rfq)
 }
@@ -118,4 +124,71 @@ func (s *RFQService) GetForViewer(userID int64, role string, rfqID int64) (*doma
 		return rfq, nil
 	}
 	return s.GetByID(userID, rfqID)
+}
+
+func validateRFQEnums(rfq *domain.RFQ) error {
+	if rfq.Incoterms != nil {
+		switch strings.TrimSpace(strings.ToUpper(*rfq.Incoterms)) {
+		case "EXW", "FOB", "CIF", "DDP":
+		default:
+			return ErrRFQIncotermsInvalid
+		}
+	}
+	if rfq.PaymentTerms != nil {
+		switch strings.TrimSpace(*rfq.PaymentTerms) {
+		case "50_50", "30_70", "net_30", "lc_at_sight":
+		default:
+			return ErrRFQPaymentTermsInvalid
+		}
+	}
+	if rfq.InspectionType != nil {
+		switch strings.TrimSpace(*rfq.InspectionType) {
+		case "self", "third_party", "buyer_onsite":
+		default:
+			return ErrRFQInspectionInvalid
+		}
+	}
+	return nil
+}
+
+func (s *RFQService) Patch(userID, rfqID int64, rfq *domain.RFQ) error {
+	existing, err := s.repo.GetByID(userID, rfqID)
+	if err != nil {
+		return err
+	}
+	if existing.Status != "OP" {
+		return errors.New("rfq is not editable")
+	}
+	rfq.RFQID = rfqID
+	rfq.UserID = userID
+	rfq.Status = existing.Status
+	rfq.CreatedAt = existing.CreatedAt
+	rfq.UploadedAt = existing.UploadedAt
+	rfq.UpdatedAt = time.Now()
+	rfq.ImageURLs = normalizeRFQImageURLs([]string(rfq.ImageURLs))
+	if len(rfq.ImageURLs) > maxRFQImages {
+		return ErrMaxRFQImages
+	}
+	if rfq.SubCategoryID != nil {
+		valid, err := s.repo.SubCategoryBelongsToCategory(*rfq.SubCategoryID, rfq.CategoryID)
+		if err != nil {
+			return err
+		}
+		if !valid {
+			return ErrInvalidSubCategory
+		}
+	}
+	if rfq.ShippingMethodID != nil {
+		valid, err := s.repo.ShippingMethodExists(*rfq.ShippingMethodID)
+		if err != nil {
+			return err
+		}
+		if !valid {
+			return ErrInvalidShippingMethod
+		}
+	}
+	if err := validateRFQEnums(rfq); err != nil {
+		return err
+	}
+	return s.repo.Patch(userID, rfqID, rfq)
 }

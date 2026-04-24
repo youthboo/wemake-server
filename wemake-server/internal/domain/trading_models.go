@@ -20,6 +20,32 @@ type Quotation struct {
 	IsLocked         bool       `db:"is_locked" json:"is_locked"`
 	LastEditedAt     *time.Time `db:"last_edited_at" json:"last_edited_at,omitempty"`
 	LastEditedBy     *int64     `db:"last_edited_by" json:"last_edited_by,omitempty"`
+
+	Subtotal                 float64 `db:"subtotal" json:"subtotal"`
+	DiscountAmount           float64 `db:"discount_amount" json:"discount_amount"`
+	ShippingCost             float64 `db:"shipping_cost" json:"shipping_cost"`
+	ShippingMethod           *string `db:"shipping_method" json:"shipping_method,omitempty"`
+	PackagingCost            float64 `db:"packaging_cost" json:"packaging_cost"`
+	ToolingMoldCost          float64 `db:"tooling_mold_cost" json:"tooling_mold_cost"`
+	VatRate                  float64 `db:"vat_rate" json:"vat_rate"`
+	VatAmount                float64 `db:"vat_amount" json:"vat_amount"`
+	PlatformCommissionRate   float64 `db:"platform_commission_rate" json:"platform_commission_rate"`
+	PlatformCommissionAmount float64 `db:"platform_commission_amount" json:"platform_commission_amount"`
+	PlatformConfigID         *int64  `db:"platform_config_id" json:"platform_config_id,omitempty"`
+	GrandTotal               float64 `db:"grand_total" json:"grand_total"`
+	FactoryNetReceivable     float64 `db:"factory_net_receivable" json:"factory_net_receivable"`
+
+	ProductionStartDate  *time.Time `db:"production_start_date" json:"production_start_date,omitempty"`
+	DeliveryDate         *time.Time `db:"delivery_date" json:"delivery_date,omitempty"`
+	Incoterms            *string    `db:"incoterms" json:"incoterms,omitempty"`
+	PaymentTerms         *string    `db:"payment_terms" json:"payment_terms,omitempty"`
+	ValidityDays         int        `db:"validity_days" json:"validity_days"`
+	ValidUntil           *time.Time `db:"valid_until" json:"valid_until,omitempty"`
+	WarrantyPeriodMonths *int       `db:"warranty_period_months" json:"warranty_period_months,omitempty"`
+
+	RevisionNo        int             `db:"revision_no" json:"revision_no"`
+	ParentQuotationID *int64          `db:"parent_quotation_id" json:"parent_quotation_id,omitempty"`
+	Items             []QuotationItem `db:"-" json:"items,omitempty"`
 }
 
 type QuotationHistoryEntry struct {

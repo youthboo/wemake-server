@@ -19,17 +19,43 @@ func NewQuotationRepository(db *sqlx.DB) *QuotationRepository {
 
 func quotationSelectBase() string {
 	return `SELECT quote_id, rfq_id, factory_id, price_per_piece, mold_cost, lead_time_days, shipping_method_id, status, create_time, log_timestamp,
-		COALESCE(version, 1) AS version, COALESCE(is_locked, false) AS is_locked, last_edited_at, last_edited_by
+		COALESCE(version, 1) AS version, COALESCE(is_locked, false) AS is_locked, last_edited_at, last_edited_by,
+		subtotal, discount_amount, shipping_cost, shipping_method, packaging_cost, tooling_mold_cost,
+		vat_rate, vat_amount, platform_commission_rate, platform_commission_amount, platform_config_id,
+		grand_total, factory_net_receivable, production_start_date, delivery_date, incoterms, payment_terms,
+		validity_days, valid_until, warranty_period_months, COALESCE(revision_no, 1) AS revision_no, parent_quotation_id
 		FROM quotations`
 }
 
 func (r *QuotationRepository) Create(item *domain.Quotation) error {
+	return r.createWithExecutor(r.db, item)
+}
+
+func (r *QuotationRepository) CreateTx(tx *sqlx.Tx, item *domain.Quotation) error {
+	return r.createWithExecutor(tx, item)
+}
+
+type quotationExecutor interface {
+	QueryRow(query string, args ...interface{}) *sql.Row
+}
+
+func (r *QuotationRepository) createWithExecutor(exec quotationExecutor, item *domain.Quotation) error {
 	query := `
-		INSERT INTO quotations (rfq_id, factory_id, price_per_piece, mold_cost, lead_time_days, shipping_method_id, status, create_time, log_timestamp)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO quotations (
+			rfq_id, factory_id, price_per_piece, mold_cost, lead_time_days, shipping_method_id, status, create_time, log_timestamp,
+			subtotal, discount_amount, shipping_cost, shipping_method, packaging_cost, tooling_mold_cost,
+			vat_rate, vat_amount, platform_commission_rate, platform_commission_amount, platform_config_id,
+			grand_total, factory_net_receivable, production_start_date, delivery_date, incoterms, payment_terms,
+			validity_days, valid_until, warranty_period_months, revision_no, parent_quotation_id
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+		        $10,$11,$12,$13,$14,$15,
+		        $16,$17,$18,$19,$20,
+		        $21,$22,$23,$24,$25,$26,
+		        $27,$28,$29,$30,$31)
 		RETURNING quote_id
 	`
-	if err := r.db.QueryRow(
+	if err := exec.QueryRow(
 		query,
 		item.RFQID,
 		item.FactoryID,
@@ -40,6 +66,28 @@ func (r *QuotationRepository) Create(item *domain.Quotation) error {
 		item.Status,
 		item.CreateTime,
 		item.LogTimestamp,
+		item.Subtotal,
+		item.DiscountAmount,
+		item.ShippingCost,
+		nullableStringPtr(item.ShippingMethod),
+		item.PackagingCost,
+		item.ToolingMoldCost,
+		item.VatRate,
+		item.VatAmount,
+		item.PlatformCommissionRate,
+		item.PlatformCommissionAmount,
+		nullableInt64Value(item.PlatformConfigID),
+		item.GrandTotal,
+		item.FactoryNetReceivable,
+		nullableTimeValue(item.ProductionStartDate),
+		nullableTimeValue(item.DeliveryDate),
+		nullableStringPtr(item.Incoterms),
+		nullableStringPtr(item.PaymentTerms),
+		item.ValidityDays,
+		nullableTimeValue(item.ValidUntil),
+		nullableIntValue(item.WarrantyPeriodMonths),
+		item.RevisionNo,
+		nullableInt64Value(item.ParentQuotationID),
 	).Scan(&item.QuotationID); err != nil {
 		return err
 	}
@@ -201,6 +249,24 @@ func (r *QuotationRepository) ListHistory(quoteID int64) ([]domain.QuotationHist
 	return items, err
 }
 
+func (r *QuotationRepository) ListRevisionChain(root *domain.Quotation) ([]domain.Quotation, error) {
+	rootID := root.QuotationID
+	for root.ParentQuotationID != nil {
+		parent, err := r.GetByID(*root.ParentQuotationID)
+		if err != nil {
+			return nil, err
+		}
+		root = parent
+		rootID = root.QuotationID
+	}
+	var items []domain.Quotation
+	err := r.db.Select(&items, quotationSelectBase()+`
+		WHERE quote_id = $1 OR parent_quotation_id = $1
+		ORDER BY revision_no ASC, create_time ASC
+	`, rootID)
+	return items, err
+}
+
 func (r *QuotationRepository) UpdateBody(quoteID int64, pricePerPiece float64, moldCost float64, leadTimeDays int64, shippingMethodID int64, editorID int64, newVersion int) error {
 	query := `
 		UPDATE quotations
@@ -228,6 +294,15 @@ func (r *QuotationRepository) ShippingMethodValid(shippingMethodID int64) (bool,
 		SELECT EXISTS (SELECT 1 FROM lbi_shipping_methods WHERE shipping_method_id = $1 AND status = '1')
 	`, shippingMethodID)
 	return ok, err
+}
+
+func (r *QuotationRepository) MarkAncestorsRevised(tx *sqlx.Tx, rfqID, factoryID int64) error {
+	_, err := tx.Exec(`
+		UPDATE quotations
+		SET status = 'RV', log_timestamp = NOW(), is_locked = TRUE
+		WHERE rfq_id = $1 AND factory_id = $2 AND status IN ('PD', 'AC')
+	`, rfqID, factoryID)
+	return err
 }
 
 // SnapshotFromQuotation builds a history row from current quotation row (for CR on create).
