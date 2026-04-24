@@ -51,12 +51,17 @@ func (s *FrontendService) GetBootstrap(userID int64) (*domain.FrontendBootstrapR
 
 	categoryRows, err := s.repo.ListCategories()
 	if err != nil {
+		log.Printf("[ERROR] ListCategories failed: %v", err)
 		return nil, err
 	}
+	log.Printf("[DEBUG] ListCategories success: %d rows", len(categoryRows))
+
 	factoryRows, err := s.repo.ListFactories()
 	if err != nil {
+		log.Printf("[ERROR] ListFactories failed: %v", err)
 		return nil, err
 	}
+	log.Printf("[DEBUG] ListFactories success: %d rows", len(factoryRows))
 
 	var rfqRows []repository.FrontendRFQRow
 	var orderRows []repository.FrontendOrderRow
@@ -64,12 +69,21 @@ func (s *FrontendService) GetBootstrap(userID int64) (*domain.FrontendBootstrapR
 	if userID > 0 {
 		if rows, e := s.repo.ListRFQsByUserID(userID); e == nil {
 			rfqRows = rows
+			log.Printf("[DEBUG] ListRFQsByUserID success: %d rows", len(rfqRows))
+		} else {
+			log.Printf("[WARN] ListRFQsByUserID error: %v (continuing)", e)
 		}
 		if rows, e := s.repo.ListOrdersByUserID(userID); e == nil {
 			orderRows = rows
+			log.Printf("[DEBUG] ListOrdersByUserID success: %d rows", len(orderRows))
+		} else {
+			log.Printf("[WARN] ListOrdersByUserID error: %v (continuing)", e)
 		}
 		if rows, e := s.repo.ListMessageThreads(userID); e == nil {
 			threadRows = rows
+			log.Printf("[DEBUG] ListMessageThreads success: %d rows", len(threadRows))
+		} else {
+			log.Printf("[WARN] ListMessageThreads error: %v (continuing)", e)
 		}
 	}
 
