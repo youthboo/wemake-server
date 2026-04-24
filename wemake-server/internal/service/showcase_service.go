@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/yourusername/wemake/internal/domain"
@@ -47,7 +48,7 @@ func (s *ShowcaseService) CreateStructured(factoryID int64, input domain.Showcas
 		FactoryID:       factoryID,
 		ContentType:     "PD",
 		Status:          "DR",
-		LinkedShowcases: domain.JSONInt64Array{},
+		LinkedShowcases: domain.JSONLinkArray{},
 		Tags:            domain.JSONStringArray{},
 	}
 	mergeShowcaseInput(item, input)
@@ -95,7 +96,7 @@ func (s *ShowcaseService) UpdateStructured(showcaseID, factoryID int64, input do
 			FactoryID:       factoryID,
 			ContentType:     existing.ContentType,
 			Status:          existing.Status,
-			LinkedShowcases: domain.JSONInt64Array{},
+			LinkedShowcases: domain.JSONLinkArray{},
 			Tags:            domain.JSONStringArray{},
 		}
 	}
@@ -167,7 +168,7 @@ func mergeShowcaseInput(item *domain.FactoryShowcase, input domain.ShowcaseWrite
 		item.Content = &v
 	}
 	if input.LinkedShowcases != nil {
-		item.LinkedShowcases = domain.JSONInt64Array(uniquePositiveIDs(*input.LinkedShowcases))
+		item.LinkedShowcases = domain.JSONLinkArray(normalizeLinkedShowcases(*input.LinkedShowcases))
 	}
 	if input.Excerpt != nil {
 		v := strings.TrimSpace(*input.Excerpt)
@@ -182,19 +183,19 @@ func mergeShowcaseInput(item *domain.FactoryShowcase, input domain.ShowcaseWrite
 	}
 }
 
-func uniquePositiveIDs(ids []int64) []int64 {
-	seen := map[int64]struct{}{}
-	out := make([]int64, 0, len(ids))
-	for _, id := range ids {
-		if id <= 0 {
-			out = append(out, id)
+func normalizeLinkedShowcases(values []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(values))
+	for _, raw := range values {
+		v := strings.TrimSpace(raw)
+		if v == "" {
 			continue
 		}
-		if _, ok := seen[id]; ok {
+		if _, ok := seen[v]; ok {
 			continue
 		}
-		seen[id] = struct{}{}
-		out = append(out, id)
+		seen[v] = struct{}{}
+		out = append(out, v)
 	}
 	return out
 }
@@ -236,11 +237,24 @@ func (s *ShowcaseService) validateShowcase(item *domain.FactoryShowcase) error {
 	if len(item.LinkedShowcases) > 5 {
 		add("linked_showcases", "maximum 5 linked showcases allowed")
 	}
-	for _, id := range item.LinkedShowcases {
-		if id <= 0 {
-			add("linked_showcases", "all IDs must be positive integers")
-			break
+	for _, ref := range item.LinkedShowcases {
+		if !isShowcaseHTTPSURL(ref) {
+			if _, err := strconv.ParseInt(ref, 10, 64); err != nil {
+				add("linked_showcases", "all entries must be HTTPS URLs or numeric showcase IDs")
+				break
+			}
 		}
+	}
+
+	if (item.ImageURL == nil || strings.TrimSpace(*item.ImageURL) == "") && len(item.LinkedShowcases) > 0 {
+		if isShowcaseHTTPSURL(item.LinkedShowcases[0]) {
+			cover := item.LinkedShowcases[0]
+			item.ImageURL = &cover
+		}
+	}
+
+	if item.Tags == nil {
+		item.Tags = domain.JSONStringArray{}
 	}
 
 	if item.CategoryID != nil {
@@ -356,27 +370,40 @@ func (s *ShowcaseService) validateShowcase(item *domain.FactoryShowcase) error {
 	}
 
 	if len(item.LinkedShowcases) > 0 {
-		rows, err := s.repo.CheckLinkedShowcases([]int64(item.LinkedShowcases))
-		if err != nil {
-			return err
-		}
-		byID := map[int64]repository.LinkedShowcaseCheckRow{}
-		for _, row := range rows {
-			byID[row.ShowcaseID] = row
-		}
-		for _, id := range item.LinkedShowcases {
-			row, ok := byID[id]
-			if !ok {
-				add("linked_showcases", "all linked showcases must exist")
-				break
+		ids := make([]int64, 0, len(item.LinkedShowcases))
+		for _, ref := range item.LinkedShowcases {
+			id, err := strconv.ParseInt(strings.TrimSpace(ref), 10, 64)
+			if err == nil && id > 0 {
+				ids = append(ids, id)
 			}
-			if row.FactoryID != item.FactoryID {
-				add("linked_showcases", "all linked showcases must belong to the same factory")
-				break
+		}
+		if len(ids) > 0 {
+			rows, err := s.repo.CheckLinkedShowcases(ids)
+			if err != nil {
+				return err
 			}
-			if row.Status != "AC" && row.ShowcaseID != item.ShowcaseID {
-				add("linked_showcases", "all linked showcases must be active")
-				break
+			byID := map[int64]repository.LinkedShowcaseCheckRow{}
+			for _, row := range rows {
+				byID[row.ShowcaseID] = row
+			}
+			for _, ref := range item.LinkedShowcases {
+				id, err := strconv.ParseInt(strings.TrimSpace(ref), 10, 64)
+				if err != nil || id <= 0 {
+					continue
+				}
+				row, ok := byID[id]
+				if !ok {
+					add("linked_showcases", "all linked showcases must exist")
+					break
+				}
+				if row.FactoryID != item.FactoryID {
+					add("linked_showcases", "all linked showcases must belong to the same factory")
+					break
+				}
+				if row.Status != "AC" && row.ShowcaseID != item.ShowcaseID {
+					add("linked_showcases", "all linked showcases must be active")
+					break
+				}
 			}
 		}
 	}

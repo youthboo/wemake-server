@@ -18,7 +18,7 @@ type FactoryShowcase struct {
 	StartDate       *time.Time      `db:"start_date" json:"start_date,omitempty"`
 	EndDate         *time.Time      `db:"end_date" json:"end_date,omitempty"`
 	Content         *string         `db:"content" json:"content,omitempty"`
-	LinkedShowcases JSONInt64Array  `db:"linked_showcases" json:"linked_showcases"`
+	LinkedShowcases JSONLinkArray   `db:"linked_showcases" json:"linked_showcases"`
 	Tags            JSONStringArray `db:"tags" json:"tags"`
 	LikesCount      int             `db:"likes_count" json:"likes_count"`
 	ViewCount       int64           `db:"view_count" json:"view_count"`
@@ -139,7 +139,7 @@ type ShowcaseDetail struct {
 	EndDate               *time.Time           `db:"end_date" json:"end_date,omitempty"`
 	Content               *string              `db:"content" json:"content,omitempty"`
 	Images                JSONStringArray      `db:"-" json:"images"`
-	LinkedShowcases       JSONInt64Array       `db:"linked_showcases" json:"linked_showcases"`
+	LinkedShowcases       JSONLinkArray        `db:"linked_showcases" json:"linked_showcases"`
 	Tags                  JSONStringArray      `db:"tags" json:"tags"`
 	LikesCount            int                  `db:"likes_count" json:"likes_count"`
 	ViewCount             int64                `db:"view_count" json:"view_count"`
@@ -193,7 +193,7 @@ type ShowcaseWriteInput struct {
 	StartDate       *time.Time
 	EndDate         *time.Time
 	Content         *string
-	LinkedShowcases *[]int64
+	LinkedShowcases *[]string
 	Excerpt         *string
 	ImageURL        *string
 	Tags            *[]string

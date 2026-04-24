@@ -55,7 +55,7 @@ type showcaseWriteRequest struct {
 	StartDate       *string   `json:"start_date"`
 	EndDate         *string   `json:"end_date"`
 	Content         *string   `json:"content"`
-	LinkedShowcases *[]int64  `json:"linked_showcases"`
+	LinkedShowcases *[]string `json:"linked_showcases"`
 	Excerpt         *string   `json:"excerpt"`
 	ImageURL        *string   `json:"image_url"`
 	Tags            *[]string `json:"tags"`
