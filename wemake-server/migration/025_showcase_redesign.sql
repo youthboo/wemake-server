@@ -31,6 +31,7 @@ END $$;
 ALTER TABLE factory_showcases
     ADD COLUMN IF NOT EXISTS moq INT,
     ADD COLUMN IF NOT EXISTS production_capacity INT,
+    ADD COLUMN IF NOT EXISTS lead_time_days INT,
     ADD COLUMN IF NOT EXISTS base_price NUMERIC(12, 2),
     ADD COLUMN IF NOT EXISTS promo_price NUMERIC(12, 2),
     ADD COLUMN IF NOT EXISTS start_date DATE,
