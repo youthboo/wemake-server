@@ -43,27 +43,22 @@ func NewShowcaseHandler(service *service.ShowcaseService) *ShowcaseHandler {
 }
 
 type showcaseWriteRequest struct {
-	Type               *string   `json:"type"`
-	ContentType        *string   `json:"content_type"`
-	Status             *string   `json:"status"`
-	Title              *string   `json:"title"`
-	CategoryID         *int64    `json:"category_id"`
-	SubCategoryID      *int64    `json:"sub_category_id"`
-	MOQ                *int      `json:"moq"`
-	ProductionCapacity *int      `json:"production_capacity"`
-	LeadTimeDays       *int      `json:"lead_time_days"`
-	BasePrice          *float64  `json:"base_price"`
-	PromoPrice         *float64  `json:"promo_price"`
-	StartDate          *string   `json:"start_date"`
-	EndDate            *string   `json:"end_date"`
-	SampleAvailable    *bool     `json:"sample_available"`
-	Content            *string   `json:"content"`
-	Images             *[]string `json:"images"`
-	LinkedShowcases    *[]int64  `json:"linked_showcases"`
-	Excerpt            *string   `json:"excerpt"`
-	Description        *string   `json:"description"`
-	ImageURL           *string   `json:"image_url"`
-	PriceRange         *string   `json:"price_range"`
+	Type            *string   `json:"type"`
+	ContentType     *string   `json:"content_type"`
+	Status          *string   `json:"status"`
+	Title           *string   `json:"title"`
+	CategoryID      *int64    `json:"category_id"`
+	SubCategoryID   *int64    `json:"sub_category_id"`
+	MOQ             *int      `json:"moq"`
+	BasePrice       *float64  `json:"base_price"`
+	PromoPrice      *float64  `json:"promo_price"`
+	StartDate       *string   `json:"start_date"`
+	EndDate         *string   `json:"end_date"`
+	Content         *string   `json:"content"`
+	LinkedShowcases *[]int64  `json:"linked_showcases"`
+	Excerpt         *string   `json:"excerpt"`
+	ImageURL        *string   `json:"image_url"`
+	Tags            *[]string `json:"tags"`
 }
 
 func parseShowcaseDate(raw *string, field string) (*time.Time, *domain.ShowcaseValidationDetail) {
@@ -96,26 +91,21 @@ func (r showcaseWriteRequest) toInput() (domain.ShowcaseWriteInput, []domain.Sho
 		details = append(details, *detail)
 	}
 	return domain.ShowcaseWriteInput{
-		Type:               typeValue,
-		Status:             r.Status,
-		Title:              r.Title,
-		CategoryID:         r.CategoryID,
-		SubCategoryID:      r.SubCategoryID,
-		MOQ:                r.MOQ,
-		ProductionCapacity: r.ProductionCapacity,
-		LeadTimeDays:       r.LeadTimeDays,
-		BasePrice:          r.BasePrice,
-		PromoPrice:         r.PromoPrice,
-		StartDate:          startDate,
-		EndDate:            endDate,
-		SampleAvailable:    r.SampleAvailable,
-		Content:            r.Content,
-		Images:             r.Images,
-		LinkedShowcases:    r.LinkedShowcases,
-		Excerpt:            r.Excerpt,
-		Description:        r.Description,
-		ImageURL:           r.ImageURL,
-		PriceRange:         r.PriceRange,
+		ContentType:     typeValue,
+		Status:          r.Status,
+		Title:           r.Title,
+		CategoryID:      r.CategoryID,
+		SubCategoryID:   r.SubCategoryID,
+		MOQ:             r.MOQ,
+		BasePrice:       r.BasePrice,
+		PromoPrice:      r.PromoPrice,
+		StartDate:       startDate,
+		EndDate:         endDate,
+		Content:         r.Content,
+		LinkedShowcases: r.LinkedShowcases,
+		Excerpt:         r.Excerpt,
+		ImageURL:        r.ImageURL,
+		Tags:            r.Tags,
 	}, details
 }
 

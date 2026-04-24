@@ -21,18 +21,18 @@ const showcaseExploreBaseSQL = `
 	SELECT
 		fs.showcase_id,
 		fs.factory_id,
-		fs."type",
+		fs.content_type,
 		fs.title,
+		fs.excerpt,
+		fs.image_url,
 		fs.category_id,
 		fs.sub_category_id,
 		fs.moq,
-		fs.production_capacity,
-		fs.lead_time_days,
 		fs.base_price,
 		fs.promo_price,
 		fs.start_date,
 		fs.end_date,
-		fs.images,
+		COALESCE(fs.tags, '[]'::jsonb) AS tags,
 		fs.likes_count,
 		fs.view_count,
 		fs.status,
@@ -56,7 +56,7 @@ func (r *ShowcaseRepository) ListExplore(contentType string) ([]domain.ShowcaseE
 	var query string
 	var args []interface{}
 	if contentType != "" {
-		query = showcaseExploreBaseSQL + ` WHERE fs.status = 'AC' AND fs."type" = $1 ORDER BY fs.created_at DESC`
+		query = showcaseExploreBaseSQL + ` WHERE fs.status = 'AC' AND fs.content_type = $1 ORDER BY fs.created_at DESC`
 		args = append(args, contentType)
 	} else {
 		query = showcaseExploreBaseSQL + ` WHERE fs.status = 'AC' ORDER BY fs.created_at DESC`
@@ -71,7 +71,7 @@ func (r *ShowcaseRepository) ListExploreByFactory(factoryID int64, contentType s
 	args := []interface{}{factoryID}
 	argPos := 2
 	if contentType != "" {
-		clauses = append(clauses, fmt.Sprintf("fs.\"type\" = $%d", argPos))
+		clauses = append(clauses, fmt.Sprintf("fs.content_type = $%d", argPos))
 		args = append(args, contentType)
 		argPos++
 	}
@@ -92,7 +92,7 @@ func (r *ShowcaseRepository) ListStructured(filter domain.ShowcaseListFilter) ([
 		argPos++
 	}
 	if filter.Type != "" {
-		clauses = append(clauses, fmt.Sprintf("fs.\"type\" = $%d", argPos))
+		clauses = append(clauses, fmt.Sprintf("fs.content_type = $%d", argPos))
 		args = append(args, filter.Type)
 		argPos++
 	}
@@ -139,16 +139,17 @@ func (r *ShowcaseRepository) GetShowcasesByFactory(factoryID int64, contentType 
 		clauses = append(clauses, "fs.status = 'AC'")
 	}
 	if contentType != "" {
-		clauses = append(clauses, fmt.Sprintf("fs.\"type\" = $%d", argPos))
+		clauses = append(clauses, fmt.Sprintf("fs.content_type = $%d", argPos))
 		args = append(args, contentType)
 		argPos++
 	}
 
 	query := `
 		SELECT
-			fs.showcase_id, fs."type", fs.title,
+			fs.showcase_id, fs.content_type, fs.title,
+			fs.excerpt, fs.image_url,
 			fs.category_id, fs.sub_category_id,
-			fs.lead_time_days,
+			fs.moq,
 			fs.likes_count, fs.status, fs.created_at,
 			c.name  AS category_name,
 			sc.name AS sub_category_name
@@ -228,13 +229,13 @@ func (r *ShowcaseRepository) GetDetail(showcaseID int64) (*domain.ShowcaseDetail
 	var s domain.ShowcaseDetail
 	err := r.db.Get(&s, `
 		SELECT
-			fs.showcase_id, fs.factory_id, fs."type",
-			fs.title,
+			fs.showcase_id, fs.factory_id, fs.content_type,
+			fs.title, fs.excerpt, fs.image_url,
 			fs.category_id, fs.sub_category_id,
-			fs.moq, fs.production_capacity, fs.lead_time_days,
+			fs.moq,
 			fs.base_price, fs.promo_price, fs.start_date, fs.end_date,
-			fs.sample_available, fs.content, fs.images, fs.linked_showcases,
-			fs.likes_count, fs.status, fs.created_at,
+			fs.content, fs.linked_showcases, COALESCE(fs.tags, '[]'::jsonb) AS tags,
+			fs.likes_count, fs.view_count, fs.status, fs.created_at,
 			fs.updated_at, fs.published_at,
 			fp.factory_name,
 			fp.image_url         AS factory_image_url,
@@ -256,7 +257,7 @@ func (r *ShowcaseRepository) GetDetail(showcaseID int64) (*domain.ShowcaseDetail
 		return nil, err
 	}
 
-	s.Images = []domain.ShowcaseImage{}
+	s.Images = domain.JSONStringArray{}
 	s.Sections = []domain.ShowcaseSection{}
 	s.Specs = []domain.ShowcaseSpec{}
 
@@ -266,6 +267,11 @@ func (r *ShowcaseRepository) GetDetail(showcaseID int64) (*domain.ShowcaseDetail
 			return nil, err
 		}
 		s.LinkedShowcaseCards = cards
+		for _, card := range cards {
+			if card.ImageURL != "" {
+				s.Images = append(s.Images, card.ImageURL)
+			}
+		}
 	}
 
 	return &s, nil
@@ -274,16 +280,16 @@ func (r *ShowcaseRepository) GetDetail(showcaseID int64) (*domain.ShowcaseDetail
 func (r *ShowcaseRepository) Create(showcase *domain.FactoryShowcase) error {
 	query := `
 		INSERT INTO factory_showcases
-			(factory_id, "type", title,
-			 category_id, sub_category_id, moq, production_capacity,
-			 lead_time_days, base_price, promo_price, start_date, end_date,
-			 sample_available, content, images, linked_showcases, status,
+			(factory_id, content_type, title, excerpt, image_url,
+			 category_id, sub_category_id, moq,
+			 base_price, promo_price, start_date, end_date,
+			 content, linked_showcases, tags, status,
 			 published_at, updated_at)
 		VALUES
-			(:factory_id, :type, :title,
-			 :category_id, :sub_category_id, :moq, :production_capacity,
-			 :lead_time_days, :base_price, :promo_price, :start_date, :end_date,
-			 :sample_available, :content, :images, :linked_showcases,
+			(:factory_id, :content_type, :title, :excerpt, :image_url,
+			 :category_id, :sub_category_id, :moq,
+			 :base_price, :promo_price, :start_date, :end_date,
+			 :content, :linked_showcases, :tags,
 			 COALESCE(NULLIF(:status, ''), 'DR'),
 			 CASE WHEN COALESCE(NULLIF(:status, ''), 'DR') = 'AC' THEN NOW() ELSE NULL END,
 			 NOW())
@@ -306,7 +312,6 @@ func (r *ShowcaseRepository) GetByID(showcaseID, factoryID int64) (*domain.Facto
 	if err != nil {
 		return nil, err
 	}
-	s.ContentType = s.Type
 	return &s, nil
 }
 
@@ -317,7 +322,7 @@ func (r *ShowcaseRepository) GetAnalytics(showcaseID, factoryID int64) (*domain.
 			showcase_id,
 			factory_id,
 			title,
-			"type",
+			content_type,
 			likes_count,
 			view_count,
 			CASE
@@ -343,21 +348,20 @@ func (r *ShowcaseRepository) ListPromoSlides() ([]domain.PromoSlide, error) {
 func (r *ShowcaseRepository) Update(s *domain.FactoryShowcase) error {
 	query := `
 		UPDATE factory_showcases
-		SET "type"          = :type,
+		SET content_type    = :content_type,
 		    title           = :title,
+		    excerpt         = :excerpt,
+		    image_url       = :image_url,
 		    category_id     = :category_id,
 		    sub_category_id = :sub_category_id,
 		    moq             = :moq,
-		    production_capacity = :production_capacity,
-		    lead_time_days  = :lead_time_days,
 		    base_price      = :base_price,
 		    promo_price     = :promo_price,
 		    start_date      = :start_date,
 		    end_date        = :end_date,
-		    sample_available = :sample_available,
 		    content         = :content,
-		    images          = :images,
 		    linked_showcases = :linked_showcases,
+		    tags            = :tags,
 		    status          = CASE WHEN :status = '' THEN status ELSE :status END,
 		    published_at    = CASE
 		                        WHEN :status = 'AC' AND published_at IS NULL THEN NOW()
@@ -420,7 +424,7 @@ func (r *ShowcaseRepository) SubCategoryBelongsToCategory(subCategoryID, categor
 type LinkedShowcaseCheckRow struct {
 	ShowcaseID int64  `db:"showcase_id"`
 	FactoryID  int64  `db:"factory_id"`
-	Type       string `db:"type"`
+	Type       string `db:"content_type"`
 	Status     string `db:"status"`
 }
 
@@ -429,7 +433,7 @@ func (r *ShowcaseRepository) CheckLinkedShowcases(ids []int64) ([]LinkedShowcase
 		return []LinkedShowcaseCheckRow{}, nil
 	}
 	query, args, err := sqlx.In(`
-		SELECT showcase_id, factory_id, "type", status
+		SELECT showcase_id, factory_id, content_type, status
 		FROM factory_showcases
 		WHERE showcase_id IN (?)
 	`, ids)
@@ -442,18 +446,34 @@ func (r *ShowcaseRepository) CheckLinkedShowcases(ids []int64) ([]LinkedShowcase
 	return rows, err
 }
 
-func (r *ShowcaseRepository) ListLinkedShowcaseCards(ids []int64) ([]domain.ShowcaseExploreItem, error) {
+func (r *ShowcaseRepository) ListLinkedShowcaseCards(ids []int64) ([]domain.LinkedShowcaseCard, error) {
 	if len(ids) == 0 {
-		return []domain.ShowcaseExploreItem{}, nil
+		return []domain.LinkedShowcaseCard{}, nil
 	}
-	query, args, err := sqlx.In(showcaseExploreBaseSQL+` WHERE fs.showcase_id IN (?) ORDER BY fs.showcase_id`, ids)
+	query, args, err := sqlx.In(`
+		SELECT showcase_id, title, COALESCE(image_url, '') AS image_url, base_price
+		FROM factory_showcases
+		WHERE showcase_id IN (?)
+	`, ids)
 	if err != nil {
 		return nil, err
 	}
 	query = r.db.Rebind(query)
-	var items []domain.ShowcaseExploreItem
-	err = r.db.Select(&items, query, args...)
-	return items, err
+	var rows []domain.LinkedShowcaseCard
+	if err := r.db.Select(&rows, query, args...); err != nil {
+		return nil, err
+	}
+	byID := make(map[int64]domain.LinkedShowcaseCard, len(rows))
+	for _, row := range rows {
+		byID[row.ShowcaseID] = row
+	}
+	out := make([]domain.LinkedShowcaseCard, 0, len(ids))
+	for _, id := range ids {
+		if row, ok := byID[id]; ok {
+			out = append(out, row)
+		}
+	}
+	return out, nil
 }
 
 func (r *ShowcaseRepository) IncrementViewCount(showcaseID int64) error {

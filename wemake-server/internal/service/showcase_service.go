@@ -45,10 +45,10 @@ func (s *ShowcaseService) Create(showcase *domain.FactoryShowcase) error {
 func (s *ShowcaseService) CreateStructured(factoryID int64, input domain.ShowcaseWriteInput) (*domain.FactoryShowcase, error) {
 	item := &domain.FactoryShowcase{
 		FactoryID:       factoryID,
-		Type:            "PD",
+		ContentType:     "PD",
 		Status:          "DR",
-		Images:          domain.JSONStringArray{},
 		LinkedShowcases: domain.JSONInt64Array{},
+		Tags:            domain.JSONStringArray{},
 	}
 	mergeShowcaseInput(item, input)
 	if err := s.validateShowcase(item); err != nil {
@@ -57,7 +57,6 @@ func (s *ShowcaseService) CreateStructured(factoryID int64, input domain.Showcas
 	if err := s.repo.Create(item); err != nil {
 		return nil, err
 	}
-	item.ContentType = item.Type
 	return item, nil
 }
 
@@ -79,11 +78,11 @@ func (s *ShowcaseService) UpdateStructured(showcaseID, factoryID int64, input do
 		return nil, err
 	}
 	if existing.Status == "AR" {
-		onlyStatus := input.Status != nil && input.Type == nil && input.Title == nil && input.CategoryID == nil &&
-			input.SubCategoryID == nil && input.MOQ == nil && input.ProductionCapacity == nil &&
-			input.LeadTimeDays == nil && input.BasePrice == nil && input.PromoPrice == nil &&
-			input.StartDate == nil && input.EndDate == nil && input.SampleAvailable == nil &&
-			input.Content == nil && input.Images == nil && input.LinkedShowcases == nil
+		onlyStatus := input.Status != nil && input.ContentType == nil && input.Title == nil && input.CategoryID == nil &&
+			input.SubCategoryID == nil && input.MOQ == nil && input.BasePrice == nil && input.PromoPrice == nil &&
+			input.StartDate == nil && input.EndDate == nil &&
+			input.Content == nil && input.LinkedShowcases == nil && input.Excerpt == nil &&
+			input.ImageURL == nil && input.Tags == nil
 		if !onlyStatus {
 			return nil, domain.ShowcaseValidationError{Details: []domain.ShowcaseValidationDetail{{Field: "status", Message: "archived showcase is read-only except status transitions"}}}
 		}
@@ -94,10 +93,10 @@ func (s *ShowcaseService) UpdateStructured(showcaseID, factoryID int64, input do
 		item = &domain.FactoryShowcase{
 			ShowcaseID:      showcaseID,
 			FactoryID:       factoryID,
-			Type:            existing.Type,
+			ContentType:     existing.ContentType,
 			Status:          existing.Status,
-			Images:          domain.JSONStringArray{},
 			LinkedShowcases: domain.JSONInt64Array{},
+			Tags:            domain.JSONStringArray{},
 		}
 	}
 	mergeShowcaseInput(item, input)
@@ -133,9 +132,8 @@ func (s *ShowcaseService) Delete(showcaseID, factoryID int64) error {
 }
 
 func mergeShowcaseInput(item *domain.FactoryShowcase, input domain.ShowcaseWriteInput) {
-	if input.Type != nil {
-		item.Type = strings.TrimSpace(strings.ToUpper(*input.Type))
-		item.ContentType = item.Type
+	if input.ContentType != nil {
+		item.ContentType = strings.TrimSpace(strings.ToUpper(*input.ContentType))
 	}
 	if input.Status != nil {
 		item.Status = strings.TrimSpace(strings.ToUpper(*input.Status))
@@ -152,12 +150,6 @@ func mergeShowcaseInput(item *domain.FactoryShowcase, input domain.ShowcaseWrite
 	if input.MOQ != nil {
 		item.MOQ = input.MOQ
 	}
-	if input.ProductionCapacity != nil {
-		item.ProductionCapacity = input.ProductionCapacity
-	}
-	if input.LeadTimeDays != nil {
-		item.LeadTimeDays = input.LeadTimeDays
-	}
 	if input.BasePrice != nil {
 		item.BasePrice = input.BasePrice
 	}
@@ -170,18 +162,23 @@ func mergeShowcaseInput(item *domain.FactoryShowcase, input domain.ShowcaseWrite
 	if input.EndDate != nil {
 		item.EndDate = input.EndDate
 	}
-	if input.SampleAvailable != nil {
-		item.SampleAvailable = *input.SampleAvailable
-	}
 	if input.Content != nil {
 		v := strings.TrimSpace(*input.Content)
 		item.Content = &v
 	}
-	if input.Images != nil {
-		item.Images = domain.JSONStringArray(*input.Images)
-	}
 	if input.LinkedShowcases != nil {
 		item.LinkedShowcases = domain.JSONInt64Array(uniquePositiveIDs(*input.LinkedShowcases))
+	}
+	if input.Excerpt != nil {
+		v := strings.TrimSpace(*input.Excerpt)
+		item.Excerpt = &v
+	}
+	if input.ImageURL != nil {
+		v := strings.TrimSpace(*input.ImageURL)
+		item.ImageURL = &v
+	}
+	if input.Tags != nil {
+		item.Tags = domain.JSONStringArray(*input.Tags)
 	}
 }
 
@@ -217,13 +214,13 @@ func (s *ShowcaseService) validateShowcase(item *domain.FactoryShowcase) error {
 		details = append(details, domain.ShowcaseValidationDetail{Field: field, Message: message})
 	}
 
-	if item.Type == "" {
-		add("type", "must be one of PD, PM, ID")
+	if item.ContentType == "" {
+		add("content_type", "must be one of PD, PM, ID")
 	}
-	switch item.Type {
+	switch item.ContentType {
 	case "PD", "PM", "ID":
 	default:
-		add("type", "must be one of PD, PM, ID")
+		add("content_type", "must be one of PD, PM, ID")
 	}
 	if !validShowcaseStatus(item.Status) {
 		add("status", "must be one of DR, AC, HI, AR")
@@ -233,14 +230,8 @@ func (s *ShowcaseService) validateShowcase(item *domain.FactoryShowcase) error {
 	} else if len([]rune(strings.TrimSpace(item.Title))) > 200 {
 		add("title", "must be 200 characters or fewer")
 	}
-	if len(item.Images) > 5 {
-		add("images", "maximum 5 images allowed")
-	}
-	for _, image := range item.Images {
-		if !isShowcaseHTTPSURL(image) {
-			add("images", "image URL must be HTTPS")
-			break
-		}
+	if item.ImageURL != nil && strings.TrimSpace(*item.ImageURL) != "" && !isShowcaseHTTPSURL(*item.ImageURL) {
+		add("image_url", "image URL must be HTTPS")
 	}
 	if len(item.LinkedShowcases) > 5 {
 		add("linked_showcases", "maximum 5 linked showcases allowed")
@@ -280,7 +271,7 @@ func (s *ShowcaseService) validateShowcase(item *domain.FactoryShowcase) error {
 	if item.Content != nil {
 		contentLen = len([]rune(*item.Content))
 	}
-	switch item.Type {
+	switch item.ContentType {
 	case "PD", "PM":
 		if contentLen > 50000 {
 			add("content", "content exceeds max length")
@@ -292,13 +283,13 @@ func (s *ShowcaseService) validateShowcase(item *domain.FactoryShowcase) error {
 	}
 
 	if fullValidation {
-		switch item.Type {
+		if item.ImageURL == nil || strings.TrimSpace(*item.ImageURL) == "" {
+			add("image_url", "is required when showcase is active")
+		}
+		switch item.ContentType {
 		case "PD":
 			if item.MOQ == nil {
 				add("moq", "is required for PD")
-			}
-			if item.LeadTimeDays == nil {
-				add("lead_time_days", "is required for PD")
 			}
 			if item.BasePrice == nil {
 				add("base_price", "is required for PD")
@@ -306,9 +297,6 @@ func (s *ShowcaseService) validateShowcase(item *domain.FactoryShowcase) error {
 		case "PM":
 			if item.MOQ == nil {
 				add("moq", "is required for PM")
-			}
-			if item.LeadTimeDays == nil {
-				add("lead_time_days", "is required for PM")
 			}
 			if item.BasePrice == nil {
 				add("base_price", "is required for PM")
@@ -330,7 +318,7 @@ func (s *ShowcaseService) validateShowcase(item *domain.FactoryShowcase) error {
 	}
 
 	if fullValidation {
-		switch item.Type {
+		switch item.ContentType {
 		case "PD":
 			if item.PromoPrice != nil {
 				add("promo_price", "must be null for PD")
@@ -341,9 +329,6 @@ func (s *ShowcaseService) validateShowcase(item *domain.FactoryShowcase) error {
 			if item.EndDate != nil {
 				add("end_date", "must be null for PD")
 			}
-			if len(item.LinkedShowcases) > 0 {
-				add("linked_showcases", "must be empty for PD")
-			}
 		case "PM":
 			if item.StartDate != nil && item.EndDate != nil && item.EndDate.Before(*item.StartDate) {
 				add("end_date", "must be greater than or equal to start_date")
@@ -351,15 +336,9 @@ func (s *ShowcaseService) validateShowcase(item *domain.FactoryShowcase) error {
 			if item.BasePrice != nil && item.PromoPrice != nil && *item.PromoPrice > *item.BasePrice {
 				add("promo_price", "must be less than or equal to base_price")
 			}
-			if len(item.LinkedShowcases) > 0 {
-				add("linked_showcases", "must be empty for PM")
-			}
 		case "ID":
 			if item.MOQ != nil {
 				add("moq", "must be null for ID")
-			}
-			if item.LeadTimeDays != nil {
-				add("lead_time_days", "must be null for ID")
 			}
 			if item.BasePrice != nil {
 				add("base_price", "must be null for ID")
@@ -373,34 +352,31 @@ func (s *ShowcaseService) validateShowcase(item *domain.FactoryShowcase) error {
 			if item.EndDate != nil {
 				add("end_date", "must be null for ID")
 			}
-			if len(item.LinkedShowcases) > 0 {
-				rows, err := s.repo.CheckLinkedShowcases([]int64(item.LinkedShowcases))
-				if err != nil {
-					return err
-				}
-				byID := map[int64]repository.LinkedShowcaseCheckRow{}
-				for _, row := range rows {
-					byID[row.ShowcaseID] = row
-				}
-				for _, id := range item.LinkedShowcases {
-					row, ok := byID[id]
-					if !ok {
-						add("linked_showcases", "all linked showcases must exist")
-						break
-					}
-					if row.FactoryID != item.FactoryID {
-						add("linked_showcases", "all linked showcases must belong to the same factory")
-						break
-					}
-					if row.Type != "PD" {
-						add("linked_showcases", "all linked showcases must be type PD")
-						break
-					}
-					if row.Status != "AC" {
-						add("linked_showcases", "all linked showcases must be active")
-						break
-					}
-				}
+		}
+	}
+
+	if len(item.LinkedShowcases) > 0 {
+		rows, err := s.repo.CheckLinkedShowcases([]int64(item.LinkedShowcases))
+		if err != nil {
+			return err
+		}
+		byID := map[int64]repository.LinkedShowcaseCheckRow{}
+		for _, row := range rows {
+			byID[row.ShowcaseID] = row
+		}
+		for _, id := range item.LinkedShowcases {
+			row, ok := byID[id]
+			if !ok {
+				add("linked_showcases", "all linked showcases must exist")
+				break
+			}
+			if row.FactoryID != item.FactoryID {
+				add("linked_showcases", "all linked showcases must belong to the same factory")
+				break
+			}
+			if row.Status != "AC" && row.ShowcaseID != item.ShowcaseID {
+				add("linked_showcases", "all linked showcases must be active")
+				break
 			}
 		}
 	}

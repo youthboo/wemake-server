@@ -54,7 +54,7 @@ func (r *MessageRepository) ReferenceExists(referenceType string, referenceID in
 		query = `SELECT EXISTS (SELECT 1 FROM orders WHERE order_id = $1)`
 		args = []interface{}{referenceID}
 	case "PD", "PM", "ID":
-		query = `SELECT EXISTS (SELECT 1 FROM factory_showcases WHERE showcase_id = $1 AND "type" = $2)`
+		query = `SELECT EXISTS (SELECT 1 FROM factory_showcases WHERE showcase_id = $1 AND content_type = $2)`
 		args = []interface{}{referenceID, referenceType}
 	default:
 		return false, fmt.Errorf("unsupported reference_type: %s", referenceType)
