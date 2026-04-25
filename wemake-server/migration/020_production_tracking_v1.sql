@@ -1,5 +1,28 @@
 BEGIN;
 
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'production_updates'
+          AND column_name = 'image_urls'
+          AND data_type <> 'jsonb'
+    ) THEN
+        ALTER TABLE production_updates
+            ALTER COLUMN image_urls DROP DEFAULT,
+            ALTER COLUMN image_urls TYPE JSONB
+            USING CASE
+                WHEN image_urls IS NULL OR BTRIM(image_urls::text, '"') = '' THEN '[]'::jsonb
+                WHEN LEFT(BTRIM(image_urls::text), 1) IN ('[', '{', '"')
+                    THEN image_urls::jsonb
+                ELSE jsonb_build_array(image_urls::text)
+            END,
+            ALTER COLUMN image_urls SET DEFAULT '[]'::jsonb;
+    END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS domain_events (
     event_id BIGSERIAL PRIMARY KEY,
     event_type VARCHAR(100) NOT NULL,
@@ -129,7 +152,7 @@ SET image_urls = CASE
     WHEN COALESCE(image_url, '') <> '' THEN jsonb_build_array(image_url)
     ELSE '[]'::jsonb
 END
-WHERE image_urls = '[]'::jsonb;
+WHERE COALESCE(image_urls, '[]'::jsonb) = '[]'::jsonb;
 
 UPDATE production_updates
 SET status = CASE status

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -64,7 +65,7 @@ func runMigrations(db *sqlx.DB) error {
 			return readErr
 		}
 		if _, execErr := db.Exec(string(content)); execErr != nil {
-			return execErr
+			return fmt.Errorf("migration %s failed: %w", name, execErr)
 		}
 	}
 

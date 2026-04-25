@@ -1,5 +1,48 @@
 BEGIN;
 
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'factory_showcases'
+          AND column_name = 'linked_showcases'
+          AND data_type <> 'jsonb'
+    ) THEN
+        ALTER TABLE factory_showcases
+            ALTER COLUMN linked_showcases DROP DEFAULT,
+            ALTER COLUMN linked_showcases TYPE JSONB
+            USING CASE
+                WHEN linked_showcases IS NULL OR BTRIM(linked_showcases::text, '"') = '' THEN '[]'::jsonb
+                WHEN LEFT(BTRIM(linked_showcases::text), 1) IN ('[', '{', '"')
+                    THEN linked_showcases::jsonb
+                ELSE jsonb_build_array(linked_showcases::text)
+            END,
+            ALTER COLUMN linked_showcases SET DEFAULT '[]'::jsonb;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'factory_showcases'
+          AND column_name = 'tags'
+          AND data_type <> 'jsonb'
+    ) THEN
+        ALTER TABLE factory_showcases
+            ALTER COLUMN tags DROP DEFAULT,
+            ALTER COLUMN tags TYPE JSONB
+            USING CASE
+                WHEN tags IS NULL OR BTRIM(tags::text, '"') = '' THEN '[]'::jsonb
+                WHEN LEFT(BTRIM(tags::text), 1) IN ('[', '{', '"')
+                    THEN tags::jsonb
+                ELSE jsonb_build_array(tags::text)
+            END,
+            ALTER COLUMN tags SET DEFAULT '[]'::jsonb;
+    END IF;
+END $$;
+
 DROP TABLE IF EXISTS showcase_section_items CASCADE;
 DROP TABLE IF EXISTS showcase_sections CASCADE;
 DROP TABLE IF EXISTS showcase_specs CASCADE;

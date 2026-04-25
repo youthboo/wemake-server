@@ -2,6 +2,49 @@ BEGIN;
 
 DO $$
 BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'factory_showcases'
+          AND column_name = 'images'
+          AND data_type <> 'jsonb'
+    ) THEN
+        ALTER TABLE factory_showcases
+            ALTER COLUMN images DROP DEFAULT,
+            ALTER COLUMN images TYPE JSONB
+            USING CASE
+                WHEN images IS NULL OR BTRIM(images::text, '"') = '' THEN '[]'::jsonb
+                WHEN LEFT(BTRIM(images::text), 1) IN ('[', '{', '"')
+                    THEN images::jsonb
+                ELSE jsonb_build_array(images::text)
+            END,
+            ALTER COLUMN images SET DEFAULT '[]'::jsonb;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'factory_showcases'
+          AND column_name = 'linked_showcases'
+          AND data_type <> 'jsonb'
+    ) THEN
+        ALTER TABLE factory_showcases
+            ALTER COLUMN linked_showcases DROP DEFAULT,
+            ALTER COLUMN linked_showcases TYPE JSONB
+            USING CASE
+                WHEN linked_showcases IS NULL OR BTRIM(linked_showcases::text, '"') = '' THEN '[]'::jsonb
+                WHEN LEFT(BTRIM(linked_showcases::text), 1) IN ('[', '{', '"')
+                    THEN linked_showcases::jsonb
+                ELSE jsonb_build_array(linked_showcases::text)
+            END,
+            ALTER COLUMN linked_showcases SET DEFAULT '[]'::jsonb;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = 'public'
@@ -71,7 +114,7 @@ BEGIN
     ) THEN
         UPDATE factory_showcases
            SET images = CASE
-               WHEN images = '[]'::jsonb AND COALESCE(image_url, '') <> ''
+               WHEN COALESCE(images, '[]'::jsonb) = '[]'::jsonb AND COALESCE(image_url, '') <> ''
                    THEN jsonb_build_array(image_url)
                ELSE images
            END;
