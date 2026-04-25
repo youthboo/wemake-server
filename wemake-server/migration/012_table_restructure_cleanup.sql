@@ -150,8 +150,21 @@ END $$;
 DO $$
 DECLARE
     rec RECORD;
+    has_unit_id BOOLEAN := FALSE;
 BEGIN
+    IF to_regclass('public.rfqs') IS NOT NULL THEN
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'rfqs'
+              AND column_name = 'unit_id'
+        )
+        INTO has_unit_id;
+    END IF;
+
     IF to_regclass('public.rfqs') IS NOT NULL
+       AND has_unit_id
        AND to_regclass('public.units') IS NOT NULL
        AND to_regclass('public.lbi_units') IS NOT NULL THEN
         UPDATE rfqs r
@@ -162,7 +175,7 @@ BEGIN
           AND r.unit_id IS DISTINCT FROM lu.unit_id;
     END IF;
 
-    IF to_regclass('public.rfqs') IS NOT NULL THEN
+    IF to_regclass('public.rfqs') IS NOT NULL AND has_unit_id THEN
         FOR rec IN
             SELECT con.conname
             FROM pg_constraint con
