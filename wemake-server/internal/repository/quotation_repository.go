@@ -23,7 +23,8 @@ func quotationSelectBase() string {
 		subtotal, discount_amount, shipping_cost, shipping_method, packaging_cost, tooling_mold_cost,
 		vat_rate, vat_amount, platform_commission_rate, platform_commission_amount, platform_config_id,
 		grand_total, factory_net_receivable, production_start_date, delivery_date, incoterms, payment_terms,
-		validity_days, valid_until, warranty_period_months, COALESCE(revision_no, 1) AS revision_no, parent_quotation_id
+		validity_days, valid_until, warranty_period_months, COALESCE(revision_no, 1) AS revision_no, parent_quotation_id,
+		COALESCE(image_urls, '[]'::jsonb) AS image_urls
 		FROM quotations`
 }
 
@@ -40,19 +41,23 @@ type quotationExecutor interface {
 }
 
 func (r *QuotationRepository) createWithExecutor(exec quotationExecutor, item *domain.Quotation) error {
+	imageURLs := item.ImageURLs
+	if imageURLs == nil {
+		imageURLs = domain.StringArray{}
+	}
 	query := `
 		INSERT INTO quotations (
 			rfq_id, factory_id, price_per_piece, mold_cost, lead_time_days, shipping_method_id, status, create_time, log_timestamp,
 			subtotal, discount_amount, shipping_cost, shipping_method, packaging_cost, tooling_mold_cost,
 			vat_rate, vat_amount, platform_commission_rate, platform_commission_amount, platform_config_id,
 			grand_total, factory_net_receivable, production_start_date, delivery_date, incoterms, payment_terms,
-			validity_days, valid_until, warranty_period_months, revision_no, parent_quotation_id
+			validity_days, valid_until, warranty_period_months, revision_no, parent_quotation_id, image_urls
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
 		        $10,$11,$12,$13,$14,$15,
 		        $16,$17,$18,$19,$20,
 		        $21,$22,$23,$24,$25,$26,
-		        $27,$28,$29,$30,$31)
+		        $27,$28,$29,$30,$31,$32)
 		RETURNING quote_id
 	`
 	if err := exec.QueryRow(
@@ -88,6 +93,7 @@ func (r *QuotationRepository) createWithExecutor(exec quotationExecutor, item *d
 		nullableIntValue(item.WarrantyPeriodMonths),
 		item.RevisionNo,
 		nullableInt64Value(item.ParentQuotationID),
+		imageURLs,
 	).Scan(&item.QuotationID); err != nil {
 		return err
 	}
@@ -286,6 +292,18 @@ func (r *QuotationRepository) UpdateBody(quoteID int64, pricePerPiece float64, m
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func (r *QuotationRepository) UpdateImageURLs(quoteID int64, imageURLs domain.StringArray) error {
+	if imageURLs == nil {
+		imageURLs = domain.StringArray{}
+	}
+	_, err := r.db.Exec(`
+		UPDATE quotations
+		SET image_urls = $1, log_timestamp = NOW()
+		WHERE quote_id = $2 AND COALESCE(is_locked, false) = false AND status = 'PD'
+	`, imageURLs, quoteID)
+	return err
 }
 
 func (r *QuotationRepository) ShippingMethodValid(shippingMethodID int64) (bool, error) {

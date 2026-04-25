@@ -45,6 +45,7 @@ type Quotation struct {
 
 	RevisionNo        int             `db:"revision_no" json:"revision_no"`
 	ParentQuotationID *int64          `db:"parent_quotation_id" json:"parent_quotation_id,omitempty"`
+	ImageURLs         StringArray     `db:"image_urls" json:"image_urls"`
 	Items             []QuotationItem `db:"-" json:"items,omitempty"`
 }
 

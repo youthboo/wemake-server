@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 	"github.com/yourusername/wemake/internal/domain"
 )
 
@@ -443,9 +444,13 @@ func (r *OrderRepository) GetDetailByParticipant(orderID, userID int64, role str
 }
 
 func (r *OrderRepository) GetRfqImages(rfqID int64) ([]domain.RfqImage, error) {
-	var raw string
-	err := r.db.Get(&raw, `
-		SELECT COALESCE(image_urls, '[]'::jsonb)::text
+	type rfqImageRow struct {
+		ReferenceImages pq.StringArray `db:"reference_images"`
+	}
+	var row rfqImageRow
+	err := r.db.Get(&row, `
+		SELECT
+			COALESCE(reference_images, ARRAY[]::TEXT[]) AS reference_images
 		FROM rfqs
 		WHERE rfq_id = $1
 	`, rfqID)
@@ -453,17 +458,26 @@ func (r *OrderRepository) GetRfqImages(rfqID int64) ([]domain.RfqImage, error) {
 		return nil, err
 	}
 
-	var urls []string
-	if err := json.Unmarshal([]byte(raw), &urls); err != nil {
-		return nil, err
-	}
-	items := make([]domain.RfqImage, 0, len(urls))
-	for i, url := range urls {
+	seen := make(map[string]struct{})
+	items := make([]domain.RfqImage, 0)
+	counter := 1
+
+	for _, rawURL := range row.ReferenceImages {
+		url := strings.TrimSpace(rawURL)
+		if url == "" {
+			continue
+		}
+		if _, dup := seen[url]; dup {
+			continue
+		}
+		seen[url] = struct{}{}
 		items = append(items, domain.RfqImage{
-			ImageID:  fmt.Sprintf("rfq-%d-image-%d", rfqID, i+1),
+			ImageID:  fmt.Sprintf("rfq-%d-image-%d", rfqID, counter),
 			ImageURL: url,
 		})
+		counter++
 	}
+
 	return items, nil
 }
 

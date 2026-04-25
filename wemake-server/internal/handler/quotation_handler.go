@@ -23,11 +23,16 @@ func NewQuotationHandler(quotationService *service.QuotationService, authService
 
 func (h *QuotationHandler) CreateQuotation(c *fiber.Ctx) error {
 	type reqBody struct {
-		FactoryID        int64   `json:"factory_id"`
-		PricePerPiece    float64 `json:"price_per_piece"`
-		MoldCost         float64 `json:"mold_cost"`
-		LeadTimeDays     int64   `json:"lead_time_days"`
-		ShippingMethodID int64   `json:"shipping_method_id"`
+		FactoryID        int64               `json:"factory_id"`
+		PricePerPiece    float64             `json:"price_per_piece"`
+		MoldCost         float64             `json:"mold_cost"`
+		ToolingMoldCost  float64             `json:"tooling_mold_cost"`
+		ShippingCost     float64             `json:"shipping_cost"`
+		PackagingCost    float64             `json:"packaging_cost"`
+		LeadTimeDays     int64               `json:"lead_time_days"`
+		ValidityDays     int                 `json:"validity_days"`
+		ShippingMethodID int64               `json:"shipping_method_id"`
+		ImageURLs        domain.StringArray  `json:"image_urls"`
 	}
 
 	userID, err := getUserIDFromHeader(c)
@@ -52,13 +57,28 @@ func (h *QuotationHandler) CreateQuotation(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "factory_id must match authenticated user"})
 	}
 
+	// tooling_mold_cost takes precedence over legacy mold_cost
+	moldCost := req.MoldCost
+	if req.ToolingMoldCost > 0 {
+		moldCost = req.ToolingMoldCost
+	}
+	validityDays := req.ValidityDays
+	if validityDays <= 0 {
+		validityDays = 14
+	}
+
 	item := &domain.Quotation{
-		RFQID:            int64(rfqID),
-		FactoryID:        req.FactoryID,
-		PricePerPiece:    req.PricePerPiece,
-		MoldCost:         req.MoldCost,
-		LeadTimeDays:     req.LeadTimeDays,
+		RFQID:           int64(rfqID),
+		FactoryID:       req.FactoryID,
+		PricePerPiece:   req.PricePerPiece,
+		MoldCost:        moldCost,
+		ToolingMoldCost: req.ToolingMoldCost,
+		ShippingCost:    req.ShippingCost,
+		PackagingCost:   req.PackagingCost,
+		LeadTimeDays:    req.LeadTimeDays,
+		ValidityDays:    validityDays,
 		ShippingMethodID: req.ShippingMethodID,
+		ImageURLs:       req.ImageURLs,
 	}
 	if err := h.service.Create(item); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create quotation"})
@@ -346,11 +366,16 @@ func (h *QuotationHandler) Reject(c *fiber.Ctx) error {
 
 func (h *QuotationHandler) PatchQuotation(c *fiber.Ctx) error {
 	type reqBody struct {
-		PricePerPiece    float64 `json:"price_per_piece"`
-		MoldCost         float64 `json:"mold_cost"`
-		LeadTimeDays     int64   `json:"lead_time_days"`
-		ShippingMethodID int64   `json:"shipping_method_id"`
-		Reason           string  `json:"reason"`
+		PricePerPiece    float64            `json:"price_per_piece"`
+		MoldCost         float64            `json:"mold_cost"`
+		ToolingMoldCost  float64            `json:"tooling_mold_cost"`
+		ShippingCost     float64            `json:"shipping_cost"`
+		PackagingCost    float64            `json:"packaging_cost"`
+		LeadTimeDays     int64              `json:"lead_time_days"`
+		ValidityDays     int                `json:"validity_days"`
+		ShippingMethodID int64              `json:"shipping_method_id"`
+		Reason           string             `json:"reason"`
+		ImageURLs        domain.StringArray `json:"image_urls"`
 	}
 	userID, err := getUserIDFromHeader(c)
 	if err != nil {
@@ -364,7 +389,12 @@ func (h *QuotationHandler) PatchQuotation(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
 	}
-	item, err := h.service.PatchBody(int64(quotationID), userID, req.PricePerPiece, req.MoldCost, req.LeadTimeDays, req.ShippingMethodID, req.Reason)
+	// tooling_mold_cost takes precedence over legacy mold_cost
+	moldCost := req.MoldCost
+	if req.ToolingMoldCost > 0 {
+		moldCost = req.ToolingMoldCost
+	}
+	item, err := h.service.PatchBody(int64(quotationID), userID, req.PricePerPiece, moldCost, req.LeadTimeDays, req.ShippingMethodID, req.Reason)
 	if err != nil {
 		if errors.Is(err, service.ErrQuotationPatchReason) {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
@@ -379,6 +409,15 @@ func (h *QuotationHandler) PatchQuotation(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update quotation"})
+	}
+	// Update image_urls if provided in request
+	if req.ImageURLs != nil {
+		if imgErr := h.service.UpdateImageURLs(int64(quotationID), req.ImageURLs); imgErr != nil {
+			// non-fatal — log but return existing item
+			_ = imgErr
+		} else {
+			item.ImageURLs = req.ImageURLs
+		}
 	}
 	return c.JSON(item)
 }

@@ -188,6 +188,10 @@ func (s *QuotationService) PatchBody(quoteID, factoryUserID int64, pricePerPiece
 	return q2, nil
 }
 
+func (s *QuotationService) UpdateImageURLs(quoteID int64, imageURLs domain.StringArray) error {
+	return s.repo.UpdateImageURLs(quoteID, imageURLs)
+}
+
 func (s *QuotationService) Preview(items []domain.QuotationItem, discountAmount, shippingCost, packagingCost, toolingCost float64) (*Breakdown, error) {
 	if err := validateQuotationItems(items); err != nil {
 		return nil, err
