@@ -445,10 +445,6 @@ func (s *OrderService) GetDetailByID(orderID, userID int64, role string) (*domai
 	if row.RFQCategoryName != nil {
 		rfqCategoryName = *row.RFQCategoryName
 	}
-	rfqUnitName := ""
-	if row.RFQUnitName != nil {
-		rfqUnitName = *row.RFQUnitName
-	}
 
 	return &domain.OrderDetailResponse{
 		OrderID:           row.OrderID,
@@ -476,11 +472,10 @@ func (s *OrderService) GetDetailByID(orderID, userID int64, role string) (*domai
 			Title:          row.RFQTitle,
 			Details:        rfqDetails,
 			Quantity:       row.RFQQuantity,
-			UnitName:       rfqUnitName,
+			UnitName:       "",
 			BudgetPerPiece: row.RFQBudget,
 			CategoryID:     row.RFQCategoryID,
 			CategoryName:   rfqCategoryName,
-			DeadlineDate:   timePtrInTH(row.RFQDeadline),
 			CreatedAt:      row.RFQCreatedAt.In(thailandLocation),
 			Images:         images,
 		},

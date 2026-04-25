@@ -18,20 +18,18 @@ func NewRFQRepository(db *sqlx.DB) *RFQRepository {
 func (r *RFQRepository) Create(rfq *domain.RFQ) error {
 	query := `
 		INSERT INTO rfqs (
-			user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details,
-			address_id, shipping_method_id, status, deadline_date, uploaded_at, created_at, updated_at, image_urls,
-			material_grade, tolerance, color_finish, dimension_spec, weight_target_g, packaging_spec,
-			target_unit_price, target_lead_time_days, required_delivery_date, incoterms, payment_terms, delivery_address_id,
+			user_id, category_id, sub_category_id, title, quantity, details,
+			address_id, shipping_method_id, status, uploaded_at, created_at, updated_at,
+			material_grade, target_unit_price, target_lead_time_days, required_delivery_date, delivery_address_id,
 			certifications_required, sample_required, sample_qty, inspection_type,
-			tech_drawing_url, reference_images, spec_sheet_url
+			reference_images
 		)
 		VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8,
-			$9, $10, $11, $12, $13, $14, $15, $16,
-			$17, $18, $19, $20, $21, $22,
-			$23, $24, $25, $26, $27, $28,
-			$29, $30, $31, $32,
-			$33, $34, $35
+			$1, $2, $3, $4, $5, $6,
+			$7, $8, $9, $10, $11, $12,
+			$13, $14, $15, $16, $17,
+			$18, $19, $20, $21,
+			$22
 		)
 		RETURNING rfq_id
 	`
@@ -42,48 +40,34 @@ func (r *RFQRepository) Create(rfq *domain.RFQ) error {
 		nullableInt64Value(rfq.SubCategoryID),
 		rfq.Title,
 		rfq.Quantity,
-		rfq.UnitID,
-		rfq.BudgetPerPiece,
 		rfq.Details,
 		rfq.AddressID,
 		nullableInt64Value(rfq.ShippingMethodID),
 		rfq.Status,
-		nullableTimeValue(rfq.DeadlineDate),
 		nullableTimeValue(rfq.UploadedAt),
 		rfq.CreatedAt,
 		rfq.UpdatedAt,
-		rfq.ImageURLs,
 		nullableStringPtr(rfq.MaterialGrade),
-		nullableStringPtr(rfq.Tolerance),
-		nullableStringPtr(rfq.ColorFinish),
-		rfq.DimensionSpec,
-		nullableFloat64(rfq.WeightTargetG),
-		nullableStringPtr(rfq.PackagingSpec),
 		nullableFloat64(rfq.TargetUnitPrice),
 		nullableIntValue(rfq.TargetLeadTimeDays),
 		nullableTimeValue(rfq.RequiredDeliveryDate),
-		nullableStringPtr(rfq.Incoterms),
-		nullableStringPtr(rfq.PaymentTerms),
 		nullableInt64Value(rfq.DeliveryAddressID),
 		rfq.CertificationsRequired,
 		rfq.SampleRequired,
 		nullableIntValue(rfq.SampleQty),
 		nullableStringPtr(rfq.InspectionType),
-		nullableStringPtr(rfq.TechDrawingURL),
 		rfq.ReferenceImages,
-		nullableStringPtr(rfq.SpecSheetURL),
 	).Scan(&rfq.RFQID)
 }
 
 func (r *RFQRepository) ListByUserID(userID int64, status string) ([]domain.RFQ, error) {
 	var rfqs []domain.RFQ
 	query := `
-		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id,
-		       shipping_method_id, status, deadline_date, uploaded_at, created_at, updated_at, image_urls,
-		       material_grade, tolerance, color_finish, dimension_spec, weight_target_g, packaging_spec,
-		       target_unit_price, target_lead_time_days, required_delivery_date, incoterms, payment_terms, delivery_address_id,
+		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, details, address_id,
+		       shipping_method_id, status, uploaded_at, created_at, updated_at,
+		       material_grade, target_unit_price, target_lead_time_days, required_delivery_date, delivery_address_id,
 		       certifications_required, sample_required, sample_qty, inspection_type,
-		       tech_drawing_url, reference_images, spec_sheet_url
+		       reference_images
 		FROM rfqs
 		WHERE user_id = $1
 	`
@@ -100,12 +84,11 @@ func (r *RFQRepository) ListByUserID(userID int64, status string) ([]domain.RFQ,
 func (r *RFQRepository) GetByID(userID, rfqID int64) (*domain.RFQ, error) {
 	var rfq domain.RFQ
 	query := `
-		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id,
-		       shipping_method_id, status, deadline_date, uploaded_at, created_at, updated_at, image_urls,
-		       material_grade, tolerance, color_finish, dimension_spec, weight_target_g, packaging_spec,
-		       target_unit_price, target_lead_time_days, required_delivery_date, incoterms, payment_terms, delivery_address_id,
+		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, details, address_id,
+		       shipping_method_id, status, uploaded_at, created_at, updated_at,
+		       material_grade, target_unit_price, target_lead_time_days, required_delivery_date, delivery_address_id,
 		       certifications_required, sample_required, sample_qty, inspection_type,
-		       tech_drawing_url, reference_images, spec_sheet_url
+		       reference_images
 		FROM rfqs
 		WHERE user_id = $1 AND rfq_id = $2
 	`
@@ -164,12 +147,11 @@ func (r *RFQRepository) ShippingMethodExists(shippingMethodID int64) (bool, erro
 func (r *RFQRepository) GetByIDAny(rfqID int64) (*domain.RFQ, error) {
 	var rfq domain.RFQ
 	query := `
-		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, unit_id, budget_per_piece, details, address_id,
-		       shipping_method_id, status, deadline_date, uploaded_at, created_at, updated_at, image_urls,
-		       material_grade, tolerance, color_finish, dimension_spec, weight_target_g, packaging_spec,
-		       target_unit_price, target_lead_time_days, required_delivery_date, incoterms, payment_terms, delivery_address_id,
+		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, details, address_id,
+		       shipping_method_id, status, uploaded_at, created_at, updated_at,
+		       material_grade, target_unit_price, target_lead_time_days, required_delivery_date, delivery_address_id,
 		       certifications_required, sample_required, sample_qty, inspection_type,
-		       tech_drawing_url, reference_images, spec_sheet_url
+		       reference_images
 		FROM rfqs
 		WHERE rfq_id = $1
 	`
@@ -187,17 +169,18 @@ func (r *RFQRepository) ListMatchingForFactory(factoryID int64, status string) (
 	}
 	var rfqs []domain.RFQ
 	query := `
-		SELECT DISTINCT r.rfq_id, r.user_id, r.category_id, r.sub_category_id, r.title, r.quantity, r.unit_id, r.budget_per_piece, r.details, r.address_id,
-		       r.shipping_method_id, r.status, r.deadline_date, r.uploaded_at, r.created_at, r.updated_at, r.image_urls,
-		       r.material_grade, r.tolerance, r.color_finish, r.dimension_spec, r.weight_target_g, r.packaging_spec,
-		       r.target_unit_price, r.target_lead_time_days, r.required_delivery_date, r.incoterms, r.payment_terms, r.delivery_address_id,
+		SELECT DISTINCT r.rfq_id, r.user_id, r.category_id, r.sub_category_id, r.title, r.quantity, r.details, r.address_id,
+		       r.shipping_method_id, r.status, r.uploaded_at, r.created_at, r.updated_at,
+		       r.material_grade, r.target_unit_price, r.target_lead_time_days, r.required_delivery_date, r.delivery_address_id,
 		       r.certifications_required, r.sample_required, r.sample_qty, r.inspection_type,
-		       r.tech_drawing_url, r.reference_images, r.spec_sheet_url
+		       r.reference_images
 		FROM rfqs r
 		INNER JOIN map_factory_categories mfc ON mfc.category_id = r.category_id AND mfc.factory_id = $1
+		LEFT JOIN lbi_sub_categories sc ON sc.sub_category_id = r.sub_category_id
 		WHERE r.status = $2
 		  AND (
 			r.sub_category_id IS NULL
+			OR COALESCE(sc.sort_order, 0) = 99
 			OR EXISTS (
 				SELECT 1 FROM map_factory_sub_categories ms
 				WHERE ms.factory_id = $1 AND ms.sub_category_id = r.sub_category_id
@@ -219,6 +202,12 @@ func (r *RFQRepository) FactoryHasMatchingCategory(factoryID int64, rfq *domain.
 		)
 		AND (
 			$3::bigint IS NULL
+			OR EXISTS (
+				SELECT 1
+				FROM lbi_sub_categories sc
+				WHERE sc.sub_category_id = $3
+				  AND COALESCE(sc.sort_order, 0) = 99
+			)
 			OR EXISTS (
 				SELECT 1 FROM map_factory_sub_categories ms
 				WHERE ms.factory_id = $1 AND ms.sub_category_id = $3
@@ -265,32 +254,19 @@ func (r *RFQRepository) Patch(userID, rfqID int64, rfq *domain.RFQ) error {
 		    sub_category_id = :sub_category_id,
 		    title = :title,
 		    quantity = :quantity,
-		    unit_id = :unit_id,
-		    budget_per_piece = :budget_per_piece,
 		    details = :details,
 		    address_id = :address_id,
 		    shipping_method_id = :shipping_method_id,
-		    deadline_date = :deadline_date,
-		    image_urls = :image_urls,
 		    material_grade = :material_grade,
-		    tolerance = :tolerance,
-		    color_finish = :color_finish,
-		    dimension_spec = :dimension_spec,
-		    weight_target_g = :weight_target_g,
-		    packaging_spec = :packaging_spec,
 		    target_unit_price = :target_unit_price,
 		    target_lead_time_days = :target_lead_time_days,
 		    required_delivery_date = :required_delivery_date,
-		    incoterms = :incoterms,
-		    payment_terms = :payment_terms,
 		    delivery_address_id = :delivery_address_id,
 		    certifications_required = :certifications_required,
 		    sample_required = :sample_required,
 		    sample_qty = :sample_qty,
 		    inspection_type = :inspection_type,
-		    tech_drawing_url = :tech_drawing_url,
 		    reference_images = :reference_images,
-		    spec_sheet_url = :spec_sheet_url,
 		    updated_at = NOW()
 		WHERE rfq_id = :rfq_id AND user_id = :user_id AND status = 'OP'
 	`, rfq)

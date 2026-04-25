@@ -121,7 +121,6 @@ type FactoryDashboardRFQItem struct {
 	CategoryID    int64      `json:"category_id"`
 	SubCategoryID *int64     `json:"sub_category_id,omitempty"`
 	Status        string     `json:"status"`
-	DeadlineDate  *time.Time `json:"deadline_date,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 }
 

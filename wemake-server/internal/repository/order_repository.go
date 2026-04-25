@@ -41,12 +41,9 @@ type OrderDetailRow struct {
 	RFQDetails         *string    `db:"rfq_details"`
 	RFQQuantity        int64      `db:"rfq_quantity"`
 	RFQBudget          float64    `db:"rfq_budget"`
-	RFQDeadline        *time.Time `db:"rfq_deadline"`
 	RFQCreatedAt       time.Time  `db:"rfq_created_at"`
 	RFQCategoryID      int64      `db:"rfq_category_id"`
 	RFQCategoryName    *string    `db:"rfq_category_name"`
-	RFQUnitID          int64      `db:"rfq_unit_id"`
-	RFQUnitName        *string    `db:"rfq_unit_name"`
 }
 
 func NewOrderRepository(db *sqlx.DB) *OrderRepository {
@@ -237,7 +234,7 @@ const orderListEnrichedSelect = `
 		r.rfq_id,
 		COALESCE(r.title, '') AS rfq_title,
 		r.quantity AS rfq_quantity,
-		COALESCE(lu.unit_name_th, '') AS unit_name,
+		'' AS unit_name,
 		COALESCE(NULLIF(TRIM(CONCAT(c.first_name, ' ', c.last_name)), ''), 'ลูกค้า #' || o.user_id::text) AS customer_display_name,
 		cur.step_id AS current_step_id,
 		cur.step_name_th AS current_step_name_th,
@@ -249,7 +246,6 @@ const orderListEnrichedSelect = `
 	FROM orders o
 	INNER JOIN quotations q ON q.quote_id = o.quote_id
 	INNER JOIN rfqs r ON r.rfq_id = q.rfq_id
-	LEFT JOIN lbi_units lu ON lu.unit_id = r.unit_id
 	LEFT JOIN customers c ON c.user_id = o.user_id
 	LEFT JOIN LATERAL (
 		SELECT
@@ -415,13 +411,11 @@ func (r *OrderRepository) GetDetailByParticipant(orderID, userID int64, role str
 			COALESCE(r.title, '') AS rfq_title,
 			r.details AS rfq_details,
 			r.quantity AS rfq_quantity,
-			r.budget_per_piece AS rfq_budget,
-			r.deadline_date AS rfq_deadline,
+			COALESCE(r.target_unit_price, 0) AS rfq_budget,
 			r.created_at AS rfq_created_at,
 			r.category_id AS rfq_category_id,
 			cat.name AS rfq_category_name,
-			r.unit_id AS rfq_unit_id,
-			un.unit_name_th AS rfq_unit_name,
+			NULL::text AS rfq_unit_name,
 			(
 				SELECT ps.due_date::timestamp
 				FROM payment_schedules ps
@@ -433,7 +427,6 @@ func (r *OrderRepository) GetDetailByParticipant(orderID, userID int64, role str
 		INNER JOIN quotations q ON q.quote_id = o.quote_id
 		INNER JOIN rfqs r ON r.rfq_id = q.rfq_id
 		LEFT JOIN categories cat ON cat.category_id = r.category_id
-		LEFT JOIN lbi_units un ON un.unit_id = r.unit_id
 		LEFT JOIN factory_profiles fp ON fp.user_id = o.factory_id
 		WHERE o.order_id = $1
 	`

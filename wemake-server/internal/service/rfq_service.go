@@ -13,12 +13,11 @@ import (
 const maxRFQImages = 5
 
 var (
-	ErrMaxRFQImages           = errors.New("at most 5 image_urls are allowed")
-	ErrInvalidSubCategory     = errors.New("sub_category_id is invalid for the selected category")
-	ErrInvalidShippingMethod  = errors.New("shipping_method_id is invalid")
-	ErrRFQIncotermsInvalid    = errors.New("incoterms is invalid")
-	ErrRFQPaymentTermsInvalid = errors.New("payment_terms is invalid")
-	ErrRFQInspectionInvalid   = errors.New("inspection_type is invalid")
+	ErrMaxRFQReferenceImages = errors.New("at most 5 reference_images are allowed")
+	ErrInvalidSubCategory    = errors.New("sub_category_id is invalid for the selected category")
+	ErrInvalidShippingMethod = errors.New("shipping_method_id is invalid")
+	ErrRFQDetailsRequired    = errors.New("description/details must not be empty")
+	ErrRFQInspectionInvalid  = errors.New("inspection_type is invalid")
 )
 
 type RFQService struct {
@@ -29,21 +28,21 @@ func NewRFQService(repo *repository.RFQRepository) *RFQService {
 	return &RFQService{repo: repo}
 }
 
-func normalizeRFQImageURLs(urls []string) domain.JSONStringArray {
+func normalizeStringSlice(values []string) []string {
 	seen := make(map[string]struct{})
-	out := make([]string, 0, len(urls))
-	for _, u := range urls {
-		u = strings.TrimSpace(u)
-		if u == "" {
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v == "" {
 			continue
 		}
-		if _, ok := seen[u]; ok {
+		if _, ok := seen[v]; ok {
 			continue
 		}
-		seen[u] = struct{}{}
-		out = append(out, u)
+		seen[v] = struct{}{}
+		out = append(out, v)
 	}
-	return domain.JSONStringArray(out)
+	return out
 }
 
 func (s *RFQService) Create(rfq *domain.RFQ) error {
@@ -55,9 +54,15 @@ func (s *RFQService) Create(rfq *domain.RFQ) error {
 	rfq.UpdatedAt = now
 	rfq.UploadedAt = &now
 
-	rfq.ImageURLs = normalizeRFQImageURLs([]string(rfq.ImageURLs))
-	if len(rfq.ImageURLs) > maxRFQImages {
-		return ErrMaxRFQImages
+	rfq.ReferenceImages = normalizeStringSlice([]string(rfq.ReferenceImages))
+	if len(rfq.ReferenceImages) > maxRFQImages {
+		return ErrMaxRFQReferenceImages
+	}
+	if rfq.Details == "" {
+		return ErrRFQDetailsRequired
+	}
+	if !rfq.SampleRequired {
+		rfq.SampleQty = nil
 	}
 
 	if rfq.SubCategoryID != nil {
@@ -79,10 +84,6 @@ func (s *RFQService) Create(rfq *domain.RFQ) error {
 			return ErrInvalidShippingMethod
 		}
 	}
-	if err := validateRFQEnums(rfq); err != nil {
-		return err
-	}
-
 	return s.repo.Create(rfq)
 }
 
@@ -127,20 +128,6 @@ func (s *RFQService) GetForViewer(userID int64, role string, rfqID int64) (*doma
 }
 
 func validateRFQEnums(rfq *domain.RFQ) error {
-	if rfq.Incoterms != nil {
-		switch strings.TrimSpace(strings.ToUpper(*rfq.Incoterms)) {
-		case "EXW", "FOB", "CIF", "DDP":
-		default:
-			return ErrRFQIncotermsInvalid
-		}
-	}
-	if rfq.PaymentTerms != nil {
-		switch strings.TrimSpace(*rfq.PaymentTerms) {
-		case "50_50", "30_70", "net_30", "lc_at_sight":
-		default:
-			return ErrRFQPaymentTermsInvalid
-		}
-	}
 	if rfq.InspectionType != nil {
 		switch strings.TrimSpace(*rfq.InspectionType) {
 		case "self", "third_party", "buyer_onsite":
@@ -165,9 +152,16 @@ func (s *RFQService) Patch(userID, rfqID int64, rfq *domain.RFQ) error {
 	rfq.CreatedAt = existing.CreatedAt
 	rfq.UploadedAt = existing.UploadedAt
 	rfq.UpdatedAt = time.Now()
-	rfq.ImageURLs = normalizeRFQImageURLs([]string(rfq.ImageURLs))
-	if len(rfq.ImageURLs) > maxRFQImages {
-		return ErrMaxRFQImages
+	rfq.Details = strings.TrimSpace(rfq.Details)
+	rfq.ReferenceImages = normalizeStringSlice([]string(rfq.ReferenceImages))
+	if len(rfq.ReferenceImages) > maxRFQImages {
+		return ErrMaxRFQReferenceImages
+	}
+	if rfq.Details == "" {
+		return ErrRFQDetailsRequired
+	}
+	if !rfq.SampleRequired {
+		rfq.SampleQty = nil
 	}
 	if rfq.SubCategoryID != nil {
 		valid, err := s.repo.SubCategoryBelongsToCategory(*rfq.SubCategoryID, rfq.CategoryID)

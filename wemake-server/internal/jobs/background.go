@@ -70,23 +70,8 @@ func runOrderAutoClose(orderService *service.OrderService) {
 	}
 }
 
-// expireRFQs sets status = 'EX' for open RFQs whose deadline_date < today.
 func expireRFQs(db *sqlx.DB) {
-	res, err := db.Exec(`
-		UPDATE rfqs
-		SET status = 'EX', updated_at = NOW()
-		WHERE status = 'OP'
-		  AND deadline_date IS NOT NULL
-		  AND deadline_date < CURRENT_DATE
-	`)
-	if err != nil {
-		log.Printf("[jobs/expiration] expireRFQs error: %v", err)
-		return
-	}
-	n, _ := res.RowsAffected()
-	if n > 0 {
-		log.Printf("[jobs/expiration] expired %d RFQ(s)", n)
-	}
+	// RFQ expiry by deadline_date is disabled because the legacy deadline column was removed.
 }
 
 // expireQuotations sets status = 'EX' for pending (PD) quotations older than 7 days

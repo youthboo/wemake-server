@@ -575,13 +575,11 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 		INNER JOIN map_factory_categories mfc
 			ON mfc.factory_id = $1
 		   AND mfc.category_id = r.category_id
+		LEFT JOIN lbi_sub_categories sc ON sc.sub_category_id = r.sub_category_id
 		WHERE r.status = 'OP'
 		  AND (
-			r.deadline_date IS NULL
-			OR r.deadline_date >= CURRENT_DATE
-		  )
-		  AND (
 			r.sub_category_id IS NULL
+			OR COALESCE(sc.sort_order, 0) = 99
 			OR EXISTS (
 				SELECT 1
 				FROM map_factory_sub_categories mfs
@@ -648,18 +646,16 @@ func (r *FactoryRepository) GetDashboard(factoryID int64) (*domain.FactoryDashbo
 	}
 
 	if err := r.db.Select(&out.RecentMatchingRFQs, `
-		SELECT DISTINCT r.rfq_id, r.title, r.category_id, r.sub_category_id, r.status, r.deadline_date, r.created_at
+		SELECT DISTINCT r.rfq_id, r.title, r.category_id, r.sub_category_id, r.status, r.created_at
 		FROM rfqs r
 		INNER JOIN map_factory_categories mfc
 			ON mfc.factory_id = $1
 		   AND mfc.category_id = r.category_id
+		LEFT JOIN lbi_sub_categories sc ON sc.sub_category_id = r.sub_category_id
 		WHERE r.status = 'OP'
 		  AND (
-			r.deadline_date IS NULL
-			OR r.deadline_date >= CURRENT_DATE
-		  )
-		  AND (
 			r.sub_category_id IS NULL
+			OR COALESCE(sc.sort_order, 0) = 99
 			OR EXISTS (
 				SELECT 1
 				FROM map_factory_sub_categories mfs
