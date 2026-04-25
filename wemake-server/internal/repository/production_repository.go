@@ -55,7 +55,7 @@ func (r *ProductionRepository) ListActiveSteps() ([]domain.ProductionStepTemplat
 
 func (r *ProductionRepository) ListActiveStepsByFactoryType(factoryTypeID *int64) ([]domain.ProductionStepTemplate, error) {
 	var items []domain.ProductionStepTemplate
-	query := `
+	baseQuery := `
 		SELECT
 			step_id,
 			COALESCE(step_code, '') AS step_code,
@@ -67,18 +67,27 @@ func (r *ProductionRepository) ListActiveStepsByFactoryType(factoryTypeID *int64
 			COALESCE(is_payment_trigger, FALSE) AS is_payment_trigger,
 			COALESCE(icon_name, '') AS icon_name,
 			COALESCE(description, '') AS description,
-			COALESCE(is_active, FALSE) AS is_active
+			(COALESCE(is_active, FALSE) OR status::text = '1') AS is_active
 		FROM lbi_production
-		WHERE COALESCE(is_active, FALSE) = TRUE
+		WHERE (COALESCE(is_active, FALSE) = TRUE OR status::text = '1')
 	ORDER BY COALESCE(sort_order, sequence), step_id
 	`
+	query := baseQuery
 	args := []interface{}{}
 	if factoryTypeID != nil && *factoryTypeID > 0 {
-		query = strings.Replace(query, "WHERE COALESCE(is_active, FALSE) = TRUE", "WHERE COALESCE(is_active, FALSE) = TRUE AND factory_type_id = $1", 1)
+		query = strings.Replace(baseQuery, "WHERE (COALESCE(is_active, FALSE) = TRUE OR status::text = '1')", "WHERE (COALESCE(is_active, FALSE) = TRUE OR status::text = '1') AND (factory_type_id = $1 OR factory_type_id IS NULL)", 1)
 		args = append(args, *factoryTypeID)
 	}
 	err := r.db.Select(&items, query, args...)
-	return items, err
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 && factoryTypeID != nil && *factoryTypeID > 0 {
+		if err := r.db.Select(&items, baseQuery); err != nil {
+			return nil, err
+		}
+	}
+	return items, nil
 }
 
 func (r *ProductionRepository) ListActiveStepsTx(tx *sqlx.Tx) ([]domain.ProductionStepTemplate, error) {
@@ -87,7 +96,7 @@ func (r *ProductionRepository) ListActiveStepsTx(tx *sqlx.Tx) ([]domain.Producti
 
 func (r *ProductionRepository) ListActiveStepsByFactoryTypeTx(tx *sqlx.Tx, factoryTypeID *int64) ([]domain.ProductionStepTemplate, error) {
 	var items []domain.ProductionStepTemplate
-	query := `
+	baseQuery := `
 		SELECT
 			step_id,
 			COALESCE(step_code, '') AS step_code,
@@ -99,18 +108,27 @@ func (r *ProductionRepository) ListActiveStepsByFactoryTypeTx(tx *sqlx.Tx, facto
 			COALESCE(is_payment_trigger, FALSE) AS is_payment_trigger,
 			COALESCE(icon_name, '') AS icon_name,
 			COALESCE(description, '') AS description,
-			COALESCE(is_active, FALSE) AS is_active
+			(COALESCE(is_active, FALSE) OR status::text = '1') AS is_active
 		FROM lbi_production
-		WHERE COALESCE(is_active, FALSE) = TRUE
+		WHERE (COALESCE(is_active, FALSE) = TRUE OR status::text = '1')
 		ORDER BY COALESCE(sort_order, sequence), step_id
 	`
+	query := baseQuery
 	args := []interface{}{}
 	if factoryTypeID != nil && *factoryTypeID > 0 {
-		query = strings.Replace(query, "WHERE COALESCE(is_active, FALSE) = TRUE", "WHERE COALESCE(is_active, FALSE) = TRUE AND factory_type_id = $1", 1)
+		query = strings.Replace(baseQuery, "WHERE (COALESCE(is_active, FALSE) = TRUE OR status::text = '1')", "WHERE (COALESCE(is_active, FALSE) = TRUE OR status::text = '1') AND (factory_type_id = $1 OR factory_type_id IS NULL)", 1)
 		args = append(args, *factoryTypeID)
 	}
 	err := tx.Select(&items, query, args...)
-	return items, err
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 && factoryTypeID != nil && *factoryTypeID > 0 {
+		if err := tx.Select(&items, baseQuery); err != nil {
+			return nil, err
+		}
+	}
+	return items, nil
 }
 
 func (r *ProductionRepository) GetOrderByID(orderID int64) (*ProductionOrderContext, error) {
@@ -155,7 +173,7 @@ func (r *ProductionRepository) ListByOrderID(orderID int64) ([]domain.Production
 			COALESCE(lp.sort_order, lp.sequence) AS sort_order,
 			pu.status,
 			COALESCE(pu.description, '') AS description,
-			COALESCE(pu.image_urls, '[]'::jsonb) AS image_urls,
+			COALESCE(pu.image_urls::text, '[]') AS image_urls,
 			pu.completed_at,
 			pu.rejected_reason,
 			pu.updated_by_user_id,
@@ -183,7 +201,7 @@ func (r *ProductionRepository) ListByOrderIDTx(tx *sqlx.Tx, orderID int64) ([]do
 			COALESCE(lp.sort_order, lp.sequence) AS sort_order,
 			pu.status,
 			COALESCE(pu.description, '') AS description,
-			COALESCE(pu.image_urls, '[]'::jsonb) AS image_urls,
+			COALESCE(pu.image_urls::text, '[]') AS image_urls,
 			pu.completed_at,
 			pu.rejected_reason,
 			pu.updated_by_user_id,
@@ -211,7 +229,7 @@ func (r *ProductionRepository) GetUpdateByID(updateID int64) (*ProductionUpdateC
 			COALESCE(lp.sort_order, lp.sequence) AS sort_order,
 			pu.status,
 			COALESCE(pu.description, '') AS description,
-			COALESCE(pu.image_urls, '[]'::jsonb) AS image_urls,
+			COALESCE(pu.image_urls::text, '[]') AS image_urls,
 			pu.completed_at,
 			pu.rejected_reason,
 			pu.updated_by_user_id,
@@ -244,7 +262,7 @@ func (r *ProductionRepository) GetUpdateByIDForUpdateTx(tx *sqlx.Tx, updateID in
 			COALESCE(lp.sort_order, lp.sequence) AS sort_order,
 			pu.status,
 			COALESCE(pu.description, '') AS description,
-			COALESCE(pu.image_urls, '[]'::jsonb) AS image_urls,
+			COALESCE(pu.image_urls::text, '[]') AS image_urls,
 			pu.completed_at,
 			pu.rejected_reason,
 			pu.updated_by_user_id,
@@ -311,7 +329,7 @@ func (r *ProductionRepository) RejectTx(tx *sqlx.Tx, updateID int64, reason stri
 			updated_by_user_id = $3
 		WHERE update_id = $1
 		RETURNING update_id, order_id, step_id, status, COALESCE(description, '') AS description,
-		          COALESCE(image_urls, '[]'::jsonb) AS image_urls,
+		          COALESCE(image_urls::text, '[]') AS image_urls,
 		          completed_at, rejected_reason, updated_by_user_id, last_updated_at, created_at
 	`
 	if err := tx.Get(&item, query, updateID, reason, updatedBy); err != nil {

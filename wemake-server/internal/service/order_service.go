@@ -29,6 +29,34 @@ var ErrPaymentAlreadyExists = errors.New("payment already exists for this order 
 var ErrPaymentStateInvalid = errors.New("payment is not in a verifiable state")
 var ErrDepositAlreadyPaid = errors.New("DEPOSIT_ALREADY_PAID")
 var ErrDepositExpired = errors.New("DEPOSIT_EXPIRED")
+var ErrConfirmReceiptInvalidStatus = errors.New("order status must be SH")
+var ErrConfirmReceiptNotAllowed = errors.New("order already completed or cancelled")
+
+type ConfirmReceiptInput struct {
+	Note       string
+	ReceivedAt *time.Time
+}
+
+type ConfirmReceiptSettlement struct {
+	FactoryUserID int64   `json:"factory_user_id"`
+	WalletID      int64   `json:"wallet_id"`
+	MovedAmount   float64 `json:"moved_amount"`
+	PendingBefore float64 `json:"pending_before"`
+	PendingAfter  float64 `json:"pending_after"`
+	GoodBefore    float64 `json:"good_before"`
+	GoodAfter     float64 `json:"good_after"`
+}
+
+type ConfirmReceiptResult struct {
+	Success         bool                     `json:"success"`
+	OrderID         int64                    `json:"order_id"`
+	StatusBefore    string                   `json:"status_before"`
+	StatusAfter     string                   `json:"status_after"`
+	CompletedStepID int64                    `json:"completed_step_id"`
+	Settlement      ConfirmReceiptSettlement `json:"settlement"`
+	CompletedAt     time.Time                `json:"completed_at"`
+	AlreadyComplete bool                     `json:"already_completed,omitempty"`
+}
 
 type OrderService struct {
 	db         *sqlx.DB
@@ -508,6 +536,146 @@ func (s *OrderService) MarkShipped(orderID, factoryID int64, trackingNo, courier
 		"tracking_no": trackingNo,
 		"courier":     courier,
 	})
+}
+
+func (s *OrderService) ConfirmReceipt(orderID, userID int64, role string, input ConfirmReceiptInput) (*ConfirmReceiptResult, error) {
+	if role != domain.RoleCustomer {
+		return nil, domain.ErrForbidden
+	}
+	return s.confirmReceiptTx(orderID, &userID, strings.TrimSpace(input.Note), input.ReceivedAt, "CUSTOMER_CONFIRMED_RECEIPT", true)
+}
+
+func (s *OrderService) AutoCloseShippedOrders() (int, error) {
+	cutoff := time.Now().AddDate(0, 0, -20)
+	candidates, err := s.repo.ListAutoCloseCandidates(cutoff)
+	if err != nil {
+		return 0, err
+	}
+	closed := 0
+	for _, orderID := range candidates {
+		if _, err := s.confirmReceiptTx(orderID, nil, "auto close after 20 days", nil, "AUTO_CLOSE_20_DAYS", true); err != nil {
+			// Keep processing next orders; this job should be best-effort.
+			continue
+		}
+		closed++
+	}
+	return closed, nil
+}
+
+func (s *OrderService) confirmReceiptTx(orderID int64, actorUserID *int64, note string, receivedAt *time.Time, activityCode string, idempotent bool) (*ConfirmReceiptResult, error) {
+	tx, err := s.db.Beginx()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	order, err := s.repo.GetByIDForUpdateTx(tx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	if actorUserID != nil && order.UserID != *actorUserID {
+		return nil, domain.ErrForbidden
+	}
+
+	statusBefore := normalizeOrderStatus(order.Status)
+	if statusBefore == "CP" {
+		if !idempotent {
+			return nil, ErrConfirmReceiptNotAllowed
+		}
+		now := time.Now()
+		if receivedAt != nil {
+			now = *receivedAt
+		}
+		return &ConfirmReceiptResult{
+			Success:         true,
+			OrderID:         order.OrderID,
+			StatusBefore:    "CP",
+			StatusAfter:     "CP",
+			CompletedStepID: 6,
+			CompletedAt:     now,
+			AlreadyComplete: true,
+		}, nil
+	}
+	if statusBefore == "CN" || statusBefore == "CC" {
+		return nil, ErrConfirmReceiptNotAllowed
+	}
+	if statusBefore != "SH" {
+		return nil, ErrConfirmReceiptInvalidStatus
+	}
+
+	completedAt := time.Now().UTC()
+	if receivedAt != nil {
+		completedAt = receivedAt.UTC()
+	}
+
+	if err := s.repo.UpsertCompletedStepTx(tx, orderID, actorUserID, note, completedAt); err != nil {
+		return nil, err
+	}
+	if err := s.repo.MarkCompletedTx(tx, orderID, completedAt); err != nil {
+		return nil, err
+	}
+
+	if _, err := s.wallets.EnsureWallet(tx, order.FactoryID); err != nil {
+		return nil, err
+	}
+	factoryWallet, err := s.wallets.GetByUserIDForUpdate(tx, order.FactoryID)
+	if err != nil {
+		return nil, err
+	}
+	movedAmount := roundCurrency(order.TotalAmount)
+	if movedAmount < 0 {
+		movedAmount = 0
+	}
+	if err := s.wallets.MovePendingToGoodTx(tx, factoryWallet.WalletID, movedAmount); err != nil {
+		return nil, err
+	}
+	settlement := ConfirmReceiptSettlement{
+		FactoryUserID: order.FactoryID,
+		WalletID:      factoryWallet.WalletID,
+		MovedAmount:   movedAmount,
+		PendingBefore: factoryWallet.PendingFund,
+		PendingAfter:  roundCurrency(factoryWallet.PendingFund - movedAmount),
+		GoodBefore:    factoryWallet.GoodFund,
+		GoodAfter:     roundCurrency(factoryWallet.GoodFund + movedAmount),
+	}
+
+	orderIDPtr := order.OrderID
+	settleTx := &domain.Transaction{
+		TxID:       "tx-" + uuid.NewString(),
+		WalletID:   factoryWallet.WalletID,
+		OrderID:    &orderIDPtr,
+		Type:       "SC",
+		Amount:     movedAmount,
+		Status:     "PT",
+		CreatedAt:  completedAt,
+		UpdatedAt:  completedAt,
+		UploadedAt: completedAt,
+	}
+	if err := s.txLedger.CreateTx(tx, settleTx); err != nil {
+		return nil, err
+	}
+	if err := s.repo.InsertActivityTx(tx, orderID, actorUserID, activityCode, map[string]interface{}{
+		"status_before": statusBefore,
+		"status_after":  "CP",
+		"completed_at":  completedAt,
+		"settlement":    settlement,
+		"note":          note,
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return &ConfirmReceiptResult{
+		Success:         true,
+		OrderID:         orderID,
+		StatusBefore:    statusBefore,
+		StatusAfter:     "CP",
+		CompletedStepID: 6,
+		Settlement:      settlement,
+		CompletedAt:     completedAt,
+	}, nil
 }
 
 func expectedPaymentAmount(order *domain.Order, paymentType string) (float64, error) {

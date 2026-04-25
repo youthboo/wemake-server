@@ -143,7 +143,7 @@ func productionServiceError(c *fiber.Ctx, err error) error {
 		case errors.Is(rule, service.ErrProductionInvalidImageFormat):
 			return productionError(c, fiber.StatusUnprocessableEntity, "INVALID_IMAGE_FORMAT", "image_urls must be a non-empty array of unique URL strings", rule.Details)
 		case errors.Is(rule, service.ErrProductionInvalidImageURL):
-			return productionError(c, fiber.StatusUnprocessableEntity, "INVALID_IMAGE_URL", "image_urls must be unique HTTPS URLs", rule.Details)
+			return productionError(c, fiber.StatusUnprocessableEntity, "INVALID_IMAGE_URL", "image_urls must be unique HTTP/HTTPS URLs", rule.Details)
 		case errors.Is(rule, service.ErrProductionDescriptionTooLong):
 			return productionError(c, fiber.StatusUnprocessableEntity, "INVALID_DESCRIPTION", "description must be 2000 characters or fewer", rule.Details)
 		case errors.Is(rule, service.ErrProductionReasonRequired):

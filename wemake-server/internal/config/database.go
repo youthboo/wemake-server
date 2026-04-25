@@ -28,6 +28,16 @@ func InitDatabase(cfg *Config) (*sqlx.DB, error) {
 }
 
 func runMigrations(db *sqlx.DB) error {
+	// Prevent concurrent app instances from running DDL at the same time.
+	// Concurrent startup migrations can deadlock with each other and with live queries.
+	const migrationLockKey int64 = 2026042501
+	if _, err := db.Exec(`SELECT pg_advisory_lock($1)`, migrationLockKey); err != nil {
+		return err
+	}
+	defer func() {
+		_, _ = db.Exec(`SELECT pg_advisory_unlock($1)`, migrationLockKey)
+	}()
+
 	entries, err := os.ReadDir("migration")
 	if err != nil {
 		if os.IsNotExist(err) {

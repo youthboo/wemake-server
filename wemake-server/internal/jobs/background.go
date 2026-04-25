@@ -8,12 +8,24 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/yourusername/wemake/internal/repository"
+	"github.com/yourusername/wemake/internal/service"
 )
 
 // Start launches all background jobs. Call once from main.go after DB is ready.
 // Each job runs in its own goroutine and loops forever until the process exits.
 func Start(db *sqlx.DB) {
+	orderService := service.NewOrderService(
+		db,
+		repository.NewOrderRepository(db),
+		nil,
+		repository.NewWalletRepository(db),
+		repository.NewTransactionRepository(db),
+		nil,
+		nil,
+	)
 	go runExpiration(db)
+	go runOrderAutoClose(orderService)
 	go runMatchingNotifications(db)
 }
 
@@ -35,6 +47,25 @@ func runExpiration(db *sqlx.DB) {
 		expireRFQs(db)
 		expireQuotations(db)
 		expirePendingDeposits(db)
+	}
+}
+
+func runOrderAutoClose(orderService *service.OrderService) {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	if n, err := orderService.AutoCloseShippedOrders(); err != nil {
+		log.Printf("[jobs/order-auto-close] error: %v", err)
+	} else if n > 0 {
+		log.Printf("[jobs/order-auto-close] auto-closed %d order(s)", n)
+	}
+
+	for range ticker.C {
+		if n, err := orderService.AutoCloseShippedOrders(); err != nil {
+			log.Printf("[jobs/order-auto-close] error: %v", err)
+		} else if n > 0 {
+			log.Printf("[jobs/order-auto-close] auto-closed %d order(s)", n)
+		}
 	}
 }
 

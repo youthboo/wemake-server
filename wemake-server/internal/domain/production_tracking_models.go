@@ -33,13 +33,13 @@ func (a *StringArray) Scan(src interface{}) error {
 
 func (a StringArray) Value() (driver.Value, error) {
 	if len(a) == 0 {
-		return []byte("[]"), nil
+		return "[]", nil
 	}
 	b, err := json.Marshal(a)
 	if err != nil {
 		return nil, err
 	}
-	return b, nil
+	return string(b), nil
 }
 
 type ProductionStepTemplate struct {

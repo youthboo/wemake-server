@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/yourusername/wemake/internal/domain"
@@ -318,4 +319,55 @@ func (h *OrderHandler) VerifyPayment(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to verify payment"})
 	}
 	return c.JSON(item)
+}
+
+func (h *OrderHandler) ConfirmReceipt(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
+	}
+	u, err := h.auth.GetUserByID(userID)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "user not found"})
+	}
+	orderID, err := c.ParamsInt("order_id")
+	if err != nil || orderID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid order_id"})
+	}
+	type reqBody struct {
+		Note       string  `json:"note"`
+		ReceivedAt *string `json:"received_at"`
+	}
+	var req reqBody
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	var receivedAt *time.Time
+	if req.ReceivedAt != nil && strings.TrimSpace(*req.ReceivedAt) != "" {
+		t, parseErr := time.Parse(time.RFC3339, strings.TrimSpace(*req.ReceivedAt))
+		if parseErr != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "received_at must be RFC3339 datetime"})
+		}
+		receivedAt = &t
+	}
+
+	result, err := h.service.ConfirmReceipt(int64(orderID), userID, u.Role, service.ConfirmReceiptInput{
+		Note:       req.Note,
+		ReceivedAt: receivedAt,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrForbidden):
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
+		case errors.Is(err, service.ErrConfirmReceiptInvalidStatus):
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error()})
+		case errors.Is(err, service.ErrConfirmReceiptNotAllowed):
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": err.Error()})
+		case repository.IsNotFoundError(err):
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "order not found"})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to confirm receipt"})
+		}
+	}
+	return c.JSON(result)
 }

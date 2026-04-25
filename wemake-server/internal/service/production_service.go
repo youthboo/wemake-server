@@ -194,15 +194,15 @@ func (s *ProductionService) Upsert(orderID, userID int64, input ProductionWriteI
 		}
 	}
 
+	// Cannot revert a completed step back to in-progress
 	if current.Status == "CD" && input.Status == "IP" {
 		return nil, &ProductionRuleError{Err: ErrProductionInvalidStateTransition}
 	}
-	if current.Status == "PD" && input.Status == "CD" {
-		return nil, &ProductionRuleError{Err: ErrProductionInvalidStateTransition}
-	}
+	// Cannot mark a rejected step as done without re-submitting as IP first
 	if current.Status == "RJ" && input.Status == "CD" {
 		return nil, &ProductionRuleError{Err: ErrProductionInvalidStateTransition}
 	}
+	// PD → CD is allowed: factory can complete a step in one click (with evidence)
 
 	if active := s.repo.GetActiveInProgressStep(inflated, input.StepID); input.Status == "IP" && active != nil && active.Status == "IP" && active.StepID != input.StepID {
 		return nil, &ProductionRuleError{
@@ -212,10 +212,11 @@ func (s *ProductionService) Upsert(orderID, userID int64, input ProductionWriteI
 	}
 
 	if input.Status == "CD" {
-		if len(input.ImageURLs) < int(step.MinPhotos) {
+		requiredPhotos := 1
+		if len(input.ImageURLs) < requiredPhotos {
 			return nil, &ProductionRuleError{
 				Err:     ErrProductionInsufficientEvidence,
-				Details: map[string]interface{}{"required": step.MinPhotos, "provided": len(input.ImageURLs)},
+				Details: map[string]interface{}{"required": requiredPhotos, "provided": len(input.ImageURLs)},
 			}
 		}
 		if step.IsPaymentTrigger && (!input.ConfirmPaymentTrigger || !input.HeaderPaymentConfirmed) {
@@ -404,7 +405,8 @@ func validateImageURLs(items []string) error {
 			return &ProductionRuleError{Err: ErrProductionInvalidImageFormat}
 		}
 		u, err := url.Parse(v)
-		if err != nil || strings.ToLower(u.Scheme) != "https" || u.Host == "" {
+		scheme := strings.ToLower(u.Scheme)
+		if err != nil || (scheme != "https" && scheme != "http") || u.Host == "" {
 			return &ProductionRuleError{Err: ErrProductionInvalidImageURL}
 		}
 		if _, ok := seen[v]; ok {

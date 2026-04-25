@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/yourusername/wemake/internal/domain"
@@ -116,4 +117,29 @@ func (r *WalletRepository) CreditGoodFund(tx *sqlx.Tx, walletID int64, amount fl
 		UPDATE wallets SET good_fund = good_fund + $1 WHERE wallet_id = $2
 	`, amount, walletID)
 	return err
+}
+
+// MovePendingToGoodTx transfers amount from pending_fund to good_fund atomically.
+func (r *WalletRepository) MovePendingToGoodTx(tx *sqlx.Tx, walletID int64, amount float64) error {
+	if amount <= 0 {
+		return nil
+	}
+	res, err := tx.Exec(`
+		UPDATE wallets
+		SET pending_fund = pending_fund - $1,
+		    good_fund = good_fund + $1
+		WHERE wallet_id = $2
+		  AND pending_fund >= $1
+	`, amount, walletID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("insufficient pending_fund")
+	}
+	return nil
 }

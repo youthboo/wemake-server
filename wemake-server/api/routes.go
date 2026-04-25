@@ -214,6 +214,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	orders.Get("/", orderHandler.ListOrders)
 	orders.Get("/:order_id/activity", orderHandler.ListActivity)
 	orders.Get("/:order_id", orderHandler.GetOrder)
+	orders.Post("/:order_id/confirm-receipt", orderHandler.ConfirmReceipt)
 	orders.Post("/:order_id/ship", orderHandler.MarkShipped)
 	orders.Post("/:order_id/payments", orderPaymentHandler.PayDeposit)
 	orders.Post("/:order_id/payments/:tx_id/verify", orderHandler.VerifyPayment)
