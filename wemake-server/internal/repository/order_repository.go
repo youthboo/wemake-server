@@ -415,7 +415,6 @@ func (r *OrderRepository) GetDetailByParticipant(orderID, userID int64, role str
 			r.created_at AS rfq_created_at,
 			r.category_id AS rfq_category_id,
 			cat.name AS rfq_category_name,
-			NULL::text AS rfq_unit_name,
 			(
 				SELECT ps.due_date::timestamp
 				FROM payment_schedules ps
