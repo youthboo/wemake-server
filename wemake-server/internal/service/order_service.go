@@ -554,16 +554,17 @@ func deriveDepositDueDate(row *repository.OrderDetailRow) *time.Time {
 }
 
 func buildNextAction(row *repository.OrderDetailRow, status string, depositDueDate, depositPaidAt, finalPaidAt *time.Time, nowTH time.Time) *domain.OrderNextAction {
+	// Business rule: 100% upfront payment — no installments.
 	switch status {
 	case "PP":
 		return &domain.OrderNextAction{
 			Actor:      "CUSTOMER",
-			Type:       "PAY_DEPOSIT",
-			Amount:     row.DepositAmount,
+			Type:       "PAY_FULL_AMOUNT",
+			Amount:     row.TotalAmount,
 			Currency:   "THB",
 			DueDate:    depositDueDate,
-			CTAURL:     fmt.Sprintf("/orders/%d/payment?stage=deposit", row.OrderID),
-			CTALabelTH: "ชำระเงินมัดจำ",
+			CTAURL:     fmt.Sprintf("/orders/%d/payment?stage=full", row.OrderID),
+			CTALabelTH: "ชำระเงินเต็มจำนวน",
 		}
 	case "PE":
 		if depositDueDate == nil {
@@ -575,93 +576,38 @@ func buildNextAction(row *repository.OrderDetailRow, status string, depositDueDa
 		}
 		return &domain.OrderNextAction{
 			Actor:      "CUSTOMER",
-			Type:       "PAY_DEPOSIT",
-			Amount:     row.DepositAmount,
+			Type:       "PAY_FULL_AMOUNT",
+			Amount:     row.TotalAmount,
 			Currency:   "THB",
 			DueDate:    &graceEnds,
-			CTAURL:     fmt.Sprintf("/orders/%d/payment?stage=deposit", row.OrderID),
-			CTALabelTH: "ชำระเงินมัดจำ",
+			CTAURL:     fmt.Sprintf("/orders/%d/payment?stage=full", row.OrderID),
+			CTALabelTH: "ชำระเงินเต็มจำนวน",
 		}
-	case "PR", "QC":
-		return nil
-	case "SH":
-		if finalPaidAt == nil {
-			return &domain.OrderNextAction{
-				Actor:      "CUSTOMER",
-				Type:       "PAY_DELIVERY",
-				Amount:     roundCurrency(row.TotalAmount - row.DepositAmount - roundCurrency(row.TotalAmount*0.4)),
-				Currency:   "THB",
-				CTAURL:     fmt.Sprintf("/orders/%d/payment?stage=delivery", row.OrderID),
-				CTALabelTH: "ชำระเงินก่อนจัดส่ง",
-			}
-		}
-	case "CP", "CN":
-		return nil
-	}
-	if depositPaidAt != nil {
+	case "PR", "QC", "SH", "CP", "CN":
 		return nil
 	}
 	return nil
 }
 
 func buildPaymentSchedule(row *repository.OrderDetailRow, status string, depositDueDate, depositPaidAt, finalPaidAt *time.Time) []domain.OrderPaymentScheduleItem {
-	depositAmount := row.DepositAmount
-	if depositAmount <= 0 {
-		depositAmount = roundCurrency(row.TotalAmount * 0.3)
-	}
-	productionAmount := roundCurrency(row.TotalAmount * 0.4)
-	remaining := roundCurrency(row.TotalAmount - depositAmount)
-	if productionAmount > remaining {
-		productionAmount = remaining
-	}
-	deliveryAmount := roundCurrency(remaining - productionAmount)
-	depositPercent := percentOf(depositAmount, row.TotalAmount)
-	productionPercent := percentOf(productionAmount, row.TotalAmount)
-	deliveryPercent := percentOf(deliveryAmount, row.TotalAmount)
-	productionTrigger := "PRODUCTION"
-	deliveryTrigger := "READY_TO_SHIP"
-
-	depositStatus := "PENDING"
-	if depositPaidAt != nil || status == "PD" || status == "PR" || status == "QC" || status == "SH" || status == "CP" {
-		depositStatus = "PAID"
+	// Business rule: customer pays 100% upfront before production starts.
+	total := row.TotalAmount
+	paidStatus := "PENDING"
+	if depositPaidAt != nil || finalPaidAt != nil ||
+		status == "PD" || status == "PR" || status == "QC" || status == "SH" || status == "CP" {
+		paidStatus = "PAID"
 	} else if status == "PE" {
-		depositStatus = "OVERDUE"
-	}
-
-	productionStatus := "LOCKED"
-	deliveryStatus := "LOCKED"
-	if finalPaidAt != nil {
-		productionStatus = "PAID"
-		deliveryStatus = "PAID"
-	} else if status == "PR" || status == "QC" || status == "SH" || status == "CP" {
-		productionStatus = "PENDING"
-		if status == "SH" || status == "CP" {
-			deliveryStatus = "PENDING"
-		}
+		paidStatus = "OVERDUE"
 	}
 
 	return []domain.OrderPaymentScheduleItem{
 		{
-			Stage:   domain.PaymentStageDeposit,
-			Percent: depositPercent,
-			Amount:  depositAmount,
-			Status:  depositStatus,
+			Stage:   domain.PaymentStageFullPayment,
+			Percent: 100,
+			Amount:  total,
+			Status:  paidStatus,
 			DueDate: depositDueDate,
 			PaidAt:  depositPaidAt,
-		},
-		{
-			Stage:           domain.PaymentStageProduction,
-			Percent:         productionPercent,
-			Amount:          productionAmount,
-			Status:          productionStatus,
-			TriggeredByStep: &productionTrigger,
-		},
-		{
-			Stage:           domain.PaymentStageDelivery,
-			Percent:         deliveryPercent,
-			Amount:          deliveryAmount,
-			Status:          deliveryStatus,
-			TriggeredByStep: &deliveryTrigger,
 		},
 	}
 }
@@ -678,11 +624,11 @@ func normalizeOrderStatus(status string) string {
 func orderStatusLabelTH(status string) string {
 	switch status {
 	case "PP":
-		return "รอชำระมัดจำ"
+		return "รอชำระเงิน"
 	case "PE":
 		return "หมดกำหนดชำระ"
 	case "PD":
-		return "ชำระมัดจำแล้ว"
+		return "ชำระเงินแล้ว รอเริ่มผลิต"
 	case "PR":
 		return "กำลังผลิต"
 	case "QC":

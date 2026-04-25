@@ -5,9 +5,10 @@ import "time"
 type PaymentStage string
 
 const (
-	PaymentStageDeposit    PaymentStage = "DEPOSIT"
-	PaymentStageProduction PaymentStage = "PRODUCTION"
-	PaymentStageDelivery   PaymentStage = "DELIVERY"
+	PaymentStageDeposit     PaymentStage = "DEPOSIT"
+	PaymentStageProduction  PaymentStage = "PRODUCTION"
+	PaymentStageDelivery    PaymentStage = "DELIVERY"
+	PaymentStageFullPayment PaymentStage = "FULL_PAYMENT"
 )
 
 // PaymentSchedule represents an installment payment schedule row for an order.
