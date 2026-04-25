@@ -94,7 +94,7 @@ func (s *OrderPaymentService) PayDeposit(input OrderPaymentInput) (*OrderPayment
 	input.PaymentMethod = strings.ToUpper(strings.TrimSpace(input.PaymentMethod))
 	input.IdempotencyKey = strings.TrimSpace(input.IdempotencyKey)
 
-	if input.Type != "DP" {
+	if input.Type != "DP" && input.Type != "FP" {
 		return nil, &PaymentRuleError{Err: ErrPaymentTypeNotSupported}
 	}
 	if input.PaymentMethod != "WALLET" {
@@ -137,7 +137,13 @@ func (s *OrderPaymentService) PayDeposit(input OrderPaymentInput) (*OrderPayment
 	default:
 		return nil, &PaymentRuleError{Err: ErrDepositAlreadyPaid}
 	}
-	if !amountEqual(input.Amount, order.DepositAmount) {
+	// For full-payment model (DP or FP), validate against total_amount.
+	// Fall back to deposit_amount only if total_amount is zero (legacy orders).
+	expectedAmount := order.TotalAmount
+	if expectedAmount <= 0 {
+		expectedAmount = order.DepositAmount
+	}
+	if !amountEqual(input.Amount, expectedAmount) {
 		return nil, &PaymentRuleError{Err: ErrPaymentAmountMismatch}
 	}
 
@@ -285,6 +291,7 @@ type paymentOrderRow struct {
 	UserID        int64   `db:"user_id"`
 	FactoryID     int64   `db:"factory_id"`
 	DepositAmount float64 `db:"deposit_amount"`
+	TotalAmount   float64 `db:"total_amount"`
 	Status        string  `db:"status"`
 }
 
@@ -298,7 +305,7 @@ type paymentWalletRow struct {
 func lockPaymentOrder(tx *sqlx.Tx, orderID int64) (*paymentOrderRow, error) {
 	var row paymentOrderRow
 	err := tx.Get(&row, `
-		SELECT order_id, user_id, factory_id, deposit_amount, status
+		SELECT order_id, user_id, factory_id, deposit_amount, total_amount, status
 		FROM orders
 		WHERE order_id = $1
 		FOR UPDATE

@@ -57,7 +57,7 @@ func orderPaymentError(c *fiber.Ctx, err error) error {
 	if rule, ok := service.AsPaymentRuleError(err); ok {
 		switch {
 		case errors.Is(rule, service.ErrPaymentAmountMismatch):
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error_code": "AMOUNT_MISMATCH", "message": "amount does not match order deposit amount"})
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error_code": "AMOUNT_MISMATCH", "message": "amount does not match order total amount"})
 		case errors.Is(rule, service.ErrPaymentInsufficientWallet):
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error_code": "INSUFFICIENT_WALLET_BALANCE",
