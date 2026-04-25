@@ -34,3 +34,4 @@ go.work
 # Build output
 bin/
 dist/
+docs/

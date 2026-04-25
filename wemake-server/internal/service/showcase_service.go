@@ -347,9 +347,6 @@ func (s *ShowcaseService) validateShowcase(item *domain.FactoryShowcase) error {
 			if item.StartDate != nil && item.EndDate != nil && item.EndDate.Before(*item.StartDate) {
 				add("end_date", "must be greater than or equal to start_date")
 			}
-			if item.BasePrice != nil && item.PromoPrice != nil && *item.PromoPrice > *item.BasePrice {
-				add("promo_price", "must be less than or equal to base_price")
-			}
 		case "ID":
 			if item.MOQ != nil {
 				add("moq", "must be null for ID")
@@ -420,7 +417,18 @@ func isShowcaseHTTPSURL(raw string) bool {
 		return false
 	}
 	u, err := url.Parse(v)
-	return err == nil && strings.EqualFold(u.Scheme, "https") && u.Host != ""
+	if err != nil || u.Host == "" {
+		return false
+	}
+	if strings.EqualFold(u.Scheme, "https") {
+		return true
+	}
+	// Dev-friendly: allow HTTP for localhost asset URLs.
+	if strings.EqualFold(u.Scheme, "http") {
+		host := strings.ToLower(u.Hostname())
+		return host == "localhost" || host == "127.0.0.1"
+	}
+	return false
 }
 
 func (s *ShowcaseService) RecordView(showcaseID int64) error {

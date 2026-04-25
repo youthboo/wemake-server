@@ -18,14 +18,25 @@ func NewQuotationRepository(db *sqlx.DB) *QuotationRepository {
 }
 
 func quotationSelectBase() string {
-	return `SELECT quote_id, rfq_id, factory_id, price_per_piece, mold_cost, lead_time_days, shipping_method_id, status, create_time, log_timestamp,
-		COALESCE(version, 1) AS version, COALESCE(is_locked, false) AS is_locked, last_edited_at, last_edited_by,
-		subtotal, discount_amount, shipping_cost, shipping_method, packaging_cost, tooling_mold_cost,
-		vat_rate, vat_amount, platform_commission_rate, platform_commission_amount, platform_config_id,
-		grand_total, factory_net_receivable, production_start_date, delivery_date, incoterms, payment_terms,
-		validity_days, valid_until, warranty_period_months, COALESCE(revision_no, 1) AS revision_no, parent_quotation_id,
-		COALESCE(image_urls, '[]'::jsonb) AS image_urls
-		FROM quotations`
+	return `SELECT q.quote_id, q.rfq_id, q.factory_id,
+		NULLIF(TRIM(COALESCE(to_jsonb(u)->>'factory_name', CONCAT_WS(' ', to_jsonb(u)->>'first_name', to_jsonb(u)->>'last_name'))), '') AS factory_name,
+		q.price_per_piece, q.mold_cost, q.lead_time_days, q.shipping_method_id,
+		NULLIF(TRIM(COALESCE(to_jsonb(sm)->>'method_name', to_jsonb(sm)->>'name')), '') AS shipping_method_name,
+		q.status, q.create_time, q.log_timestamp,
+		COALESCE(q.version, 1) AS version, COALESCE(q.is_locked, false) AS is_locked, q.last_edited_at, q.last_edited_by,
+		q.subtotal, q.discount_amount, q.shipping_cost, q.shipping_method, q.packaging_cost, q.tooling_mold_cost,
+		q.vat_rate, q.vat_amount, q.platform_commission_rate, q.platform_commission_amount, q.platform_config_id,
+		q.grand_total, q.factory_net_receivable, q.production_start_date, q.delivery_date, q.incoterms, q.payment_terms,
+		validity_days, COALESCE(q.valid_until, (q.create_time + (q.validity_days::text || ' day')::interval)::date) AS valid_until,
+		q.warranty_period_months, COALESCE(q.revision_no, 1) AS revision_no, q.parent_quotation_id,
+		COALESCE(q.image_urls::text, '[]') AS image_urls,
+		NULL::text AS material_detail,
+		NULL::text AS payment_condition,
+		0::double precision AS sample_cost,
+		'[]'::jsonb AS certifications
+		FROM quotations q
+		LEFT JOIN users u ON u.user_id = q.factory_id
+		LEFT JOIN lbi_shipping_methods sm ON sm.shipping_method_id = q.shipping_method_id`
 }
 
 func (r *QuotationRepository) Create(item *domain.Quotation) error {
@@ -104,8 +115,25 @@ func (r *QuotationRepository) createWithExecutor(exec quotationExecutor, item *d
 
 func (r *QuotationRepository) ListByRFQID(rfqID int64) ([]domain.Quotation, error) {
 	var items []domain.Quotation
-	query := quotationSelectBase() + `
-		WHERE rfq_id = $1
+	query := `SELECT
+		q.quote_id, q.rfq_id, q.factory_id,
+		NULL::text AS factory_name,
+		q.price_per_piece, q.mold_cost, q.lead_time_days, q.shipping_method_id,
+		NULL::text AS shipping_method_name,
+		q.status, q.create_time, q.log_timestamp,
+		COALESCE(q.version, 1) AS version, COALESCE(q.is_locked, false) AS is_locked, q.last_edited_at, q.last_edited_by,
+		q.subtotal, q.discount_amount, q.shipping_cost, q.shipping_method, q.packaging_cost, q.tooling_mold_cost,
+		q.vat_rate, q.vat_amount, q.platform_commission_rate, q.platform_commission_amount, q.platform_config_id,
+		q.grand_total, q.factory_net_receivable, q.production_start_date, q.delivery_date, q.incoterms, q.payment_terms,
+		q.validity_days, COALESCE(q.valid_until, (q.create_time + (q.validity_days::text || ' day')::interval)::date) AS valid_until,
+		q.warranty_period_months, COALESCE(q.revision_no, 1) AS revision_no, q.parent_quotation_id,
+		COALESCE(q.image_urls::text, '[]') AS image_urls,
+		NULL::text AS material_detail,
+		NULL::text AS payment_condition,
+		0::double precision AS sample_cost,
+		'[]'::jsonb AS certifications
+		FROM quotations q
+		WHERE q.rfq_id = $1
 		ORDER BY create_time DESC
 	`
 	err := r.db.Select(&items, query, rfqID)

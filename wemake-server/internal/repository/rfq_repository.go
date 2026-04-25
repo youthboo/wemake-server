@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"database/sql"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -78,7 +79,16 @@ func (r *RFQRepository) ListByUserID(userID int64, status string) ([]domain.RFQ,
 	}
 	query += " ORDER BY created_at DESC"
 	err := r.db.Select(&rfqs, query, args...)
-	return rfqs, err
+	if err != nil {
+		return rfqs, err
+	}
+	for i := range rfqs {
+		if err := r.enrichRFQLookups(&rfqs[i]); err != nil {
+			return rfqs, err
+		}
+		domain.EnrichRFQBudgetFields(&rfqs[i])
+	}
+	return rfqs, nil
 }
 
 func (r *RFQRepository) GetByID(userID, rfqID int64) (*domain.RFQ, error) {
@@ -95,6 +105,17 @@ func (r *RFQRepository) GetByID(userID, rfqID int64) (*domain.RFQ, error) {
 	if err := r.db.Get(&rfq, query, userID, rfqID); err != nil {
 		return nil, err
 	}
+	addr, err := r.getAddressByID(rfq.AddressID)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+	if err == nil {
+		rfq.Address = addr
+	}
+	if err := r.enrichRFQLookups(&rfq); err != nil {
+		return nil, err
+	}
+	domain.EnrichRFQBudgetFields(&rfq)
 	return &rfq, nil
 }
 
@@ -158,7 +179,31 @@ func (r *RFQRepository) GetByIDAny(rfqID int64) (*domain.RFQ, error) {
 	if err := r.db.Get(&rfq, query, rfqID); err != nil {
 		return nil, err
 	}
+	addr, err := r.getAddressByID(rfq.AddressID)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+	if err == nil {
+		rfq.Address = addr
+	}
+	if err := r.enrichRFQLookups(&rfq); err != nil {
+		return nil, err
+	}
+	domain.EnrichRFQBudgetFields(&rfq)
 	return &rfq, nil
+}
+
+func (r *RFQRepository) getAddressByID(addressID int64) (*domain.Address, error) {
+	var address domain.Address
+	query := `
+		SELECT address_id, user_id, address_type, address_detail, sub_district_id, district_id, province_id, zip_code, is_default
+		FROM addresses
+		WHERE address_id = $1
+	`
+	if err := r.db.Get(&address, query, addressID); err != nil {
+		return nil, err
+	}
+	return &address, nil
 }
 
 // ListMatchingForFactory returns open RFQs whose category (and optional sub-category) match the factory maps.
@@ -189,7 +234,77 @@ func (r *RFQRepository) ListMatchingForFactory(factoryID int64, status string) (
 		ORDER BY r.created_at DESC
 	`
 	err := r.db.Select(&rfqs, query, factoryID, st)
-	return rfqs, err
+	if err != nil {
+		return rfqs, err
+	}
+	for i := range rfqs {
+		if err := r.enrichRFQLookups(&rfqs[i]); err != nil {
+			return rfqs, err
+		}
+		domain.EnrichRFQBudgetFields(&rfqs[i])
+	}
+	return rfqs, nil
+}
+
+func (r *RFQRepository) enrichRFQLookups(rfq *domain.RFQ) error {
+	if rfq == nil {
+		return nil
+	}
+
+	var categoryName sql.NullString
+	if err := r.db.Get(&categoryName, `SELECT name FROM categories WHERE category_id = $1`, rfq.CategoryID); err != nil {
+		if err != sql.ErrNoRows {
+			return err
+		}
+	} else if categoryName.Valid {
+		rfq.CategoryName = &categoryName.String
+	}
+
+	if rfq.SubCategoryID != nil {
+		var subCategoryName sql.NullString
+		if err := r.db.Get(&subCategoryName, `SELECT name FROM lbi_sub_categories WHERE sub_category_id = $1`, *rfq.SubCategoryID); err != nil {
+			if err != sql.ErrNoRows {
+				return err
+			}
+		} else if subCategoryName.Valid {
+			rfq.SubCategoryName = &subCategoryName.String
+		}
+	}
+
+	if rfq.ShippingMethodID != nil {
+		var shippingMethodName sql.NullString
+		if err := r.db.Get(&shippingMethodName, `SELECT method_name FROM lbi_shipping_methods WHERE shipping_method_id = $1`, *rfq.ShippingMethodID); err != nil {
+			if err != sql.ErrNoRows {
+				return err
+			}
+		} else if shippingMethodName.Valid {
+			rfq.ShippingMethodName = &shippingMethodName.String
+		}
+	}
+
+	var addressSummary sql.NullString
+	if err := r.db.Get(&addressSummary, `
+		SELECT TRIM(BOTH ' ' FROM CONCAT_WS(' / ',
+			NULLIF(a.address_detail, ''),
+			NULLIF(sd.name_th, ''),
+			NULLIF(d.name_th, ''),
+			NULLIF(p.name_th, ''),
+			NULLIF(a.zip_code, '')
+		))
+		FROM addresses a
+		LEFT JOIN lbi_sub_districts sd ON sd.row_id = a.sub_district_id
+		LEFT JOIN lbi_districts d ON d.row_id = a.district_id
+		LEFT JOIN lbi_provinces p ON p.row_id = a.province_id
+		WHERE a.address_id = $1
+	`, rfq.AddressID); err != nil {
+		if err != sql.ErrNoRows {
+			return err
+		}
+	} else if addressSummary.Valid {
+		rfq.AddressSummary = &addressSummary.String
+	}
+
+	return nil
 }
 
 // FactoryHasMatchingCategory returns true if factory accepts RFQ's category and sub-category rules.
