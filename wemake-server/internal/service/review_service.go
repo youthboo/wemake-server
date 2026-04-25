@@ -20,3 +20,7 @@ func (s *ReviewService) ListByFactoryID(factoryID int64) ([]domain.FactoryReview
 func (s *ReviewService) Create(review *domain.FactoryReview) error {
 	return s.repo.Create(review)
 }
+
+func (s *ReviewService) GetSummaryByFactoryID(factoryID int64) (*domain.FactoryReviewSummary, error) {
+	return s.repo.GetSummaryByFactoryID(factoryID)
+}

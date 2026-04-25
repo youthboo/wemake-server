@@ -31,10 +31,19 @@ var ErrDepositAlreadyPaid = errors.New("DEPOSIT_ALREADY_PAID")
 var ErrDepositExpired = errors.New("DEPOSIT_EXPIRED")
 var ErrConfirmReceiptInvalidStatus = errors.New("order status must be SH")
 var ErrConfirmReceiptNotAllowed = errors.New("order already completed or cancelled")
+var ErrReviewRatingInvalid = errors.New("rating must be between 1 and 5")
+var ErrReviewCommentInvalid = errors.New("comment must be 1-1000 characters")
+var ErrReviewOrderNotCompleted = errors.New("order must be completed before review")
+var ErrReviewAlreadyExists = errors.New("review already exists for this order")
 
 type ConfirmReceiptInput struct {
 	Note       string
 	ReceivedAt *time.Time
+}
+
+type CreateOrderReviewInput struct {
+	Rating  int
+	Comment string
 }
 
 type ConfirmReceiptSettlement struct {
@@ -66,10 +75,11 @@ type OrderService struct {
 	txLedger   *repository.TransactionRepository
 	quotations *repository.QuotationRepository
 	rfqs       *repository.RFQRepository
+	reviews    *repository.ReviewRepository
 }
 
-func NewOrderService(db *sqlx.DB, repo *repository.OrderRepository, schedules *repository.PaymentScheduleRepository, wallets *repository.WalletRepository, txLedger *repository.TransactionRepository, quotations *repository.QuotationRepository, rfqs *repository.RFQRepository) *OrderService {
-	return &OrderService{db: db, repo: repo, schedules: schedules, wallets: wallets, txLedger: txLedger, quotations: quotations, rfqs: rfqs}
+func NewOrderService(db *sqlx.DB, repo *repository.OrderRepository, schedules *repository.PaymentScheduleRepository, wallets *repository.WalletRepository, txLedger *repository.TransactionRepository, quotations *repository.QuotationRepository, rfqs *repository.RFQRepository, reviews *repository.ReviewRepository) *OrderService {
+	return &OrderService{db: db, repo: repo, schedules: schedules, wallets: wallets, txLedger: txLedger, quotations: quotations, rfqs: rfqs, reviews: reviews}
 }
 
 var thailandLocation = time.FixedZone("Asia/Bangkok", 7*60*60)
@@ -543,6 +553,110 @@ func (s *OrderService) ConfirmReceipt(orderID, userID int64, role string, input 
 		return nil, domain.ErrForbidden
 	}
 	return s.confirmReceiptTx(orderID, &userID, strings.TrimSpace(input.Note), input.ReceivedAt, "CUSTOMER_CONFIRMED_RECEIPT", true)
+}
+
+func (s *OrderService) GetReviewState(orderID, userID int64, role string) (*domain.OrderReviewState, error) {
+	if role != domain.RoleCustomer {
+		return nil, domain.ErrForbidden
+	}
+	order, err := s.repo.GetByParticipant(orderID, userID, role)
+	if err != nil {
+		return nil, err
+	}
+
+	factoryName := fmt.Sprintf("โรงงาน #%d", order.FactoryID)
+	if detail, detailErr := s.repo.GetDetailByParticipant(orderID, userID, role); detailErr == nil && strings.TrimSpace(detail.FactoryName) != "" {
+		factoryName = detail.FactoryName
+	}
+
+	state := &domain.OrderReviewState{
+		OrderID:         order.OrderID,
+		FactoryID:       order.FactoryID,
+		FactoryName:     factoryName,
+		Eligible:        false,
+		AlreadyReviewed: false,
+	}
+
+	review, err := s.reviews.GetByOrderAndUser(orderID, userID)
+	if err == nil {
+		state.AlreadyReviewed = true
+		state.Review = review
+		reason := "already_reviewed"
+		state.Reason = &reason
+		return state, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
+	if normalizeOrderStatus(order.Status) != "CP" {
+		reason := "order_not_completed"
+		state.Reason = &reason
+		return state, nil
+	}
+
+	state.Eligible = true
+	return state, nil
+}
+
+func (s *OrderService) CreateReview(orderID, userID int64, role string, input CreateOrderReviewInput) (*domain.FactoryReview, error) {
+	if role != domain.RoleCustomer {
+		return nil, domain.ErrForbidden
+	}
+	if input.Rating < 1 || input.Rating > 5 {
+		return nil, ErrReviewRatingInvalid
+	}
+	comment := strings.TrimSpace(input.Comment)
+	if comment == "" || len(comment) > 1000 {
+		return nil, ErrReviewCommentInvalid
+	}
+
+	order, err := s.repo.GetByParticipant(orderID, userID, role)
+	if err != nil {
+		return nil, err
+	}
+	if normalizeOrderStatus(order.Status) != "CP" {
+		return nil, ErrReviewOrderNotCompleted
+	}
+	if _, err := s.reviews.GetByOrderAndUser(orderID, userID); err == nil {
+		return nil, ErrReviewAlreadyExists
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
+	tx, err := s.db.Beginx()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	orderIDPtr := order.OrderID
+	review := &domain.FactoryReview{
+		FactoryID: order.FactoryID,
+		UserID:    userID,
+		OrderID:   &orderIDPtr,
+		Rating:    input.Rating,
+		Comment:   comment,
+	}
+	if err := s.reviews.CreateForOrderTx(tx, review); err != nil {
+		if errors.Is(err, repository.ErrReviewAlreadyExists) {
+			return nil, ErrReviewAlreadyExists
+		}
+		return nil, err
+	}
+	if err := s.reviews.SyncFactoryAggregateTx(tx, order.FactoryID); err != nil {
+		return nil, err
+	}
+	if err := s.repo.InsertActivityTx(tx, orderID, &userID, "REVIEW_CREATED", map[string]interface{}{
+		"review_id": review.ReviewID,
+		"rating":    review.Rating,
+	}); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return review, nil
 }
 
 func (s *OrderService) AutoCloseShippedOrders() (int, error) {

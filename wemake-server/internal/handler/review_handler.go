@@ -26,6 +26,18 @@ func (h *ReviewHandler) ListByFactory(c *fiber.Ctx) error {
 	return c.JSON(items)
 }
 
+func (h *ReviewHandler) GetSummaryByFactory(c *fiber.Ctx) error {
+	factoryID, err := c.ParamsInt("factory_id")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid factory_id"})
+	}
+	item, err := h.service.GetSummaryByFactoryID(int64(factoryID))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to summarize reviews"})
+	}
+	return c.JSON(item)
+}
+
 func (h *ReviewHandler) Create(c *fiber.Ctx) error {
 	factoryID, err := c.ParamsInt("factory_id")
 	if err != nil {

@@ -47,8 +47,8 @@ func (r *FactoryRepository) ListPublicVerified() ([]domain.FactoryListItem, erro
 			fp.factory_type_id,
 			ft.type_name AS factory_type_name,
 			fp.specialization,
-			fp.rating::float8 AS rating,
-			COALESCE(fp.review_count, 0)::bigint AS review_count,
+			COALESCE(rev.avg_rating, fp.rating, 0)::float8 AS rating,
+			COALESCE(rev.review_cnt, fp.review_count, 0)::bigint AS review_count,
 			fp.min_order,
 			fp.lead_time_desc,
 			COALESCE(fp.is_verified, FALSE) AS is_verified,
@@ -62,8 +62,15 @@ func (r *FactoryRepository) ListPublicVerified() ([]domain.FactoryListItem, erro
 		INNER JOIN users u ON u.user_id = fp.user_id AND u.role = 'FT' AND u.is_active = TRUE
 		LEFT JOIN lbi_factory_types ft ON ft.factory_type_id = fp.factory_type_id
 		LEFT JOIN lbi_provinces p ON p.row_id = fp.province_id
+		LEFT JOIN (
+			SELECT factory_id::bigint AS factory_id,
+			       ROUND(AVG(rating::numeric), 2)::float8 AS avg_rating,
+			       COUNT(*)::bigint AS review_cnt
+			FROM factory_reviews
+			GROUP BY factory_id
+		) rev ON rev.factory_id = fp.user_id
 		WHERE COALESCE(fp.is_verified, FALSE) = TRUE
-		ORDER BY fp.rating DESC NULLS LAST, fp.factory_name ASC
+		ORDER BY COALESCE(rev.avg_rating, fp.rating) DESC NULLS LAST, fp.factory_name ASC
 	`
 	err := r.db.Select(&items, query)
 	return items, err
@@ -117,8 +124,8 @@ func (r *FactoryRepository) getFactoryDetailHead(factoryID int64) (factoryDetail
 			fp.min_order,
 			fp.lead_time_desc,
 			COALESCE(fp.is_verified, FALSE) AS is_verified,
-			fp.rating::float8 AS rating,
-			COALESCE(fp.review_count, 0)::bigint AS review_count,
+			COALESCE(rev.avg_rating, fp.rating, 0)::float8 AS rating,
+			COALESCE(rev.review_cnt, fp.review_count, 0)::bigint AS review_count,
 			COALESCE(fp.completed_orders, 0)::bigint AS completed_orders,
 			fp.image_url,
 			fp.description,
@@ -129,6 +136,13 @@ func (r *FactoryRepository) getFactoryDetailHead(factoryID int64) (factoryDetail
 		INNER JOIN users u ON u.user_id = fp.user_id AND u.role = 'FT' AND u.is_active = TRUE
 		LEFT JOIN lbi_factory_types ft ON ft.factory_type_id = fp.factory_type_id
 		LEFT JOIN lbi_provinces p ON p.row_id = fp.province_id
+		LEFT JOIN (
+			SELECT factory_id::bigint AS factory_id,
+			       ROUND(AVG(rating::numeric), 2)::float8 AS avg_rating,
+			       COUNT(*)::bigint AS review_cnt
+			FROM factory_reviews
+			GROUP BY factory_id
+		) rev ON rev.factory_id = fp.user_id
 		WHERE fp.user_id = $1
 	`
 	if err := r.db.Get(&head, headQuery, factoryID); err != nil {

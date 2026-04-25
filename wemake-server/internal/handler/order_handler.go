@@ -371,3 +371,74 @@ func (h *OrderHandler) ConfirmReceipt(c *fiber.Ctx) error {
 	}
 	return c.JSON(result)
 }
+
+func (h *OrderHandler) GetReviewState(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
+	}
+	u, err := h.auth.GetUserByID(userID)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "user not found"})
+	}
+	orderID, err := c.ParamsInt("order_id")
+	if err != nil || orderID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid order_id"})
+	}
+	item, err := h.service.GetReviewState(int64(orderID), userID, u.Role)
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrForbidden):
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
+		case repository.IsNotFoundError(err):
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "order not found"})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch review state"})
+		}
+	}
+	return c.JSON(item)
+}
+
+func (h *OrderHandler) CreateReview(c *fiber.Ctx) error {
+	type reqBody struct {
+		Rating  int    `json:"rating"`
+		Comment string `json:"comment"`
+	}
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
+	}
+	u, err := h.auth.GetUserByID(userID)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "user not found"})
+	}
+	orderID, err := c.ParamsInt("order_id")
+	if err != nil || orderID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid order_id"})
+	}
+	var req reqBody
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	item, err := h.service.CreateReview(int64(orderID), userID, u.Role, service.CreateOrderReviewInput{
+		Rating:  req.Rating,
+		Comment: req.Comment,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrForbidden):
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
+		case errors.Is(err, service.ErrReviewRatingInvalid), errors.Is(err, service.ErrReviewCommentInvalid):
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		case errors.Is(err, service.ErrReviewOrderNotCompleted):
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error()})
+		case errors.Is(err, service.ErrReviewAlreadyExists):
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error()})
+		case repository.IsNotFoundError(err):
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "order not found"})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create review"})
+		}
+	}
+	return c.Status(fiber.StatusCreated).JSON(item)
+}
