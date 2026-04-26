@@ -18,26 +18,7 @@ func NewPlatformConfigHandler(service *service.PlatformConfigService, auth *serv
 	return &PlatformConfigHandler{service: service, auth: auth}
 }
 
-func (h *PlatformConfigHandler) requireAdmin(c *fiber.Ctx) (int64, error) {
-	userID, err := getUserIDFromHeader(c)
-	if err != nil {
-		return 0, fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
-	}
-	u, err := h.auth.GetUserByID(userID)
-	if err != nil {
-		return 0, fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
-	}
-	role := strings.ToUpper(strings.TrimSpace(u.Role))
-	if role != "AD" && role != "ADMIN" {
-		return 0, fiber.NewError(fiber.StatusForbidden, "admin role required")
-	}
-	return userID, nil
-}
-
 func (h *PlatformConfigHandler) GetActive(c *fiber.Ctx) error {
-	if _, err := h.requireAdmin(c); err != nil {
-		return c.Status(err.(*fiber.Error).Code).JSON(fiber.Map{"error": err.Error()})
-	}
 	item, err := h.service.GetActive()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch platform config"})
@@ -46,9 +27,6 @@ func (h *PlatformConfigHandler) GetActive(c *fiber.Ctx) error {
 }
 
 func (h *PlatformConfigHandler) ListHistory(c *fiber.Ctx) error {
-	if _, err := h.requireAdmin(c); err != nil {
-		return c.Status(err.(*fiber.Error).Code).JSON(fiber.Map{"error": err.Error()})
-	}
 	items, err := h.service.ListHistory()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch platform config history"})
@@ -66,9 +44,9 @@ func (h *PlatformConfigHandler) Create(c *fiber.Ctx) error {
 		VatRate               float64  `json:"vat_rate"`
 		CurrencyCode          string   `json:"currency_code"`
 	}
-	userID, err := h.requireAdmin(c)
+	userID, err := getUserIDFromHeader(c)
 	if err != nil {
-		return c.Status(err.(*fiber.Error).Code).JSON(fiber.Map{"error": err.Error()})
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
 	}
 	var req reqBody
 	if err := c.BodyParser(&req); err != nil {

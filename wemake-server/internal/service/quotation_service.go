@@ -19,6 +19,7 @@ var (
 	ErrIncotermsInvalid     = errors.New("INCOTERMS_INVALID")
 	ErrPaymentTermsInvalid  = errors.New("PAYMENT_TERMS_INVALID")
 	ErrQuotationExpired     = errors.New("QUOTATION_EXPIRED")
+	ErrFactorySuspended     = errors.New("FACTORY_SUSPENDED")
 )
 
 type QuotationService struct {
@@ -28,13 +29,23 @@ type QuotationService struct {
 	items      *repository.QuotationItemRepository
 	commission *CommissionService
 	orders     *OrderService
+	factories  *repository.FactoryRepository
 }
 
-func NewQuotationService(db *sqlx.DB, repo *repository.QuotationRepository, rfqRepo *repository.RFQRepository, items *repository.QuotationItemRepository, commission *CommissionService, orders *OrderService) *QuotationService {
-	return &QuotationService{db: db, repo: repo, rfqRepo: rfqRepo, items: items, commission: commission, orders: orders}
+func NewQuotationService(db *sqlx.DB, repo *repository.QuotationRepository, rfqRepo *repository.RFQRepository, items *repository.QuotationItemRepository, commission *CommissionService, orders *OrderService, factories *repository.FactoryRepository) *QuotationService {
+	return &QuotationService{db: db, repo: repo, rfqRepo: rfqRepo, items: items, commission: commission, orders: orders, factories: factories}
 }
 
 func (s *QuotationService) Create(item *domain.Quotation) error {
+	if s.factories != nil {
+		approvalStatus, err := s.factories.GetApprovalStatus(item.FactoryID)
+		if err != nil {
+			return err
+		}
+		if approvalStatus == "SU" {
+			return ErrFactorySuspended
+		}
+	}
 	now := time.Now()
 	item.Status = "PD"
 	item.CreateTime = now
@@ -251,6 +262,7 @@ func (s *QuotationService) CreateDetailed(item *domain.Quotation) error {
 		ShippingCost:   item.ShippingCost,
 		PackagingCost:  item.PackagingCost,
 		ToolingCost:    item.ToolingMoldCost,
+		FactoryID:      &item.FactoryID,
 	})
 	if err != nil {
 		return err

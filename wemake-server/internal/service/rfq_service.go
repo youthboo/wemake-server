@@ -21,11 +21,12 @@ var (
 )
 
 type RFQService struct {
-	repo *repository.RFQRepository
+	repo        *repository.RFQRepository
+	factoryRepo *repository.FactoryRepository
 }
 
-func NewRFQService(repo *repository.RFQRepository) *RFQService {
-	return &RFQService{repo: repo}
+func NewRFQService(repo *repository.RFQRepository, factoryRepo *repository.FactoryRepository) *RFQService {
+	return &RFQService{repo: repo, factoryRepo: factoryRepo}
 }
 
 func normalizeStringSlice(values []string) []string {
@@ -100,6 +101,15 @@ func (s *RFQService) Cancel(userID, rfqID int64) error {
 }
 
 func (s *RFQService) ListMatchingForFactory(factoryID int64, status string) ([]domain.RFQ, error) {
+	if s.factoryRepo != nil {
+		approvalStatus, err := s.factoryRepo.GetApprovalStatus(factoryID)
+		if err != nil {
+			return nil, err
+		}
+		if approvalStatus == "SU" {
+			return []domain.RFQ{}, nil
+		}
+	}
 	return s.repo.ListMatchingForFactory(factoryID, strings.TrimSpace(strings.ToUpper(status)))
 }
 

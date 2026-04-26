@@ -104,8 +104,8 @@ func (r *AuthRepository) CreateFactoryUser(user *domain.User, factory *domain.Fa
 	}
 
 	const factoryInsert = `
-		INSERT INTO factory_profiles (user_id, factory_name, factory_type_id, tax_id, province_id)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO factory_profiles (user_id, factory_name, factory_type_id, tax_id, province_id, approval_status, submitted_at)
+		VALUES ($1, $2, $3, $4, $5, 'PE', NOW())
 	`
 	var provinceID sql.NullInt64
 	if factory.ProvinceID != nil && *factory.ProvinceID > 0 {
@@ -116,6 +116,54 @@ func (r *AuthRepository) CreateFactoryUser(user *domain.User, factory *domain.Fa
 	}
 
 	return tx.Commit()
+}
+
+func (r *AuthRepository) CreateAdminUser(user *domain.User, profile *domain.AdminProfile) error {
+	tx, err := r.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if err := tx.QueryRow(`
+		INSERT INTO users (role, email, phone, password_hash, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING user_id
+	`, user.Role, user.Email, user.Phone, user.PasswordHash, user.IsActive, user.CreatedAt, user.UpdatedAt).Scan(&user.UserID); err != nil {
+		return err
+	}
+
+	if profile != nil {
+		profile.UserID = user.UserID
+		if err := tx.QueryRow(`
+			INSERT INTO admin_profiles (user_id, display_name, department, created_by)
+			VALUES ($1, $2, $3, $4)
+			RETURNING created_at
+		`, profile.UserID, profile.DisplayName, nullableStringPtr(profile.Department), nullableInt64Value(profile.CreatedBy)).Scan(&profile.CreatedAt); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (r *AuthRepository) ListAdminUsers() ([]domain.AdminUserListItem, error) {
+	var items []domain.AdminUserListItem
+	err := r.db.Select(&items, `
+		SELECT
+			u.user_id,
+			u.email,
+			u.role,
+			u.is_active,
+			ap.display_name,
+			ap.department,
+			u.created_at
+		FROM users u
+		LEFT JOIN admin_profiles ap ON ap.user_id = u.user_id
+		WHERE u.role IN ('AM', 'AD', 'SA')
+		ORDER BY u.created_at DESC, u.user_id DESC
+	`)
+	return items, err
 }
 
 func (r *AuthRepository) UpdateLoginTimestamp(userID int64, loginAt time.Time) error {

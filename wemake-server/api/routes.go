@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/jmoiron/sqlx"
 	"github.com/yourusername/wemake/internal/config"
+	"github.com/yourusername/wemake/internal/domain"
 	"github.com/yourusername/wemake/internal/handler"
 	"github.com/yourusername/wemake/internal/media"
 	"github.com/yourusername/wemake/internal/middleware"
@@ -53,17 +54,20 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	paymentScheduleRepo := repository.NewPaymentScheduleRepository(db)
 	platformConfigRepo := repository.NewPlatformConfigRepository(db)
 	quotationItemRepo := repository.NewQuotationItemRepository(db)
+	commissionRepo := repository.NewCommissionRepository(db)
+	adminAuditRepo := repository.NewAdminAuditRepository(db)
+	adminDashboardRepo := repository.NewAdminDashboardRepository(db)
 
 	// Initialize services
 	authService := service.NewAuthService(authRepo, cfg.JWTSecret)
 	catalogService := service.NewCatalogService(catalogRepo)
 	addressService := service.NewAddressService(addressRepo)
 	walletService := service.NewWalletService(walletRepo, transactionRepo)
-	rfqService := service.NewRFQService(rfqRepo)
+	rfqService := service.NewRFQService(rfqRepo, factoryRepo)
 	orderService := service.NewOrderService(db, orderRepo, paymentScheduleRepo, walletRepo, transactionRepo, quotationRepo, rfqRepo, reviewRepo)
-	commissionService := service.NewCommissionService(platformConfigRepo)
+	commissionService := service.NewCommissionService(platformConfigRepo, commissionRepo)
 	platformConfigService := service.NewPlatformConfigService(db, platformConfigRepo)
-	quotationService := service.NewQuotationService(db, quotationRepo, rfqRepo, quotationItemRepo, commissionService, orderService)
+	quotationService := service.NewQuotationService(db, quotationRepo, rfqRepo, quotationItemRepo, commissionService, orderService, factoryRepo)
 	orderPaymentService := service.NewOrderPaymentService(db)
 	productionService := service.NewProductionService(productionRepo)
 	messageService := service.NewMessageService(messageRepo, conversationRepo)
@@ -83,6 +87,8 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	disputeService := service.NewDisputeService(disputeRepo)
 	quotationTemplateService := service.NewQuotationTemplateService(quotationTemplateRepo)
 	paymentScheduleService := service.NewPaymentScheduleService(paymentScheduleRepo)
+	adminFactoryService := service.NewAdminFactoryService(factoryRepo, adminAuditRepo, commissionRepo)
+	adminDashboardService := service.NewAdminDashboardService(adminDashboardRepo)
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService)
@@ -118,6 +124,12 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	quotationTemplateHandler := handler.NewQuotationTemplateHandler(quotationTemplateService)
 	paymentScheduleHandler := handler.NewPaymentScheduleHandler(paymentScheduleService)
 	platformConfigHandler := handler.NewPlatformConfigHandler(platformConfigService, authService)
+	adminFactoryHandler := handler.NewAdminFactoryHandler(factoryRepo, adminFactoryService)
+	adminDashboardHandler := handler.NewAdminDashboardHandler(adminDashboardService)
+	adminRFQHandler := handler.NewAdminRFQHandler(rfqRepo, adminAuditRepo)
+	adminOrderHandler := handler.NewAdminOrderHandler(orderRepo, orderService, withdrawalRepo, disputeRepo, adminAuditRepo)
+	adminConfigHandler := handler.NewAdminConfigHandler(commissionRepo, adminAuditRepo)
+	adminUserHandler := handler.NewAdminUserHandler(authService, authRepo)
 
 	// Health check route
 	app.Get("/health", func(c *fiber.Ctx) error {
@@ -130,9 +142,39 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 
 	admin := app.Group("/api/admin")
 	admin.Use(middleware.AuthContext(cfg.JWTSecret))
-	admin.Get("/platform-config", platformConfigHandler.GetActive)
-	admin.Post("/platform-config", platformConfigHandler.Create)
-	admin.Get("/platform-config/history", platformConfigHandler.ListHistory)
+	admin.Get("/platform-config", middleware.RequireRole(authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), platformConfigHandler.GetActive)
+	admin.Post("/platform-config", middleware.RequireRole(authService, domain.RoleSuperAdmin), platformConfigHandler.Create)
+	admin.Get("/platform-config/history", middleware.RequireRole(authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), platformConfigHandler.ListHistory)
+	admin.Get("/dashboard/summary", middleware.RequireRole(authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), adminDashboardHandler.GetSummary)
+	admin.Get("/dashboard/revenue-chart", middleware.RequireRole(authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), adminDashboardHandler.GetRevenueChart)
+	admin.Get("/dashboard/top-factories", middleware.RequireRole(authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), adminDashboardHandler.GetTopFactories)
+	admin.Get("/factories", middleware.RequireRole(authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), adminFactoryHandler.List)
+	admin.Get("/factories/:factory_id", middleware.RequireRole(authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), adminFactoryHandler.GetByID)
+	admin.Post("/factories/:factory_id/approve", middleware.RequireRole(authService, domain.RoleAdmin, domain.RoleSuperAdmin), adminFactoryHandler.Approve)
+	admin.Post("/factories/:factory_id/reject", middleware.RequireRole(authService, domain.RoleAdmin, domain.RoleSuperAdmin), adminFactoryHandler.Reject)
+	admin.Post("/factories/:factory_id/suspend", middleware.RequireRole(authService, domain.RoleSuperAdmin), adminFactoryHandler.Suspend)
+	admin.Post("/factories/:factory_id/unsuspend", middleware.RequireRole(authService, domain.RoleSuperAdmin), adminFactoryHandler.Unsuspend)
+	admin.Get("/factory-verification", middleware.RequireRole(authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), adminFactoryHandler.List)
+	admin.Patch("/factories/:factory_id/verification", middleware.RequireRole(authService, domain.RoleSuperAdmin), adminFactoryHandler.PatchVerification)
+	admin.Get("/rfqs", middleware.RequireRole(authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), adminRFQHandler.List)
+	admin.Get("/rfqs/:rfq_id", middleware.RequireRole(authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), adminRFQHandler.GetByID)
+	admin.Patch("/rfqs/:rfq_id/status", middleware.RequireRole(authService, domain.RoleAdmin, domain.RoleSuperAdmin), adminRFQHandler.PatchStatus)
+	admin.Get("/orders", middleware.RequireRole(authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), adminOrderHandler.List)
+	admin.Get("/orders/:order_id", middleware.RequireRole(authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), adminOrderHandler.GetByID)
+	admin.Patch("/orders/:order_id/status", middleware.RequireRole(authService, domain.RoleAdmin, domain.RoleSuperAdmin), adminOrderHandler.PatchStatus)
+	admin.Get("/withdrawals", middleware.RequireRole(authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), adminOrderHandler.ListWithdrawals)
+	admin.Patch("/withdrawals/:request_id", middleware.RequireRole(authService, domain.RoleAdmin, domain.RoleSuperAdmin), adminOrderHandler.PatchWithdrawal)
+	admin.Get("/disputes", middleware.RequireRole(authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), adminOrderHandler.ListDisputes)
+	admin.Patch("/disputes/:dispute_id", middleware.RequireRole(authService, domain.RoleAdmin, domain.RoleSuperAdmin), adminOrderHandler.PatchDispute)
+	admin.Get("/commission-rules", middleware.RequireRole(authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), adminConfigHandler.ListRules)
+	admin.Post("/commission-rules", middleware.RequireRole(authService, domain.RoleAdmin, domain.RoleSuperAdmin), adminConfigHandler.CreateRule)
+	admin.Delete("/commission-rules/:rule_id", middleware.RequireRole(authService, domain.RoleAdmin, domain.RoleSuperAdmin), adminConfigHandler.DeleteRule)
+	admin.Get("/commission-exemptions", middleware.RequireRole(authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), adminConfigHandler.ListExemptions)
+	admin.Post("/commission-exemptions", middleware.RequireRole(authService, domain.RoleSuperAdmin), adminConfigHandler.CreateExemption)
+	admin.Delete("/commission-exemptions/:exemption_id", middleware.RequireRole(authService, domain.RoleSuperAdmin), adminConfigHandler.DeleteExemption)
+	admin.Get("/audit-log", middleware.RequireRole(authService, domain.RoleAdmin, domain.RoleSuperAdmin), adminConfigHandler.ListAuditLog)
+	admin.Post("/users", middleware.RequireRole(authService, domain.RoleSuperAdmin), adminUserHandler.Create)
+	admin.Get("/users", middleware.RequireRole(authService, domain.RoleSuperAdmin), adminUserHandler.List)
 
 	auth := api.Group("/auth")
 	auth.Post("/register", authHandler.Register)

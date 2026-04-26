@@ -81,6 +81,9 @@ func (h *QuotationHandler) CreateQuotation(c *fiber.Ctx) error {
 		ImageURLs:       req.ImageURLs,
 	}
 	if err := h.service.Create(item); err != nil {
+		if errors.Is(err, service.ErrFactorySuspended) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "factory account is suspended"})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create quotation"})
 	}
 	return c.Status(fiber.StatusCreated).JSON(item)
@@ -278,6 +281,9 @@ func (h *QuotationHandler) CreateDetailed(c *fiber.Ctx) error {
 		item.DeliveryDate = &d
 	}
 	if err := h.service.CreateDetailed(item); err != nil {
+		if errors.Is(err, service.ErrFactorySuspended) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "factory account is suspended"})
+		}
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.Status(fiber.StatusCreated).JSON(item)

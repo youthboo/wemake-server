@@ -33,14 +33,16 @@ type CommissionInput struct {
 	ShippingCost   float64
 	PackagingCost  float64
 	ToolingCost    float64
+	FactoryID      *int64
 }
 
 type CommissionService struct {
-	configs *repository.PlatformConfigRepository
+	configs    *repository.PlatformConfigRepository
+	overrides  *repository.CommissionRepository
 }
 
-func NewCommissionService(configs *repository.PlatformConfigRepository) *CommissionService {
-	return &CommissionService{configs: configs}
+func NewCommissionService(configs *repository.PlatformConfigRepository, overrides *repository.CommissionRepository) *CommissionService {
+	return &CommissionService{configs: configs, overrides: overrides}
 }
 
 func round2(v float64) float64 {
@@ -72,6 +74,15 @@ func (s *CommissionService) Calculate(in CommissionInput) (*Breakdown, error) {
 	vatAmount := round2(preVatBase * cfg.VatRate / 100)
 	grandTotal := round2(preVatBase + vatAmount)
 	commissionRate := resolveEffectiveRate(time.Now().UTC(), cfg)
+	if in.FactoryID != nil && s.overrides != nil {
+		if ex, err := s.overrides.GetActiveExemptionForFactory(*in.FactoryID); err == nil && ex != nil {
+			commissionRate = 0
+		} else if err == nil {
+			if rule, ruleErr := s.overrides.GetActiveRuleForFactory(*in.FactoryID); ruleErr == nil && rule != nil {
+				commissionRate = rule.RatePercent
+			}
+		}
+	}
 	commissionAmount := round2(subtotal * commissionRate / 100)
 	factoryNet := round2(grandTotal - commissionAmount)
 

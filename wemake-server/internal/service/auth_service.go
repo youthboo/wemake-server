@@ -118,6 +118,71 @@ func (s *AuthService) Register(input RegisterInput) (*LoginResult, error) {
 	return &LoginResult{Token: token, User: user}, nil
 }
 
+type RegisterAdminInput struct {
+	Role        string
+	Email       string
+	Phone       string
+	Password    string
+	DisplayName string
+	Department  *string
+	CreatedBy   *int64
+}
+
+func (s *AuthService) RegisterAdmin(input RegisterAdminInput, actorRole string) (*LoginResult, error) {
+	actorRole = strings.TrimSpace(strings.ToUpper(actorRole))
+	if actorRole != domain.RoleSuperAdmin {
+		return nil, ErrInvalidRole
+	}
+
+	input.Role = strings.TrimSpace(strings.ToUpper(input.Role))
+	if input.Role != domain.RoleAccountManager && input.Role != domain.RoleAdmin && input.Role != domain.RoleSuperAdmin {
+		return nil, ErrInvalidRole
+	}
+	if input.Role == domain.RoleSuperAdmin {
+		return nil, ErrInvalidRole
+	}
+	if strings.TrimSpace(input.DisplayName) == "" {
+		return nil, ErrMissingRoleData
+	}
+
+	input.Email = strings.TrimSpace(strings.ToLower(input.Email))
+	if _, err := s.repo.GetUserByEmail(input.Email); err == nil {
+		return nil, ErrEmailAlreadyExists
+	} else if !repository.IsNotFoundError(err) {
+		return nil, err
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	user := &domain.User{
+		Role:         input.Role,
+		Email:        input.Email,
+		Phone:        input.Phone,
+		PasswordHash: string(hashedPassword),
+		IsActive:     true,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	profile := &domain.AdminProfile{
+		DisplayName: strings.TrimSpace(input.DisplayName),
+		Department:  input.Department,
+		CreatedBy:   input.CreatedBy,
+	}
+	if err := s.repo.CreateAdminUser(user, profile); err != nil {
+		return nil, err
+	}
+	token, err := s.generateToken(user)
+	if err != nil {
+		return nil, err
+	}
+	user.PasswordHash = ""
+	return &LoginResult{Token: token, User: user}, nil
+}
+
 func (s *AuthService) Login(email, password string) (*LoginResult, error) {
 	normalizedEmail := strings.TrimSpace(strings.ToLower(email))
 

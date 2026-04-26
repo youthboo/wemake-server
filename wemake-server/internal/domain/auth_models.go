@@ -3,8 +3,11 @@ package domain
 import "time"
 
 const (
-	RoleCustomer = "CT"
-	RoleFactory  = "FT"
+	RoleCustomer       = "CT"
+	RoleFactory        = "FT"
+	RoleAccountManager = "AM"
+	RoleAdmin          = "AD"
+	RoleSuperAdmin     = "SA"
 )
 
 type User struct {
@@ -37,6 +40,10 @@ type FactoryProfile struct {
 	LeadTimeDesc    *string  `db:"lead_time_desc" json:"lead_time_desc,omitempty"`
 	IsVerified      bool       `db:"is_verified" json:"is_verified"`
 	VerifiedAt      *time.Time `db:"verified_at" json:"verified_at,omitempty"`
+	ApprovalStatus  string     `db:"approval_status" json:"approval_status"`
+	VerifiedBy      *int64     `db:"verified_by" json:"verified_by,omitempty"`
+	RejectionReason *string    `db:"rejection_reason" json:"rejection_reason,omitempty"`
+	SubmittedAt     *time.Time `db:"submitted_at" json:"submitted_at,omitempty"`
 	CompletedOrders int64      `db:"completed_orders" json:"completed_orders"`
 	ImageURL        *string  `db:"image_url" json:"image_url,omitempty"`
 	Description     *string  `db:"description" json:"description,omitempty"`
