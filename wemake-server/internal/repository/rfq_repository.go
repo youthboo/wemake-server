@@ -17,32 +17,50 @@ func NewRFQRepository(db *sqlx.DB) *RFQRepository {
 }
 
 func (r *RFQRepository) Create(rfq *domain.RFQ) error {
+	return r.createWithExecutor(r.db, rfq)
+}
+
+func (r *RFQRepository) CreateTx(tx *sqlx.Tx, rfq *domain.RFQ) error {
+	return r.createWithExecutor(tx, rfq)
+}
+
+type rfqQueryRowExecutor interface {
+	QueryRow(query string, args ...interface{}) *sql.Row
+}
+
+func (r *RFQRepository) createWithExecutor(exec rfqQueryRowExecutor, rfq *domain.RFQ) error {
 	query := `
 		INSERT INTO rfqs (
 			user_id, category_id, sub_category_id, title, quantity, details,
 			address_id, shipping_method_id, status, uploaded_at, created_at, updated_at,
 			material_grade, target_unit_price, target_lead_time_days, required_delivery_date, delivery_address_id,
 			certifications_required, sample_required, sample_qty, inspection_type,
-			reference_images
+			reference_images, rfq_type, initiated_by, factory_user_id, source_showcase_id, source_conv_id,
+			boq_currency, boq_subtotal, boq_discount_amount, boq_vat_percent, boq_vat_amount, boq_grand_total,
+			boq_moq, boq_lead_time_days, boq_payment_terms, boq_validity_days, boq_note,
+			boq_sent_at, boq_responded_at, boq_response, boq_decline_reason
 		)
 		VALUES (
 			$1, $2, $3, $4, $5, $6,
 			$7, $8, $9, $10, $11, $12,
 			$13, $14, $15, $16, $17,
 			$18, $19, $20, $21,
-			$22
+			$22, $23, $24, $25, $26, $27,
+			$28, $29, $30, $31, $32, $33,
+			$34, $35, $36, $37, $38,
+			$39, $40, $41, $42
 		)
 		RETURNING rfq_id
 	`
-	return r.db.QueryRow(
+	return exec.QueryRow(
 		query,
 		rfq.UserID,
-		rfq.CategoryID,
+		nullableZeroInt64(rfq.CategoryID),
 		nullableInt64Value(rfq.SubCategoryID),
 		rfq.Title,
 		rfq.Quantity,
 		rfq.Details,
-		rfq.AddressID,
+		nullableZeroInt64(rfq.AddressID),
 		nullableInt64Value(rfq.ShippingMethodID),
 		rfq.Status,
 		nullableTimeValue(rfq.UploadedAt),
@@ -58,17 +76,41 @@ func (r *RFQRepository) Create(rfq *domain.RFQ) error {
 		nullableIntValue(rfq.SampleQty),
 		nullableStringPtr(rfq.InspectionType),
 		rfq.ReferenceImages,
+		nullableRFQType(rfq.RFQType),
+		nullableInitiatedBy(rfq.InitiatedBy),
+		nullableInt64Value(rfq.FactoryUserID),
+		nullableInt64Value(rfq.SourceShowcaseID),
+		nullableInt64Value(rfq.SourceConvID),
+		nullableStringPtr(rfq.BOQCurrency),
+		nullableFloat64(rfq.BOQSubtotal),
+		nullableFloat64(rfq.BOQDiscountAmount),
+		nullableFloat64(rfq.BOQVatPercent),
+		nullableFloat64(rfq.BOQVatAmount),
+		nullableFloat64(rfq.BOQGrandTotal),
+		nullableIntValue(rfq.BOQMOQ),
+		nullableIntValue(rfq.BOQLeadTimeDays),
+		nullableStringPtr(rfq.BOQPaymentTerms),
+		nullableIntValue(rfq.BOQValidityDays),
+		nullableStringPtr(rfq.BOQNote),
+		nullableTimeValue(rfq.BOQSentAt),
+		nullableTimeValue(rfq.BOQRespondedAt),
+		nullableStringPtr(rfq.BOQResponse),
+		nullableStringPtr(rfq.BOQDeclineReason),
 	).Scan(&rfq.RFQID)
 }
 
 func (r *RFQRepository) ListByUserID(userID int64, status string) ([]domain.RFQ, error) {
 	var rfqs []domain.RFQ
 	query := `
-		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, details, address_id,
+		SELECT rfq_id, user_id, COALESCE(category_id, 0) AS category_id, sub_category_id, title, quantity, details, COALESCE(address_id, 0) AS address_id,
 		       shipping_method_id, status, uploaded_at, created_at, updated_at,
 		       material_grade, target_unit_price, target_lead_time_days, required_delivery_date, delivery_address_id,
 		       certifications_required, sample_required, sample_qty, inspection_type,
-		       reference_images
+		       reference_images, COALESCE(rfq_type, 'RFQ') AS rfq_type, COALESCE(initiated_by, 'buyer') AS initiated_by,
+		       factory_user_id, source_showcase_id, source_conv_id,
+		       boq_currency, boq_subtotal, boq_discount_amount, boq_vat_percent, boq_vat_amount, boq_grand_total,
+		       boq_moq, boq_lead_time_days, boq_payment_terms, boq_validity_days, boq_note,
+		       boq_sent_at, boq_responded_at, boq_response, boq_decline_reason
 		FROM rfqs
 		WHERE user_id = $1
 	`
@@ -94,23 +136,29 @@ func (r *RFQRepository) ListByUserID(userID int64, status string) ([]domain.RFQ,
 func (r *RFQRepository) GetByID(userID, rfqID int64) (*domain.RFQ, error) {
 	var rfq domain.RFQ
 	query := `
-		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, details, address_id,
+		SELECT rfq_id, user_id, COALESCE(category_id, 0) AS category_id, sub_category_id, title, quantity, details, COALESCE(address_id, 0) AS address_id,
 		       shipping_method_id, status, uploaded_at, created_at, updated_at,
 		       material_grade, target_unit_price, target_lead_time_days, required_delivery_date, delivery_address_id,
 		       certifications_required, sample_required, sample_qty, inspection_type,
-		       reference_images
+		       reference_images, COALESCE(rfq_type, 'RFQ') AS rfq_type, COALESCE(initiated_by, 'buyer') AS initiated_by,
+		       factory_user_id, source_showcase_id, source_conv_id,
+		       boq_currency, boq_subtotal, boq_discount_amount, boq_vat_percent, boq_vat_amount, boq_grand_total,
+		       boq_moq, boq_lead_time_days, boq_payment_terms, boq_validity_days, boq_note,
+		       boq_sent_at, boq_responded_at, boq_response, boq_decline_reason
 		FROM rfqs
 		WHERE user_id = $1 AND rfq_id = $2
 	`
 	if err := r.db.Get(&rfq, query, userID, rfqID); err != nil {
 		return nil, err
 	}
-	addr, err := r.getAddressByID(rfq.AddressID)
-	if err != nil && err != sql.ErrNoRows {
-		return nil, err
-	}
-	if err == nil {
-		rfq.Address = addr
+	if rfq.AddressID > 0 {
+		addr, err := r.getAddressByID(rfq.AddressID)
+		if err != nil && err != sql.ErrNoRows {
+			return nil, err
+		}
+		if err == nil {
+			rfq.Address = addr
+		}
 	}
 	if err := r.enrichRFQLookups(&rfq); err != nil {
 		return nil, err
@@ -168,23 +216,29 @@ func (r *RFQRepository) ShippingMethodExists(shippingMethodID int64) (bool, erro
 func (r *RFQRepository) GetByIDAny(rfqID int64) (*domain.RFQ, error) {
 	var rfq domain.RFQ
 	query := `
-		SELECT rfq_id, user_id, category_id, sub_category_id, title, quantity, details, address_id,
+		SELECT rfq_id, user_id, COALESCE(category_id, 0) AS category_id, sub_category_id, title, quantity, details, COALESCE(address_id, 0) AS address_id,
 		       shipping_method_id, status, uploaded_at, created_at, updated_at,
 		       material_grade, target_unit_price, target_lead_time_days, required_delivery_date, delivery_address_id,
 		       certifications_required, sample_required, sample_qty, inspection_type,
-		       reference_images
+		       reference_images, COALESCE(rfq_type, 'RFQ') AS rfq_type, COALESCE(initiated_by, 'buyer') AS initiated_by,
+		       factory_user_id, source_showcase_id, source_conv_id,
+		       boq_currency, boq_subtotal, boq_discount_amount, boq_vat_percent, boq_vat_amount, boq_grand_total,
+		       boq_moq, boq_lead_time_days, boq_payment_terms, boq_validity_days, boq_note,
+		       boq_sent_at, boq_responded_at, boq_response, boq_decline_reason
 		FROM rfqs
 		WHERE rfq_id = $1
 	`
 	if err := r.db.Get(&rfq, query, rfqID); err != nil {
 		return nil, err
 	}
-	addr, err := r.getAddressByID(rfq.AddressID)
-	if err != nil && err != sql.ErrNoRows {
-		return nil, err
-	}
-	if err == nil {
-		rfq.Address = addr
+	if rfq.AddressID > 0 {
+		addr, err := r.getAddressByID(rfq.AddressID)
+		if err != nil && err != sql.ErrNoRows {
+			return nil, err
+		}
+		if err == nil {
+			rfq.Address = addr
+		}
 	}
 	if err := r.enrichRFQLookups(&rfq); err != nil {
 		return nil, err
@@ -214,11 +268,15 @@ func (r *RFQRepository) ListMatchingForFactory(factoryID int64, status string) (
 	}
 	var rfqs []domain.RFQ
 	query := `
-		SELECT DISTINCT r.rfq_id, r.user_id, r.category_id, r.sub_category_id, r.title, r.quantity, r.details, r.address_id,
+		SELECT DISTINCT r.rfq_id, r.user_id, COALESCE(r.category_id, 0) AS category_id, r.sub_category_id, r.title, r.quantity, r.details, COALESCE(r.address_id, 0) AS address_id,
 		       r.shipping_method_id, r.status, r.uploaded_at, r.created_at, r.updated_at,
 		       r.material_grade, r.target_unit_price, r.target_lead_time_days, r.required_delivery_date, r.delivery_address_id,
 		       r.certifications_required, r.sample_required, r.sample_qty, r.inspection_type,
-		       r.reference_images
+		       r.reference_images, COALESCE(r.rfq_type, 'RFQ') AS rfq_type, COALESCE(r.initiated_by, 'buyer') AS initiated_by,
+		       r.factory_user_id, r.source_showcase_id, r.source_conv_id,
+		       r.boq_currency, r.boq_subtotal, r.boq_discount_amount, r.boq_vat_percent, r.boq_vat_amount, r.boq_grand_total,
+		       r.boq_moq, r.boq_lead_time_days, r.boq_payment_terms, r.boq_validity_days, r.boq_note,
+		       r.boq_sent_at, r.boq_responded_at, r.boq_response, r.boq_decline_reason
 		FROM rfqs r
 		INNER JOIN map_factory_categories mfc ON mfc.category_id = r.category_id AND mfc.factory_id = $1
 		LEFT JOIN lbi_sub_categories sc ON sc.sub_category_id = r.sub_category_id
@@ -283,6 +341,9 @@ func (r *RFQRepository) enrichRFQLookups(rfq *domain.RFQ) error {
 	}
 
 	var addressSummary sql.NullString
+	if rfq.AddressID <= 0 {
+		return nil
+	}
 	if err := r.db.Get(&addressSummary, `
 		SELECT TRIM(BOTH ' ' FROM CONCAT_WS(' / ',
 			NULLIF(a.address_detail, ''),
@@ -305,6 +366,27 @@ func (r *RFQRepository) enrichRFQLookups(rfq *domain.RFQ) error {
 	}
 
 	return nil
+}
+
+func nullableZeroInt64(v int64) interface{} {
+	if v <= 0 {
+		return nil
+	}
+	return v
+}
+
+func nullableRFQType(v string) interface{} {
+	if v == "" {
+		return "RFQ"
+	}
+	return v
+}
+
+func nullableInitiatedBy(v string) interface{} {
+	if v == "" {
+		return "buyer"
+	}
+	return v
 }
 
 // FactoryHasMatchingCategory returns true if factory accepts RFQ's category and sub-category rules.

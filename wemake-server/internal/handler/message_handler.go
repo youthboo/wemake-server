@@ -93,7 +93,7 @@ func (h *MessageHandler) CreateMessage(c *fiber.Ctx) error {
 		case errors.Is(err, service.ErrConversationReceiverMismatch):
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "receiver_id must match the other participant in conv_id"})
 		case errors.Is(err, service.ErrInvalidMessageType):
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "message_type must be one of TX, QT, IM"})
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "message_type must be one of TX, QT, IM, BQ"})
 		case errors.Is(err, service.ErrQuoteDataRequired):
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "quote_data is required when message_type is QT"})
 		}

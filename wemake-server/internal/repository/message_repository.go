@@ -20,8 +20,8 @@ func (r *MessageRepository) Create(item *domain.Message) error {
 		item.MessageType = "TX"
 	}
 	query := `
-		INSERT INTO messages (message_id, reference_type, reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, is_read)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		INSERT INTO messages (message_id, reference_type, reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, boq_rfq_id, is_read)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	`
 	_, err := r.db.Exec(
 		query,
@@ -36,6 +36,7 @@ func (r *MessageRepository) Create(item *domain.Message) error {
 		item.ConvID,
 		item.MessageType,
 		item.QuoteData,
+		nullableInt64Value(item.BOQRfqID),
 		item.IsRead,
 	)
 	return err
@@ -69,7 +70,7 @@ func (r *MessageRepository) ReferenceExists(referenceType string, referenceID in
 func (r *MessageRepository) ListByReference(referenceType string, referenceID int64, userID int64) ([]domain.Message, error) {
 	var items []domain.Message
 	query := `
-		SELECT message_id, COALESCE(reference_type, '') AS reference_type, COALESCE(reference_id, 0) AS reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, is_read
+		SELECT message_id, COALESCE(reference_type, '') AS reference_type, COALESCE(reference_id, 0) AS reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, boq_rfq_id, is_read
 		FROM messages
 		WHERE reference_type = $1 AND reference_id = $2 AND (sender_id = $3 OR receiver_id = $3)
 		ORDER BY created_at ASC
@@ -81,7 +82,7 @@ func (r *MessageRepository) ListByReference(referenceType string, referenceID in
 func (r *MessageRepository) ListByConvID(convID int64) ([]domain.Message, error) {
 	var items []domain.Message
 	query := `
-		SELECT message_id, COALESCE(reference_type, '') AS reference_type, COALESCE(reference_id, 0) AS reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, is_read
+		SELECT message_id, COALESCE(reference_type, '') AS reference_type, COALESCE(reference_id, 0) AS reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, boq_rfq_id, is_read
 		FROM messages
 		WHERE conv_id = $1
 		ORDER BY created_at ASC

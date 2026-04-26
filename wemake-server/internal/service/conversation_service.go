@@ -57,6 +57,23 @@ func (s *ConversationService) Create(conv *domain.Conversation) error {
 	return s.repo.Create(conv)
 }
 
+func (s *ConversationService) CreateFromShowcase(showcaseID, customerID int64) (*domain.ConversationResponse, error) {
+	factoryID, err := s.repo.GetFactoryIDByShowcaseID(showcaseID)
+	if err != nil {
+		return nil, err
+	}
+	conv := &domain.Conversation{
+		CustomerID:       customerID,
+		FactoryID:        factoryID,
+		SourceShowcaseID: &showcaseID,
+		ConvType:         "showcase_inquiry",
+	}
+	if err := s.repo.Create(conv); err != nil {
+		return nil, err
+	}
+	return s.GetByID(conv.ConvID, customerID)
+}
+
 func (s *ConversationService) MarkAsRead(convID, userID int64) error {
 	err := s.repo.MarkAsRead(convID, userID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -77,14 +94,16 @@ func mapConversation(row *domain.ConversationRow) domain.ConversationResponse {
 		factoryName = fmt.Sprintf("โรงงาน #%d", row.FactoryID)
 	}
 	return domain.ConversationResponse{
-		ConvID:         row.ConvID,
-		CustomerID:     row.CustomerID,
-		FactoryID:      row.FactoryID,
-		LastMessage:    derefString(row.LastMessage),
-		UnreadCustomer: row.UnreadCustomer,
-		UnreadFactory:  row.UnreadFactory,
-		HasQuote:       row.HasQuote,
-		UpdatedAt:      row.UpdatedAt,
+		ConvID:           row.ConvID,
+		CustomerID:       row.CustomerID,
+		FactoryID:        row.FactoryID,
+		SourceShowcaseID: row.SourceShowcaseID,
+		ConvType:         row.ConvType,
+		LastMessage:      derefString(row.LastMessage),
+		UnreadCustomer:   row.UnreadCustomer,
+		UnreadFactory:    row.UnreadFactory,
+		HasQuote:         row.HasQuote,
+		UpdatedAt:        row.UpdatedAt,
 		Customer: domain.CustomerPartyInfo{
 			UserID:      row.CustomerID,
 			FirstName:   first,

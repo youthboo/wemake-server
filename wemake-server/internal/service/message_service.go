@@ -34,6 +34,7 @@ var allowedMessageTypes = map[string]struct{}{
 	"TX": {},
 	"QT": {},
 	"IM": {},
+	"BQ": {},
 }
 
 type messageRepository interface {

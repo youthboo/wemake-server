@@ -18,8 +18,11 @@ func AuthContext(jwtSecret string) fiber.Handler {
 		authHeader := strings.TrimSpace(c.Get("Authorization"))
 		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
 			rawToken := strings.TrimSpace(authHeader[7:])
-			if userID, ok := parseUserIDFromToken(rawToken, jwtSecret); ok {
+			if userID, role, ok := parseUserAndRoleFromToken(rawToken, jwtSecret); ok {
 				c.Locals("user_id", userID)
+				if role != "" {
+					c.Locals("role", role)
+				}
 			}
 		}
 
@@ -38,29 +41,30 @@ func parseUserIDFromHeader(raw string) (int64, bool) {
 	return userID, true
 }
 
-func parseUserIDFromToken(rawToken string, jwtSecret string) (int64, bool) {
+func parseUserAndRoleFromToken(rawToken string, jwtSecret string) (int64, string, bool) {
 	token, err := jwt.Parse(rawToken, func(token *jwt.Token) (interface{}, error) {
 		return []byte(jwtSecret), nil
 	})
 	if err != nil || !token.Valid {
-		return 0, false
+		return 0, "", false
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return 0, false
+		return 0, "", false
 	}
+	role, _ := claims["role"].(string)
 
 	switch value := claims["user_id"].(type) {
 	case float64:
-		return int64(value), true
+		return int64(value), role, true
 	case string:
 		userID, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
-			return 0, false
+			return 0, "", false
 		}
-		return userID, true
+		return userID, role, true
 	default:
-		return 0, false
+		return 0, "", false
 	}
 }

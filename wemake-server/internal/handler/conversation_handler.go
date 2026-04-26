@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/yourusername/wemake/internal/domain"
@@ -48,14 +49,50 @@ func (h *ConversationHandler) Get(c *fiber.Ctx) error {
 }
 
 func (h *ConversationHandler) Create(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+	}
 	var req domain.Conversation
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid payload"})
 	}
+	if req.CustomerID <= 0 || req.FactoryID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "customer_id and factory_id are required"})
+	}
+	if role := getOptionalRoleFromContext(c); role != "" && role != domain.RoleCustomer {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "buyer role required"})
+	}
+	if req.CustomerID != userID && req.FactoryID != userID {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
+	}
 	if err := h.service.Create(&req); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create conversation"})
 	}
-	return c.Status(fiber.StatusCreated).JSON(req)
+	item, err := h.service.GetByID(req.ConvID, userID)
+	if err != nil {
+		return c.Status(fiber.StatusCreated).JSON(req)
+	}
+	return c.Status(fiber.StatusCreated).JSON(item)
+}
+
+func (h *ConversationHandler) InquireShowcase(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+	}
+	showcaseID, err := strconv.ParseInt(c.Params("showcase_id"), 10, 64)
+	if err != nil || showcaseID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid showcase_id"})
+	}
+	if role := getOptionalRoleFromContext(c); role != "" && role != domain.RoleCustomer {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "buyer role required"})
+	}
+	item, err := h.service.CreateFromShowcase(showcaseID, userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create conversation"})
+	}
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"conv_id": item.ConvID})
 }
 
 func (h *ConversationHandler) MarkAsRead(c *fiber.Ctx) error {

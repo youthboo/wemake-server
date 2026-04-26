@@ -2,6 +2,7 @@ package handler
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -28,4 +29,13 @@ func getOptionalUserIDFromHeader(c *fiber.Ctx) int64 {
 		return 0
 	}
 	return userID
+}
+
+func getOptionalRoleFromContext(c *fiber.Ctx) string {
+	if localValue := c.Locals("role"); localValue != nil {
+		if value, ok := localValue.(string); ok {
+			return strings.TrimSpace(strings.ToUpper(value))
+		}
+	}
+	return ""
 }
