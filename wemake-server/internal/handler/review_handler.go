@@ -58,6 +58,9 @@ func (h *ReviewHandler) Create(c *fiber.Ctx) error {
 	req.UserID = userID
 
 	if err := h.service.Create(&req); err != nil {
+		if err == service.ErrReviewImagesInvalid {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create review"})
 	}
 	return c.Status(fiber.StatusCreated).JSON(req)
@@ -73,14 +76,18 @@ func (h *ReviewHandler) UpdateByUser(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid review_id"})
 	}
 	var req struct {
-		Rating  int    `json:"rating"`
-		Comment string `json:"comment"`
+		Rating    int                `json:"rating"`
+		Comment   string             `json:"comment"`
+		ImageURLs domain.StringArray `json:"image_urls"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid payload"})
 	}
-	item, err := h.service.UpdateByUser(int64(reviewID), userID, req.Rating, req.Comment)
+	item, err := h.service.UpdateByUser(int64(reviewID), userID, req.Rating, req.Comment, req.ImageURLs)
 	if err != nil {
+		if err == service.ErrReviewImagesInvalid {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
 		if err == sql.ErrNoRows {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "review cannot be edited"})
 		}

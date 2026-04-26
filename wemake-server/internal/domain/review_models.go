@@ -3,18 +3,19 @@ package domain
 import "time"
 
 type FactoryReview struct {
-	ReviewID       int64      `db:"review_id" json:"review_id"`
-	FactoryID      int64      `db:"factory_id" json:"factory_id"`
-	UserID         int64      `db:"user_id" json:"user_id"`
-	OrderID        *int64     `db:"order_id" json:"order_id,omitempty"`
-	Rating         int        `db:"rating" json:"rating"`
-	Comment        string     `db:"comment" json:"comment"`
-	CreatedAt      time.Time  `db:"created_at" json:"created_at"`
-	UpdatedAt      *time.Time `db:"updated_at" json:"updated_at,omitempty"`
-	FactoryReply   *string    `db:"factory_reply" json:"factory_reply,omitempty"`
-	FactoryReplyAt *time.Time `db:"factory_reply_at" json:"factory_reply_at,omitempty"`
-	FactoryReplyBy *int64     `db:"factory_reply_by" json:"factory_reply_by,omitempty"`
-	ReviewerName   *string    `db:"reviewer_name" json:"reviewer_name,omitempty"`
+	ReviewID       int64       `db:"review_id" json:"review_id"`
+	FactoryID      int64       `db:"factory_id" json:"factory_id"`
+	UserID         int64       `db:"user_id" json:"user_id"`
+	OrderID        *int64      `db:"order_id" json:"order_id,omitempty"`
+	Rating         int         `db:"rating" json:"rating"`
+	Comment        string      `db:"comment" json:"comment"`
+	ImageURLs      StringArray `db:"image_urls" json:"image_urls"`
+	CreatedAt      time.Time   `db:"created_at" json:"created_at"`
+	UpdatedAt      *time.Time  `db:"updated_at" json:"updated_at,omitempty"`
+	FactoryReply   *string     `db:"factory_reply" json:"factory_reply,omitempty"`
+	FactoryReplyAt *time.Time  `db:"factory_reply_at" json:"factory_reply_at,omitempty"`
+	FactoryReplyBy *int64      `db:"factory_reply_by" json:"factory_reply_by,omitempty"`
+	ReviewerName   *string     `db:"reviewer_name" json:"reviewer_name,omitempty"`
 }
 
 type FactoryReviewSummary struct {

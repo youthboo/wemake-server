@@ -30,17 +30,18 @@ type TransactionListItem struct {
 }
 
 type UserReviewListItem struct {
-	ReviewID      int64      `json:"review_id"`
-	OrderID       *int64     `json:"order_id,omitempty"`
-	FactoryID     int64      `json:"factory_id"`
-	FactoryName   string     `json:"factory_name"`
-	FactoryAvatar *string    `json:"factory_avatar,omitempty"`
-	ReviewerName  *string    `json:"reviewer_name,omitempty"`
-	Rating        int        `json:"rating"`
-	Comment       string     `json:"comment"`
-	IsEditable    bool       `json:"is_editable"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     *time.Time `json:"updated_at,omitempty"`
+	ReviewID      int64       `json:"review_id"`
+	OrderID       *int64      `json:"order_id,omitempty"`
+	FactoryID     int64       `json:"factory_id"`
+	FactoryName   string      `json:"factory_name"`
+	FactoryAvatar *string     `json:"factory_avatar,omitempty"`
+	ReviewerName  *string     `json:"reviewer_name,omitempty"`
+	Rating        int         `json:"rating"`
+	Comment       string      `json:"comment"`
+	ImageURLs     StringArray `json:"image_urls"`
+	IsEditable    bool        `json:"is_editable"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     *time.Time  `json:"updated_at,omitempty"`
 }
 
 type NotificationPreference struct {

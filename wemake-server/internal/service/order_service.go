@@ -33,6 +33,7 @@ var ErrConfirmReceiptInvalidStatus = errors.New("order status must be SH")
 var ErrConfirmReceiptNotAllowed = errors.New("order already completed or cancelled")
 var ErrReviewRatingInvalid = errors.New("rating must be between 1 and 5")
 var ErrReviewCommentInvalid = errors.New("comment must be 1-1000 characters")
+var ErrReviewImagesInvalid = errors.New("image_urls must contain at most 5 unique urls")
 var ErrReviewOrderNotCompleted = errors.New("order must be completed before review")
 var ErrReviewAlreadyExists = errors.New("review already exists for this order")
 
@@ -42,8 +43,9 @@ type ConfirmReceiptInput struct {
 }
 
 type CreateOrderReviewInput struct {
-	Rating  int
-	Comment string
+	Rating    int
+	Comment   string
+	ImageURLs domain.StringArray
 }
 
 type ConfirmReceiptSettlement struct {
@@ -735,6 +737,10 @@ func (s *OrderService) CreateReview(orderID, userID int64, role string, input Cr
 	if comment == "" || len(comment) > 1000 {
 		return nil, ErrReviewCommentInvalid
 	}
+	imageURLs := normalizeReviewImageURLs(input.ImageURLs)
+	if len(imageURLs) > maxReviewImages {
+		return nil, ErrReviewImagesInvalid
+	}
 
 	order, err := s.repo.GetByParticipant(orderID, userID, role)
 	if err != nil {
@@ -762,6 +768,7 @@ func (s *OrderService) CreateReview(orderID, userID int64, role string, input Cr
 		OrderID:   &orderIDPtr,
 		Rating:    input.Rating,
 		Comment:   comment,
+		ImageURLs: imageURLs,
 	}
 	if err := s.reviews.CreateForOrderTx(tx, review); err != nil {
 		if errors.Is(err, repository.ErrReviewAlreadyExists) {

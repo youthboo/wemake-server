@@ -248,7 +248,7 @@ func (r *ProfileRepository) listReviews(fromWhere string, userID int64, page, li
 	query := `SELECT
 		fr.review_id, fr.order_id, fr.factory_id, fp.factory_name, fp.image_url AS factory_avatar,
 		` + selectReviewer + `,
-		fr.rating, COALESCE(fr.comment, '') AS comment,
+		fr.rating, COALESCE(fr.comment, '') AS comment, fr.image_urls,
 		(fr.created_at > NOW() - INTERVAL '7 days') AS is_editable,
 		fr.created_at, fr.updated_at
 	` + fromWhere + ` ORDER BY fr.created_at DESC LIMIT $2 OFFSET $3`

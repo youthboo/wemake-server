@@ -26,7 +26,7 @@ func (r *ReviewRepository) DB() *sqlx.DB {
 func (r *ReviewRepository) ListByFactoryID(factoryID int64) ([]domain.FactoryReview, error) {
 	var items []domain.FactoryReview
 	query := `
-		SELECT fr.review_id, fr.factory_id, fr.user_id, fr.order_id, fr.rating, fr.comment,
+		SELECT fr.review_id, fr.factory_id, fr.user_id, fr.order_id, fr.rating, fr.comment, fr.image_urls,
 		       fr.created_at, fr.updated_at, fr.factory_reply, fr.factory_reply_at, fr.factory_reply_by,
 		       NULLIF(TRIM(CONCAT(c.first_name, ' ', c.last_name)), '') AS reviewer_name
 		FROM factory_reviews fr
@@ -41,16 +41,16 @@ func (r *ReviewRepository) ListByFactoryID(factoryID int64) ([]domain.FactoryRev
 
 func (r *ReviewRepository) Create(review *domain.FactoryReview) error {
 	query := `
-		INSERT INTO factory_reviews (factory_id, user_id, rating, comment)
-		VALUES (:factory_id, :user_id, :rating, :comment)
-		RETURNING review_id, created_at
+		INSERT INTO factory_reviews (factory_id, user_id, rating, comment, image_urls)
+		VALUES (:factory_id, :user_id, :rating, :comment, :image_urls)
+		RETURNING review_id, image_urls, created_at
 	`
 	rows, err := r.db.NamedQuery(query, review)
 	if err != nil {
 		return err
 	}
 	if rows.Next() {
-		err = rows.Scan(&review.ReviewID, &review.CreatedAt)
+		err = rows.Scan(&review.ReviewID, &review.ImageURLs, &review.CreatedAt)
 	}
 	rows.Close()
 	return err
@@ -59,7 +59,7 @@ func (r *ReviewRepository) Create(review *domain.FactoryReview) error {
 func (r *ReviewRepository) GetByOrderAndUser(orderID, userID int64) (*domain.FactoryReview, error) {
 	var item domain.FactoryReview
 	err := r.db.Get(&item, `
-		SELECT fr.review_id, fr.factory_id, fr.user_id, fr.order_id, fr.rating, fr.comment,
+		SELECT fr.review_id, fr.factory_id, fr.user_id, fr.order_id, fr.rating, fr.comment, fr.image_urls,
 		       fr.created_at, fr.updated_at, fr.factory_reply, fr.factory_reply_at, fr.factory_reply_by,
 		       NULLIF(TRIM(CONCAT(c.first_name, ' ', c.last_name)), '') AS reviewer_name
 		FROM factory_reviews fr
@@ -75,11 +75,11 @@ func (r *ReviewRepository) GetByOrderAndUser(orderID, userID int64) (*domain.Fac
 
 func (r *ReviewRepository) CreateForOrderTx(tx *sqlx.Tx, review *domain.FactoryReview) error {
 	err := tx.QueryRow(`
-		INSERT INTO factory_reviews (factory_id, user_id, order_id, rating, comment, updated_at)
-		VALUES ($1, $2, $3, $4, $5, NOW())
-		RETURNING review_id, created_at, updated_at
-	`, review.FactoryID, review.UserID, review.OrderID, review.Rating, strings.TrimSpace(review.Comment)).
-		Scan(&review.ReviewID, &review.CreatedAt, &review.UpdatedAt)
+		INSERT INTO factory_reviews (factory_id, user_id, order_id, rating, comment, image_urls, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, NOW())
+		RETURNING review_id, image_urls, created_at, updated_at
+	`, review.FactoryID, review.UserID, review.OrderID, review.Rating, strings.TrimSpace(review.Comment), review.ImageURLs).
+		Scan(&review.ReviewID, &review.ImageURLs, &review.CreatedAt, &review.UpdatedAt)
 	if err != nil {
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
@@ -147,16 +147,16 @@ func (r *ReviewRepository) GetSummaryByFactoryID(factoryID int64) (*domain.Facto
 	}, nil
 }
 
-func (r *ReviewRepository) UpdateByUser(reviewID, userID int64, rating int, comment string) (*domain.FactoryReview, error) {
+func (r *ReviewRepository) UpdateByUser(reviewID, userID int64, rating int, comment string, imageURLs domain.StringArray) (*domain.FactoryReview, error) {
 	var item domain.FactoryReview
 	err := r.db.Get(&item, `
 		UPDATE factory_reviews
-		SET rating = $1, comment = $2, updated_at = NOW()
-		WHERE review_id = $3 AND user_id = $4
+		SET rating = $1, comment = $2, image_urls = $3, updated_at = NOW()
+		WHERE review_id = $4 AND user_id = $5
 		  AND created_at > NOW() - INTERVAL '7 days'
 		  AND deleted_at IS NULL
-		RETURNING review_id, factory_id, user_id, order_id, rating, comment, created_at, updated_at, factory_reply, factory_reply_at, factory_reply_by
-	`, rating, strings.TrimSpace(comment), reviewID, userID)
+		RETURNING review_id, factory_id, user_id, order_id, rating, comment, image_urls, created_at, updated_at, factory_reply, factory_reply_at, factory_reply_by
+	`, rating, strings.TrimSpace(comment), imageURLs, reviewID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +171,7 @@ func (r *ReviewRepository) SoftDeleteByUser(reviewID, userID int64) (*domain.Fac
 		WHERE review_id = $1 AND user_id = $2
 		  AND created_at > NOW() - INTERVAL '7 days'
 		  AND deleted_at IS NULL
-		RETURNING review_id, factory_id, user_id, order_id, rating, comment, created_at, updated_at, factory_reply, factory_reply_at, factory_reply_by
+		RETURNING review_id, factory_id, user_id, order_id, rating, comment, image_urls, created_at, updated_at, factory_reply, factory_reply_at, factory_reply_by
 	`, reviewID, userID)
 	if err != nil {
 		return nil, err

@@ -401,8 +401,9 @@ func (h *OrderHandler) GetReviewState(c *fiber.Ctx) error {
 
 func (h *OrderHandler) CreateReview(c *fiber.Ctx) error {
 	type reqBody struct {
-		Rating  int    `json:"rating"`
-		Comment string `json:"comment"`
+		Rating    int                `json:"rating"`
+		Comment   string             `json:"comment"`
+		ImageURLs domain.StringArray `json:"image_urls"`
 	}
 	userID, err := getUserIDFromHeader(c)
 	if err != nil {
@@ -421,14 +422,15 @@ func (h *OrderHandler) CreateReview(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
 	}
 	item, err := h.service.CreateReview(int64(orderID), userID, u.Role, service.CreateOrderReviewInput{
-		Rating:  req.Rating,
-		Comment: req.Comment,
+		Rating:    req.Rating,
+		Comment:   req.Comment,
+		ImageURLs: req.ImageURLs,
 	})
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrForbidden):
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
-		case errors.Is(err, service.ErrReviewRatingInvalid), errors.Is(err, service.ErrReviewCommentInvalid):
+		case errors.Is(err, service.ErrReviewRatingInvalid), errors.Is(err, service.ErrReviewCommentInvalid), errors.Is(err, service.ErrReviewImagesInvalid):
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		case errors.Is(err, service.ErrReviewOrderNotCompleted):
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error()})

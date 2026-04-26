@@ -8,6 +8,8 @@ import (
 	"github.com/yourusername/wemake/internal/repository"
 )
 
+const maxReviewImages = 5
+
 type ReviewService struct {
 	repo *repository.ReviewRepository
 }
@@ -21,6 +23,10 @@ func (s *ReviewService) ListByFactoryID(factoryID int64) ([]domain.FactoryReview
 }
 
 func (s *ReviewService) Create(review *domain.FactoryReview) error {
+	review.ImageURLs = normalizeReviewImageURLs(review.ImageURLs)
+	if len(review.ImageURLs) > maxReviewImages {
+		return ErrReviewImagesInvalid
+	}
 	return s.repo.Create(review)
 }
 
@@ -28,11 +34,15 @@ func (s *ReviewService) GetSummaryByFactoryID(factoryID int64) (*domain.FactoryR
 	return s.repo.GetSummaryByFactoryID(factoryID)
 }
 
-func (s *ReviewService) UpdateByUser(reviewID, userID int64, rating int, comment string) (*domain.FactoryReview, error) {
+func (s *ReviewService) UpdateByUser(reviewID, userID int64, rating int, comment string, imageURLs domain.StringArray) (*domain.FactoryReview, error) {
 	if rating < 1 || rating > 5 || strings.TrimSpace(comment) == "" || len(strings.TrimSpace(comment)) > 2000 {
 		return nil, sql.ErrNoRows
 	}
-	return s.repo.UpdateByUser(reviewID, userID, rating, comment)
+	imageURLs = normalizeReviewImageURLs(imageURLs)
+	if len(imageURLs) > maxReviewImages {
+		return nil, ErrReviewImagesInvalid
+	}
+	return s.repo.UpdateByUser(reviewID, userID, rating, comment, imageURLs)
 }
 
 func (s *ReviewService) DeleteByUser(reviewID, userID int64) error {
@@ -49,4 +59,21 @@ func (s *ReviewService) DeleteByUser(reviewID, userID int64) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+func normalizeReviewImageURLs(values domain.StringArray) domain.StringArray {
+	seen := make(map[string]struct{})
+	out := make(domain.StringArray, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }
