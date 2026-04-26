@@ -71,46 +71,46 @@ type AdminDashboardSummary struct {
 }
 
 type AdminDashboardRevenue struct {
-	GrossOrderValue    float64 `json:"gross_order_value"`
-	TotalVATCollected  float64 `json:"total_vat_collected"`
-	PlatformCommission float64 `json:"platform_commission"`
-	FactoryNetPayable  float64 `json:"factory_net_payable"`
+	GrossOrderValue    float64 `db:"gross_order_value" json:"gross_order_value"`
+	TotalVATCollected  float64 `db:"total_vat_collected" json:"total_vat_collected"`
+	PlatformCommission float64 `db:"platform_commission" json:"platform_commission"`
+	FactoryNetPayable  float64 `db:"factory_net_payable" json:"factory_net_payable"`
 }
 
 type AdminDashboardOrders struct {
-	Total     int64 `json:"total"`
-	Completed int64 `json:"completed"`
-	Active    int64 `json:"active"`
-	Cancelled int64 `json:"cancelled"`
-	Disputed  int64 `json:"disputed"`
+	Total     int64 `db:"total" json:"total"`
+	Completed int64 `db:"completed" json:"completed"`
+	Active    int64 `db:"active" json:"active"`
+	Cancelled int64 `db:"cancelled" json:"cancelled"`
+	Disputed  int64 `db:"disputed" json:"disputed"`
 }
 
 type AdminDashboardRFQs struct {
-	Total  int64 `json:"total"`
-	Open   int64 `json:"open"`
-	Closed int64 `json:"closed"`
+	Total  int64 `db:"total" json:"total"`
+	Open   int64 `db:"open" json:"open"`
+	Closed int64 `db:"closed" json:"closed"`
 }
 
 type AdminDashboardFactories struct {
-	TotalRegistered int64 `json:"total_registered"`
-	PendingApproval int64 `json:"pending_approval"`
-	Approved        int64 `json:"approved"`
-	Rejected        int64 `json:"rejected"`
-	Suspended       int64 `json:"suspended"`
+	TotalRegistered int64 `db:"total_registered" json:"total_registered"`
+	PendingApproval int64 `db:"pending_approval" json:"pending_approval"`
+	Approved        int64 `db:"approved" json:"approved"`
+	Rejected        int64 `db:"rejected" json:"rejected"`
+	Suspended       int64 `db:"suspended" json:"suspended"`
 }
 
 type AdminDashboardCustomers struct {
-	Total int64 `json:"total"`
+	Total int64 `db:"total" json:"total"`
 }
 
 type AdminDashboardMoney struct {
-	PendingAmount   float64 `json:"pending_amount,omitempty"`
-	CompletedAmount float64 `json:"completed_amount,omitempty"`
+	PendingAmount   float64 `db:"pending_amount" json:"pending_amount,omitempty"`
+	CompletedAmount float64 `db:"completed_amount" json:"completed_amount,omitempty"`
 }
 
 type AdminDashboardPending struct {
-	PendingCount  int64   `json:"pending_count"`
-	PendingAmount float64 `json:"pending_amount"`
+	PendingCount  int64   `db:"pending_count" json:"pending_count"`
+	PendingAmount float64 `db:"pending_amount" json:"pending_amount"`
 }
 
 type RevenueChartPoint struct {
