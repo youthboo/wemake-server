@@ -79,9 +79,9 @@ func (r *AdminDashboardRepository) GetSummary(from, to time.Time, period string)
 	if err := r.db.Get(&out.Orders, fmt.Sprintf(`
 		SELECT
 			COUNT(*)::bigint AS total,
-			COUNT(*) FILTER (WHERE status = 'CP')::bigint AS completed,
-			COUNT(*) FILTER (WHERE status IN ('PP','PR','WF','QC','SH','DL','AC'))::bigint AS active,
-			COUNT(*) FILTER (WHERE status = 'CC')::bigint AS cancelled,
+			COUNT(*) FILTER (WHERE o.status = 'CP')::bigint AS completed,
+			COUNT(*) FILTER (WHERE o.status IN ('PP','PR','WF','QC','SH','DL','AC'))::bigint AS active,
+			COUNT(*) FILTER (WHERE o.status = 'CC')::bigint AS cancelled,
 			%s AS disputed
 		FROM orders o
 		%s
