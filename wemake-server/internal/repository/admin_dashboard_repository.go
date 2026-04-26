@@ -2,6 +2,7 @@ package repository
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -17,6 +18,7 @@ func NewAdminDashboardRepository(db *sqlx.DB) *AdminDashboardRepository {
 }
 
 func (r *AdminDashboardRepository) GetSummary(from, to time.Time, period string) (*domain.AdminDashboardSummary, error) {
+	log.Printf("[AdminDashboard] GetSummary called: period=%s, from=%s, to=%s", period, from.Format("2006-01-02"), to.Format("2006-01-02"))
 	out := &domain.AdminDashboardSummary{
 		Period:   period,
 		DateFrom: from.Format("2006-01-02"),
@@ -24,6 +26,7 @@ func (r *AdminDashboardRepository) GetSummary(from, to time.Time, period string)
 	}
 	hasQuoteVAT, err := r.hasColumn("quotations", "vat_amount")
 	if err != nil {
+		log.Printf("[AdminDashboard] Error checking vat_amount column: %v", err)
 		return nil, err
 	}
 	hasQuoteCommission, err := r.hasColumn("quotations", "platform_commission_amount")
@@ -59,8 +62,10 @@ func (r *AdminDashboardRepository) GetSummary(from, to time.Time, period string)
 		netExpr = "COALESCE(SUM(q.factory_net_receivable), 0)::float8"
 	}
 	if err := r.db.Get(&out.Revenue, fmt.Sprintf(revenueQuery, vatExpr, commissionExpr, netExpr), from, to); err != nil {
+		log.Printf("[AdminDashboard] Error fetching revenue: %v", err)
 		return nil, err
 	}
+	log.Printf("[AdminDashboard] Revenue fetched successfully: %+v", out.Revenue)
 	hasDisputesTable, err := r.hasTable("disputes")
 	if err != nil {
 		return nil, err
@@ -83,8 +88,10 @@ func (r *AdminDashboardRepository) GetSummary(from, to time.Time, period string)
 		WHERE o.created_at >= $1
 		  AND o.created_at < $2
 	`, disputedExpr, disputeJoin), from, to); err != nil {
+		log.Printf("[AdminDashboard] Error fetching orders: %v", err)
 		return nil, err
 	}
+	log.Printf("[AdminDashboard] Orders fetched successfully: %+v", out.Orders)
 	if err := r.db.Get(&out.RFQs, `
 		SELECT
 			COUNT(*)::bigint AS total,
@@ -94,10 +101,13 @@ func (r *AdminDashboardRepository) GetSummary(from, to time.Time, period string)
 		WHERE created_at >= $1
 		  AND created_at < $2
 	`, from, to); err != nil {
+		log.Printf("[AdminDashboard] Error fetching RFQs: %v", err)
 		return nil, err
 	}
+	log.Printf("[AdminDashboard] RFQs fetched successfully: %+v", out.RFQs)
 	hasApprovalStatus, err := r.hasColumn("factory_profiles", "approval_status")
 	if err != nil {
+		log.Printf("[AdminDashboard] Error checking approval_status column: %v", err)
 		return nil, err
 	}
 	if hasApprovalStatus {
@@ -110,6 +120,7 @@ func (r *AdminDashboardRepository) GetSummary(from, to time.Time, period string)
 				COUNT(*) FILTER (WHERE approval_status = 'SU')::bigint AS suspended
 			FROM factory_profiles
 		`); err != nil {
+			log.Printf("[AdminDashboard] Error fetching factories (with approval_status): %v", err)
 			return nil, err
 		}
 	} else {
@@ -122,16 +133,21 @@ func (r *AdminDashboardRepository) GetSummary(from, to time.Time, period string)
 				0::bigint AS suspended
 			FROM factory_profiles
 		`); err != nil {
+			log.Printf("[AdminDashboard] Error fetching factories (without approval_status): %v", err)
 			return nil, err
 		}
 	}
+	log.Printf("[AdminDashboard] Factories fetched successfully: %+v", out.Factories)
 	if err := r.db.Get(&out.Customers, `
 		SELECT COUNT(*)::bigint AS total FROM users WHERE role = 'CT'
 	`); err != nil {
+		log.Printf("[AdminDashboard] Error fetching customers: %v", err)
 		return nil, err
 	}
+	log.Printf("[AdminDashboard] Customers fetched successfully: %+v", out.Customers)
 	hasSettlementsTable, err := r.hasTable("settlements")
 	if err != nil {
+		log.Printf("[AdminDashboard] Error checking settlements table: %v", err)
 		return nil, err
 	}
 	if hasSettlementsTable {
@@ -143,11 +159,14 @@ func (r *AdminDashboardRepository) GetSummary(from, to time.Time, period string)
 			WHERE created_at >= $1
 			  AND created_at < $2
 		`, from, to); err != nil {
+			log.Printf("[AdminDashboard] Error fetching settlements: %v", err)
 			return nil, err
 		}
+		log.Printf("[AdminDashboard] Settlements fetched successfully: %+v", out.Settlements)
 	}
 	hasWithdrawalsTable, err := r.hasTable("withdrawal_requests")
 	if err != nil {
+		log.Printf("[AdminDashboard] Error checking withdrawal_requests table: %v", err)
 		return nil, err
 	}
 	if hasWithdrawalsTable {
@@ -159,9 +178,12 @@ func (r *AdminDashboardRepository) GetSummary(from, to time.Time, period string)
 			WHERE created_at >= $1
 			  AND created_at < $2
 		`, from, to); err != nil {
+			log.Printf("[AdminDashboard] Error fetching withdrawals: %v", err)
 			return nil, err
 		}
+		log.Printf("[AdminDashboard] Withdrawals fetched successfully: %+v", out.Withdrawals)
 	}
+	log.Printf("[AdminDashboard] GetSummary completed successfully")
 	return out, nil
 }
 
