@@ -304,6 +304,35 @@ func (r *RFQRepository) ListMatchingForFactory(factoryID int64, status string) (
 	return rfqs, nil
 }
 
+func (r *RFQRepository) ListMatchingFactoryIDs(rfq *domain.RFQ) ([]int64, error) {
+	if rfq == nil {
+		return nil, nil
+	}
+	var ids []int64
+	query := `
+		SELECT DISTINCT mfc.factory_id
+		FROM map_factory_categories mfc
+		LEFT JOIN lbi_sub_categories sc ON sc.sub_category_id = $2
+		LEFT JOIN factory_profiles fp ON fp.user_id = mfc.factory_id
+		WHERE mfc.category_id = $1
+		  AND COALESCE(fp.approval_status, 'AP') <> 'SU'
+		  AND (
+			$2::bigint IS NULL
+			OR COALESCE(sc.sort_order, 0) = 99
+			OR EXISTS (
+				SELECT 1
+				FROM map_factory_sub_categories ms
+				WHERE ms.factory_id = mfc.factory_id
+				  AND ms.sub_category_id = $2
+			)
+		  )
+	`
+	if err := r.db.Select(&ids, query, nullableZeroInt64(rfq.CategoryID), nullableInt64Value(rfq.SubCategoryID)); err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
 func (r *RFQRepository) enrichRFQLookups(rfq *domain.RFQ) error {
 	if rfq == nil {
 		return nil

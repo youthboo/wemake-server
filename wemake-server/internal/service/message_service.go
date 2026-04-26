@@ -50,12 +50,13 @@ type conversationRepository interface {
 }
 
 type MessageService struct {
-	repo     messageRepository
-	convRepo conversationRepository
+	repo          messageRepository
+	convRepo      conversationRepository
+	notifications *NotificationService
 }
 
-func NewMessageService(repo messageRepository, convRepo conversationRepository) *MessageService {
-	return &MessageService{repo: repo, convRepo: convRepo}
+func NewMessageService(repo messageRepository, convRepo conversationRepository, notifications *NotificationService) *MessageService {
+	return &MessageService{repo: repo, convRepo: convRepo, notifications: notifications}
 }
 
 func (s *MessageService) Create(item *domain.Message) error {
@@ -76,7 +77,11 @@ func (s *MessageService) Create(item *domain.Message) error {
 		return err
 	}
 	item.CreatedAt = time.Now()
-	return s.repo.Create(item)
+	if err := s.repo.Create(item); err != nil {
+		return err
+	}
+	s.notifyReceiver(item)
+	return nil
 }
 
 func normalizeMessageRefType(t string) string {
@@ -166,4 +171,67 @@ func (s *MessageService) ListByConvID(convID int64) ([]domain.Message, error) {
 
 func (s *MessageService) ListThreads(userID int64) ([]domain.MessageThread, error) {
 	return s.repo.ListThreads(userID)
+}
+
+func (s *MessageService) notifyReceiver(item *domain.Message) {
+	if s.notifications == nil || item == nil || item.MessageType == "BQ" {
+		return
+	}
+
+	title := "ข้อความใหม่"
+	preview := trimNotificationPreview(item.Content, 80)
+	if preview == "" {
+		switch item.MessageType {
+		case "IM":
+			preview = "ส่งรูปภาพใหม่"
+		case "QT":
+			preview = "ส่งใบเสนอราคาใหม่"
+		default:
+			preview = "มีข้อความใหม่ในแชต"
+		}
+	}
+
+	link := ""
+	if item.ConvID != nil {
+		link = fmt.Sprintf("/chat/%d", *item.ConvID)
+	}
+
+	senderName := fmt.Sprintf("ผู้ใช้ #%d", item.SenderID)
+	if item.ConvID != nil && s.convRepo != nil {
+		if conv, err := s.convRepo.GetByID(*item.ConvID); err == nil {
+			if conv.FactoryID == item.SenderID {
+				if conv.FactoryName != nil && strings.TrimSpace(*conv.FactoryName) != "" {
+					senderName = strings.TrimSpace(*conv.FactoryName)
+				}
+			} else {
+				firstName := ""
+				lastName := ""
+				if conv.CustomerFirstName != nil {
+					firstName = *conv.CustomerFirstName
+				}
+				if conv.CustomerLastName != nil {
+					lastName = *conv.CustomerLastName
+				}
+				fullName := strings.TrimSpace(firstName + " " + lastName)
+				if fullName != "" {
+					senderName = fullName
+				}
+			}
+		}
+	}
+
+	createNotificationSafe(s.notifications, &domain.Notification{
+		UserID:  item.ReceiverID,
+		Type:    "CHAT_MESSAGE",
+		Title:   title,
+		Message: fmt.Sprintf("%s: %s", senderName, preview),
+		LinkTo:  link,
+		Data: notificationData(map[string]interface{}{
+			"conv_id":     item.ConvID,
+			"sender_id":   item.SenderID,
+			"sender_name": senderName,
+			"url":         link,
+		}),
+		CreatedAt: item.CreatedAt,
+	})
 }

@@ -21,12 +21,13 @@ var (
 )
 
 type RFQService struct {
-	repo        *repository.RFQRepository
-	factoryRepo *repository.FactoryRepository
+	repo          *repository.RFQRepository
+	factoryRepo   *repository.FactoryRepository
+	notifications *NotificationService
 }
 
-func NewRFQService(repo *repository.RFQRepository, factoryRepo *repository.FactoryRepository) *RFQService {
-	return &RFQService{repo: repo, factoryRepo: factoryRepo}
+func NewRFQService(repo *repository.RFQRepository, factoryRepo *repository.FactoryRepository, notifications *NotificationService) *RFQService {
+	return &RFQService{repo: repo, factoryRepo: factoryRepo, notifications: notifications}
 }
 
 func normalizeStringSlice(values []string) []string {
@@ -85,7 +86,11 @@ func (s *RFQService) Create(rfq *domain.RFQ) error {
 			return ErrInvalidShippingMethod
 		}
 	}
-	return s.repo.Create(rfq)
+	if err := s.repo.Create(rfq); err != nil {
+		return err
+	}
+	s.notifyMatchingFactories(rfq)
+	return nil
 }
 
 func (s *RFQService) ListByUserID(userID int64, status string) ([]domain.RFQ, error) {
@@ -195,4 +200,35 @@ func (s *RFQService) Patch(userID, rfqID int64, rfq *domain.RFQ) error {
 		return err
 	}
 	return s.repo.Patch(userID, rfqID, rfq)
+}
+
+func (s *RFQService) notifyMatchingFactories(rfq *domain.RFQ) {
+	if s.notifications == nil || s.repo == nil || rfq == nil || rfq.RFQID <= 0 {
+		return
+	}
+	factoryIDs, err := s.repo.ListMatchingFactoryIDs(rfq)
+	if err != nil {
+		return
+	}
+	title := "RFQ ใหม่ตรงหมวด"
+	rfqTitle := strings.TrimSpace(rfq.Title)
+	if rfqTitle == "" {
+		rfqTitle = "RFQ ใหม่"
+	}
+	for _, factoryID := range factoryIDs {
+		createNotificationSafe(s.notifications, &domain.Notification{
+			UserID:  factoryID,
+			Type:    "RFQ_RECEIVED",
+			Title:   title,
+			Message: "มี RFQ ใหม่ที่ตรงหมวดของคุณ: " + rfqTitle,
+			LinkTo:  rfqLink(rfq.RFQID),
+			Data: notificationData(map[string]interface{}{
+				"rfq_id":    rfq.RFQID,
+				"rfq_title": rfqTitle,
+				"url":       rfqLink(rfq.RFQID),
+			}),
+			ReferenceID: &rfq.RFQID,
+			CreatedAt:   rfq.CreatedAt,
+		})
+	}
 }

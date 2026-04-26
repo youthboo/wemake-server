@@ -19,6 +19,10 @@ func NewReviewRepository(db *sqlx.DB) *ReviewRepository {
 	return &ReviewRepository{db: db}
 }
 
+func (r *ReviewRepository) DB() *sqlx.DB {
+	return r.db
+}
+
 func (r *ReviewRepository) ListByFactoryID(factoryID int64) ([]domain.FactoryReview, error) {
 	var items []domain.FactoryReview
 	query := `
@@ -28,6 +32,7 @@ func (r *ReviewRepository) ListByFactoryID(factoryID int64) ([]domain.FactoryRev
 		FROM factory_reviews fr
 		LEFT JOIN customers c ON c.user_id = fr.user_id
 		WHERE fr.factory_id = $1
+		  AND fr.deleted_at IS NULL
 		ORDER BY fr.created_at DESC
 	`
 	err := r.db.Select(&items, query, factoryID)
@@ -59,7 +64,7 @@ func (r *ReviewRepository) GetByOrderAndUser(orderID, userID int64) (*domain.Fac
 		       NULLIF(TRIM(CONCAT(c.first_name, ' ', c.last_name)), '') AS reviewer_name
 		FROM factory_reviews fr
 		LEFT JOIN customers c ON c.user_id = fr.user_id
-		WHERE fr.order_id = $1 AND fr.user_id = $2
+		WHERE fr.order_id = $1 AND fr.user_id = $2 AND fr.deleted_at IS NULL
 		LIMIT 1
 	`, orderID, userID)
 	if err != nil {
@@ -96,7 +101,7 @@ func (r *ReviewRepository) SyncFactoryAggregateTx(tx *sqlx.Tx, factoryID int64) 
 				CASE WHEN COUNT(*) = 0 THEN NULL ELSE ROUND(AVG(rating::numeric), 2) END AS avg_rating,
 				COUNT(*)::int AS review_count
 			FROM factory_reviews
-			WHERE factory_id = $1
+			WHERE factory_id = $1 AND deleted_at IS NULL
 		) agg
 		WHERE fp.user_id = agg.factory_id
 	`, factoryID)
@@ -124,7 +129,7 @@ func (r *ReviewRepository) GetSummaryByFactoryID(factoryID int64) (*domain.Facto
 			COUNT(*) FILTER (WHERE rating = 2)::bigint AS star2,
 			COUNT(*) FILTER (WHERE rating = 1)::bigint AS star1
 		FROM factory_reviews
-		WHERE factory_id = $1
+		WHERE factory_id = $1 AND deleted_at IS NULL
 	`, factoryID); err != nil {
 		return nil, err
 	}
@@ -140,4 +145,36 @@ func (r *ReviewRepository) GetSummaryByFactoryID(factoryID int64) (*domain.Facto
 			"1": row.Star1,
 		},
 	}, nil
+}
+
+func (r *ReviewRepository) UpdateByUser(reviewID, userID int64, rating int, comment string) (*domain.FactoryReview, error) {
+	var item domain.FactoryReview
+	err := r.db.Get(&item, `
+		UPDATE factory_reviews
+		SET rating = $1, comment = $2, updated_at = NOW()
+		WHERE review_id = $3 AND user_id = $4
+		  AND created_at > NOW() - INTERVAL '7 days'
+		  AND deleted_at IS NULL
+		RETURNING review_id, factory_id, user_id, order_id, rating, comment, created_at, updated_at, factory_reply, factory_reply_at, factory_reply_by
+	`, rating, strings.TrimSpace(comment), reviewID, userID)
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *ReviewRepository) SoftDeleteByUser(reviewID, userID int64) (*domain.FactoryReview, error) {
+	var item domain.FactoryReview
+	err := r.db.Get(&item, `
+		UPDATE factory_reviews
+		SET deleted_at = NOW(), updated_at = NOW()
+		WHERE review_id = $1 AND user_id = $2
+		  AND created_at > NOW() - INTERVAL '7 days'
+		  AND deleted_at IS NULL
+		RETURNING review_id, factory_id, user_id, order_id, rating, comment, created_at, updated_at, factory_reply, factory_reply_at, factory_reply_by
+	`, reviewID, userID)
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
 }

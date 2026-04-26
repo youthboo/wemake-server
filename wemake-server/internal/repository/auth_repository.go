@@ -19,7 +19,7 @@ func NewAuthRepository(db *sqlx.DB) *AuthRepository {
 func (r *AuthRepository) GetUserByID(userID int64) (*domain.User, error) {
 	var user domain.User
 	query := `
-		SELECT user_id, role, email, phone, password_hash, is_active, created_at, updated_at
+		SELECT user_id, role, email, phone, avatar_url, bio, password_hash, is_active, created_at, updated_at
 		FROM users
 		WHERE user_id = $1
 	`
@@ -32,7 +32,7 @@ func (r *AuthRepository) GetUserByID(userID int64) (*domain.User, error) {
 func (r *AuthRepository) GetUserByEmail(email string) (*domain.User, error) {
 	var user domain.User
 	query := `
-		SELECT user_id, role, email, phone, password_hash, is_active, created_at, updated_at
+		SELECT user_id, role, email, phone, avatar_url, bio, password_hash, is_active, created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`
@@ -212,6 +212,11 @@ func (r *AuthRepository) ResetPassword(userID int64, tokenID int64, passwordHash
 	}
 
 	return tx.Commit()
+}
+
+func (r *AuthRepository) UpdatePassword(userID int64, passwordHash string, now time.Time) error {
+	_, err := r.db.Exec(`UPDATE users SET password_hash = $1, updated_at = $2 WHERE user_id = $3`, passwordHash, now, userID)
+	return err
 }
 
 func IsNotFoundError(err error) bool {

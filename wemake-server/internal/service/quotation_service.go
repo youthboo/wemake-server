@@ -3,6 +3,7 @@ package service
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -23,17 +24,18 @@ var (
 )
 
 type QuotationService struct {
-	db         *sqlx.DB
-	repo       *repository.QuotationRepository
-	rfqRepo    *repository.RFQRepository
-	items      *repository.QuotationItemRepository
-	commission *CommissionService
-	orders     *OrderService
-	factories  *repository.FactoryRepository
+	db            *sqlx.DB
+	repo          *repository.QuotationRepository
+	rfqRepo       *repository.RFQRepository
+	items         *repository.QuotationItemRepository
+	commission    *CommissionService
+	orders        *OrderService
+	factories     *repository.FactoryRepository
+	notifications *NotificationService
 }
 
-func NewQuotationService(db *sqlx.DB, repo *repository.QuotationRepository, rfqRepo *repository.RFQRepository, items *repository.QuotationItemRepository, commission *CommissionService, orders *OrderService, factories *repository.FactoryRepository) *QuotationService {
-	return &QuotationService{db: db, repo: repo, rfqRepo: rfqRepo, items: items, commission: commission, orders: orders, factories: factories}
+func NewQuotationService(db *sqlx.DB, repo *repository.QuotationRepository, rfqRepo *repository.RFQRepository, items *repository.QuotationItemRepository, commission *CommissionService, orders *OrderService, factories *repository.FactoryRepository, notifications *NotificationService) *QuotationService {
+	return &QuotationService{db: db, repo: repo, rfqRepo: rfqRepo, items: items, commission: commission, orders: orders, factories: factories, notifications: notifications}
 }
 
 func (s *QuotationService) Create(item *domain.Quotation) error {
@@ -302,7 +304,11 @@ func (s *QuotationService) CreateDetailed(item *domain.Quotation) error {
 	if err := s.items.BulkInsert(tx, item.QuotationID, item.Items); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.notifyQuotationQuoted(item)
+	return nil
 }
 
 func (s *QuotationService) CreateRevision(parentID, factoryID int64, next *domain.Quotation) error {
@@ -335,7 +341,25 @@ func (s *QuotationService) Accept(quoteID, customerID int64) (*domain.Order, err
 	if q.ValidUntil != nil && q.ValidUntil.Before(time.Now().UTC()) {
 		return nil, ErrQuotationExpired
 	}
-	return s.orders.CreateFromQuotation(quoteID, customerID)
+	order, err := s.orders.CreateFromQuotation(quoteID, customerID)
+	if err != nil {
+		return nil, err
+	}
+	createNotificationSafe(s.notifications, &domain.Notification{
+		UserID:  q.FactoryID,
+		Type:    "QUOTATION_ACCEPTED",
+		Title:   "ใบเสนอราคาได้รับการยอมรับ",
+		Message: fmt.Sprintf("ลูกค้ายอมรับ Quote #%d", q.QuotationID),
+		LinkTo:  orderLink(order.OrderID),
+		Data: notificationData(map[string]interface{}{
+			"quote_id": q.QuotationID,
+			"order_id": order.OrderID,
+			"url":      orderLink(order.OrderID),
+		}),
+		ReferenceID: &order.OrderID,
+		CreatedAt:   time.Now(),
+	})
+	return order, nil
 }
 
 func (s *QuotationService) Reject(quoteID, customerID int64) error {
@@ -350,5 +374,55 @@ func (s *QuotationService) Reject(quoteID, customerID int64) error {
 	if rfq.UserID != customerID {
 		return ErrNotQuotationParty
 	}
-	return s.repo.UpdateStatus(quoteID, "RJ")
+	if err := s.repo.UpdateStatus(quoteID, "RJ"); err != nil {
+		return err
+	}
+	createNotificationSafe(s.notifications, &domain.Notification{
+		UserID:  q.FactoryID,
+		Type:    "QUOTATION_REJECTED",
+		Title:   "ใบเสนอราคาถูกปฏิเสธ",
+		Message: fmt.Sprintf("Quote #%d ถูกปฏิเสธ", q.QuotationID),
+		LinkTo:  quoteLink(q.QuotationID),
+		Data: notificationData(map[string]interface{}{
+			"quote_id": q.QuotationID,
+			"url":      quoteLink(q.QuotationID),
+		}),
+		ReferenceID: &q.QuotationID,
+		CreatedAt:   time.Now(),
+	})
+	return nil
+}
+
+func (s *QuotationService) notifyQuotationQuoted(item *domain.Quotation) {
+	if s.notifications == nil || item == nil {
+		return
+	}
+	rfq, err := s.rfqRepo.GetByIDAny(item.RFQID)
+	if err != nil {
+		return
+	}
+	title := "ได้รับใบเสนอราคา"
+	factoryName := fmt.Sprintf("โรงงาน #%d", item.FactoryID)
+	if item.FactoryName != nil && strings.TrimSpace(*item.FactoryName) != "" {
+		factoryName = strings.TrimSpace(*item.FactoryName)
+	}
+	rfqTitle := strings.TrimSpace(rfq.Title)
+	if rfqTitle == "" {
+		rfqTitle = fmt.Sprintf("RFQ #%d", rfq.RFQID)
+	}
+	createNotificationSafe(s.notifications, &domain.Notification{
+		UserID:  rfq.UserID,
+		Type:    "RFQ_QUOTED",
+		Title:   title,
+		Message: fmt.Sprintf("โรงงาน %s ส่งใบเสนอราคาสำหรับ %s", factoryName, rfqTitle),
+		LinkTo:  quoteLink(item.QuotationID),
+		Data: notificationData(map[string]interface{}{
+			"rfq_id":     rfq.RFQID,
+			"quote_id":   item.QuotationID,
+			"factory_id": item.FactoryID,
+			"url":        quoteLink(item.QuotationID),
+		}),
+		ReferenceID: &item.QuotationID,
+		CreatedAt:   item.CreateTime,
+	})
 }

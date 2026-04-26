@@ -24,3 +24,19 @@ func (s *NotificationService) MarkAsRead(notiID, userID int64) error {
 func (s *NotificationService) Create(noti *domain.Notification) error {
 	return s.repo.Create(noti)
 }
+
+func (s *NotificationService) ListPaginated(userID int64, page, limit int, unreadOnly bool) ([]domain.Notification, int64, int64, error) {
+	return s.repo.ListPaginated(userID, page, limit, unreadOnly)
+}
+
+func (s *NotificationService) GetUnreadCount(userID int64) (int64, error) {
+	return s.repo.GetUnreadCount(userID)
+}
+
+func (s *NotificationService) MarkAllRead(userID int64) (int64, error) {
+	return s.repo.MarkAllRead(userID)
+}
+
+func (s *NotificationService) SoftDelete(notiID, userID int64) error {
+	return s.repo.SoftDelete(notiID, userID)
+}

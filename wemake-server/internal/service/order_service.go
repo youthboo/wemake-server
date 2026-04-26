@@ -68,18 +68,19 @@ type ConfirmReceiptResult struct {
 }
 
 type OrderService struct {
-	db         *sqlx.DB
-	repo       *repository.OrderRepository
-	schedules  *repository.PaymentScheduleRepository
-	wallets    *repository.WalletRepository
-	txLedger   *repository.TransactionRepository
-	quotations *repository.QuotationRepository
-	rfqs       *repository.RFQRepository
-	reviews    *repository.ReviewRepository
+	db            *sqlx.DB
+	repo          *repository.OrderRepository
+	schedules     *repository.PaymentScheduleRepository
+	wallets       *repository.WalletRepository
+	txLedger      *repository.TransactionRepository
+	quotations    *repository.QuotationRepository
+	rfqs          *repository.RFQRepository
+	reviews       *repository.ReviewRepository
+	notifications *NotificationService
 }
 
-func NewOrderService(db *sqlx.DB, repo *repository.OrderRepository, schedules *repository.PaymentScheduleRepository, wallets *repository.WalletRepository, txLedger *repository.TransactionRepository, quotations *repository.QuotationRepository, rfqs *repository.RFQRepository, reviews *repository.ReviewRepository) *OrderService {
-	return &OrderService{db: db, repo: repo, schedules: schedules, wallets: wallets, txLedger: txLedger, quotations: quotations, rfqs: rfqs, reviews: reviews}
+func NewOrderService(db *sqlx.DB, repo *repository.OrderRepository, schedules *repository.PaymentScheduleRepository, wallets *repository.WalletRepository, txLedger *repository.TransactionRepository, quotations *repository.QuotationRepository, rfqs *repository.RFQRepository, reviews *repository.ReviewRepository, notifications *NotificationService) *OrderService {
+	return &OrderService{db: db, repo: repo, schedules: schedules, wallets: wallets, txLedger: txLedger, quotations: quotations, rfqs: rfqs, reviews: reviews, notifications: notifications}
 }
 
 var thailandLocation = time.FixedZone("Asia/Bangkok", 7*60*60)
@@ -179,6 +180,20 @@ func (s *OrderService) CreateFromQuotation(quotationID, userID int64) (*domain.O
 		"quote_id":       order.QuotationID,
 		"amount":         total,
 		"deposit_amount": deposit,
+	})
+	createNotificationSafe(s.notifications, &domain.Notification{
+		UserID:  order.FactoryID,
+		Type:    "ORDER_PLACED",
+		Title:   "คำสั่งซื้อใหม่",
+		Message: fmt.Sprintf("ลูกค้าสั่งซื้อ Order #%d", order.OrderID),
+		LinkTo:  orderLink(order.OrderID),
+		Data: notificationData(map[string]interface{}{
+			"order_id": order.OrderID,
+			"quote_id": order.QuotationID,
+			"url":      orderLink(order.OrderID),
+		}),
+		ReferenceID: &order.OrderID,
+		CreatedAt:   now,
 	})
 	return order, nil
 }
@@ -387,6 +402,20 @@ func (s *OrderService) VerifyPayment(orderID, userID int64, role, txID string) (
 		return nil, err
 	}
 	paymentTx.Status = "PT"
+	createNotificationSafe(s.notifications, &domain.Notification{
+		UserID:  order.FactoryID,
+		Type:    "PAYMENT_RECEIVED",
+		Title:   "รับชำระเงินแล้ว",
+		Message: fmt.Sprintf("ได้รับการชำระเงิน ฿%.2f สำหรับ Order #%d", paymentTx.Amount, order.OrderID),
+		LinkTo:  orderLink(order.OrderID),
+		Data: notificationData(map[string]interface{}{
+			"order_id": order.OrderID,
+			"amount":   paymentTx.Amount,
+			"url":      orderLink(order.OrderID),
+		}),
+		ReferenceID: &order.OrderID,
+		CreatedAt:   now,
+	})
 	return paymentTx, nil
 }
 
@@ -577,10 +606,29 @@ func (s *OrderService) Cancel(orderID, userID int64, role string) error {
 	if err := s.repo.UpdateStatus(orderID, "CC"); err != nil {
 		return err
 	}
-	return s.repo.InsertActivity(orderID, &userID, "ORDER_CANCELLED", map[string]interface{}{
+	if err := s.repo.InsertActivity(orderID, &userID, "ORDER_CANCELLED", map[string]interface{}{
 		"status":          "CC",
 		"previous_status": order.Status,
-	})
+	}); err != nil {
+		return err
+	}
+	now := time.Now()
+	for _, recipient := range []int64{order.UserID, order.FactoryID} {
+		createNotificationSafe(s.notifications, &domain.Notification{
+			UserID:  recipient,
+			Type:    "ORDER_CANCELLED",
+			Title:   "คำสั่งซื้อถูกยกเลิก",
+			Message: fmt.Sprintf("Order #%d ถูกยกเลิก", orderID),
+			LinkTo:  orderLink(orderID),
+			Data: notificationData(map[string]interface{}{
+				"order_id": orderID,
+				"url":      orderLink(orderID),
+			}),
+			ReferenceID: &orderID,
+			CreatedAt:   now,
+		})
+	}
+	return nil
 }
 
 func (s *OrderService) MarkShipped(orderID, factoryID int64, trackingNo, courier string) error {
@@ -600,11 +648,29 @@ func (s *OrderService) MarkShipped(orderID, factoryID int64, trackingNo, courier
 		return err
 	}
 	uid := factoryID
-	return s.repo.InsertActivity(orderID, &uid, "ORDER_SHIPPED", map[string]interface{}{
+	if err := s.repo.InsertActivity(orderID, &uid, "ORDER_SHIPPED", map[string]interface{}{
 		"status":      "SH",
 		"tracking_no": trackingNo,
 		"courier":     courier,
+	}); err != nil {
+		return err
+	}
+	createNotificationSafe(s.notifications, &domain.Notification{
+		UserID:  order.UserID,
+		Type:    "ORDER_SHIPPED",
+		Title:   "สินค้ากำลังจัดส่ง",
+		Message: fmt.Sprintf("Tracking: %s", trackingNo),
+		LinkTo:  orderLink(orderID),
+		Data: notificationData(map[string]interface{}{
+			"order_id":    orderID,
+			"tracking_no": trackingNo,
+			"courier":     courier,
+			"url":         orderLink(orderID),
+		}),
+		ReferenceID: &orderID,
+		CreatedAt:   time.Now(),
 	})
+	return nil
 }
 
 func (s *OrderService) ConfirmReceipt(orderID, userID int64, role string, input ConfirmReceiptInput) (*ConfirmReceiptResult, error) {
@@ -715,6 +781,21 @@ func (s *OrderService) CreateReview(orderID, userID int64, role string, input Cr
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
+	createNotificationSafe(s.notifications, &domain.Notification{
+		UserID:  order.FactoryID,
+		Type:    "REVIEW_RECEIVED",
+		Title:   "ได้รับรีวิวใหม่",
+		Message: fmt.Sprintf("ลูกค้าให้ %d ดาว: \"%s\"", review.Rating, trimNotificationPreview(review.Comment, 80)),
+		LinkTo:  orderLink(orderID),
+		Data: notificationData(map[string]interface{}{
+			"review_id": review.ReviewID,
+			"order_id":  orderID,
+			"rating":    review.Rating,
+			"url":       orderLink(orderID),
+		}),
+		ReferenceID: &review.ReviewID,
+		CreatedAt:   time.Now(),
+	})
 	return review, nil
 }
 
@@ -839,6 +920,21 @@ func (s *OrderService) confirmReceiptTx(orderID int64, actorUserID *int64, note 
 
 	if err := tx.Commit(); err != nil {
 		return nil, err
+	}
+	for _, recipient := range []int64{order.UserID, order.FactoryID} {
+		createNotificationSafe(s.notifications, &domain.Notification{
+			UserID:  recipient,
+			Type:    "ORDER_COMPLETED",
+			Title:   "คำสั่งซื้อเสร็จสมบูรณ์",
+			Message: fmt.Sprintf("Order #%d เสร็จสมบูรณ์", orderID),
+			LinkTo:  orderLink(orderID),
+			Data: notificationData(map[string]interface{}{
+				"order_id": orderID,
+				"url":      orderLink(orderID),
+			}),
+			ReferenceID: &orderID,
+			CreatedAt:   completedAt,
+		})
 	}
 	return &ConfirmReceiptResult{
 		Success:         true,

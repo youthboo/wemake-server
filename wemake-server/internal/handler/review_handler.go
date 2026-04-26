@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"database/sql"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/yourusername/wemake/internal/domain"
 	"github.com/yourusername/wemake/internal/service"
@@ -59,4 +61,48 @@ func (h *ReviewHandler) Create(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create review"})
 	}
 	return c.Status(fiber.StatusCreated).JSON(req)
+}
+
+func (h *ReviewHandler) UpdateByUser(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+	}
+	reviewID, err := c.ParamsInt("review_id")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid review_id"})
+	}
+	var req struct {
+		Rating  int    `json:"rating"`
+		Comment string `json:"comment"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid payload"})
+	}
+	item, err := h.service.UpdateByUser(int64(reviewID), userID, req.Rating, req.Comment)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "review cannot be edited"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update review"})
+	}
+	return c.JSON(item)
+}
+
+func (h *ReviewHandler) DeleteByUser(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+	}
+	reviewID, err := c.ParamsInt("review_id")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid review_id"})
+	}
+	if err := h.service.DeleteByUser(int64(reviewID), userID); err != nil {
+		if err == sql.ErrNoRows {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "review cannot be deleted"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete review"})
+	}
+	return c.JSON(fiber.Map{"message": "review deleted"})
 }
