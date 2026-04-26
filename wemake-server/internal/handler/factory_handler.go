@@ -73,6 +73,7 @@ func (h *FactoryHandler) PatchProfile(c *fiber.Ctx) error {
 		TaxID         *string `json:"tax_id"`
 		Description   *string `json:"description"`
 		FactoryTypeID *int64  `json:"factory_type_id"`
+		ImageURL      *string `json:"image_url"`
 	}
 
 	userID, err := getUserIDFromHeader(c)
@@ -105,6 +106,14 @@ func (h *FactoryHandler) PatchProfile(c *fiber.Ctx) error {
 	}
 	if req.Description != nil {
 		fields["description"] = strings.TrimSpace(*req.Description)
+	}
+	if req.ImageURL != nil {
+		imageURL := strings.TrimSpace(*req.ImageURL)
+		if imageURL == "" {
+			fields["image_url"] = nil
+		} else {
+			fields["image_url"] = imageURL
+		}
 	}
 	if req.FactoryTypeID != nil {
 		if *req.FactoryTypeID <= 0 {
