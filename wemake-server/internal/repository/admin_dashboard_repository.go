@@ -61,16 +61,34 @@ func (r *AdminDashboardRepository) GetSummary(from, to time.Time, period string)
 	`, from, to); err != nil {
 		return nil, err
 	}
-	if err := r.db.Get(&out.Factories, `
-		SELECT
-			COUNT(*)::bigint AS total_registered,
-			COUNT(*) FILTER (WHERE approval_status = 'PE')::bigint AS pending_approval,
-			COUNT(*) FILTER (WHERE approval_status = 'AP')::bigint AS approved,
-			COUNT(*) FILTER (WHERE approval_status = 'RJ')::bigint AS rejected,
-			COUNT(*) FILTER (WHERE approval_status = 'SU')::bigint AS suspended
-		FROM factory_profiles
-	`); err != nil {
+	hasApprovalStatus, err := r.hasColumn("factory_profiles", "approval_status")
+	if err != nil {
 		return nil, err
+	}
+	if hasApprovalStatus {
+		if err := r.db.Get(&out.Factories, `
+			SELECT
+				COUNT(*)::bigint AS total_registered,
+				COUNT(*) FILTER (WHERE approval_status = 'PE')::bigint AS pending_approval,
+				COUNT(*) FILTER (WHERE approval_status = 'AP')::bigint AS approved,
+				COUNT(*) FILTER (WHERE approval_status = 'RJ')::bigint AS rejected,
+				COUNT(*) FILTER (WHERE approval_status = 'SU')::bigint AS suspended
+			FROM factory_profiles
+		`); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := r.db.Get(&out.Factories, `
+			SELECT
+				COUNT(*)::bigint AS total_registered,
+				COUNT(*) FILTER (WHERE COALESCE(is_verified, FALSE) = FALSE)::bigint AS pending_approval,
+				COUNT(*) FILTER (WHERE COALESCE(is_verified, FALSE) = TRUE)::bigint AS approved,
+				0::bigint AS rejected,
+				0::bigint AS suspended
+			FROM factory_profiles
+		`); err != nil {
+			return nil, err
+		}
 	}
 	if err := r.db.Get(&out.Customers, `
 		SELECT COUNT(*)::bigint AS total FROM users WHERE role = 'CT'
@@ -98,6 +116,20 @@ func (r *AdminDashboardRepository) GetSummary(from, to time.Time, period string)
 		return nil, err
 	}
 	return out, nil
+}
+
+func (r *AdminDashboardRepository) hasColumn(tableName, columnName string) (bool, error) {
+	var exists bool
+	err := r.db.Get(&exists, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM information_schema.columns
+			WHERE table_schema = 'public'
+			  AND table_name = $1
+			  AND column_name = $2
+		)
+	`, tableName, columnName)
+	return exists, err
 }
 
 func (r *AdminDashboardRepository) GetRevenueChart(from, to time.Time, granularity string) ([]domain.RevenueChartPoint, error) {
