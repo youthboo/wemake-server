@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -32,10 +33,11 @@ type QuotationService struct {
 	orders        *OrderService
 	factories     *repository.FactoryRepository
 	notifications *NotificationService
+	messages      *MessageService
 }
 
-func NewQuotationService(db *sqlx.DB, repo *repository.QuotationRepository, rfqRepo *repository.RFQRepository, items *repository.QuotationItemRepository, commission *CommissionService, orders *OrderService, factories *repository.FactoryRepository, notifications *NotificationService) *QuotationService {
-	return &QuotationService{db: db, repo: repo, rfqRepo: rfqRepo, items: items, commission: commission, orders: orders, factories: factories, notifications: notifications}
+func NewQuotationService(db *sqlx.DB, repo *repository.QuotationRepository, rfqRepo *repository.RFQRepository, items *repository.QuotationItemRepository, commission *CommissionService, orders *OrderService, factories *repository.FactoryRepository, notifications *NotificationService, messages *MessageService) *QuotationService {
+	return &QuotationService{db: db, repo: repo, rfqRepo: rfqRepo, items: items, commission: commission, orders: orders, factories: factories, notifications: notifications, messages: messages}
 }
 
 func (s *QuotationService) Create(item *domain.Quotation) error {
@@ -308,6 +310,7 @@ func (s *QuotationService) CreateDetailed(item *domain.Quotation) error {
 		return err
 	}
 	s.notifyQuotationQuoted(item)
+	s.autoSendQuotationCard(item)
 	return nil
 }
 
@@ -425,4 +428,15 @@ func (s *QuotationService) notifyQuotationQuoted(item *domain.Quotation) {
 		ReferenceID: &item.QuotationID,
 		CreatedAt:   item.CreateTime,
 	})
+}
+
+func (s *QuotationService) autoSendQuotationCard(item *domain.Quotation) {
+	if s.messages == nil || item == nil {
+		return
+	}
+	rfq, err := s.rfqRepo.GetByIDAny(item.RFQID)
+	if err != nil || rfq == nil || rfq.ConversationID == nil {
+		return
+	}
+	_ = s.messages.AutoSendQuotationCard(context.Background(), *rfq.ConversationID, rfq.UserID, item)
 }

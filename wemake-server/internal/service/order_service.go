@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -79,10 +80,11 @@ type OrderService struct {
 	rfqs          *repository.RFQRepository
 	reviews       *repository.ReviewRepository
 	notifications *NotificationService
+	messages      *MessageService
 }
 
-func NewOrderService(db *sqlx.DB, repo *repository.OrderRepository, schedules *repository.PaymentScheduleRepository, wallets *repository.WalletRepository, txLedger *repository.TransactionRepository, quotations *repository.QuotationRepository, rfqs *repository.RFQRepository, reviews *repository.ReviewRepository, notifications *NotificationService) *OrderService {
-	return &OrderService{db: db, repo: repo, schedules: schedules, wallets: wallets, txLedger: txLedger, quotations: quotations, rfqs: rfqs, reviews: reviews, notifications: notifications}
+func NewOrderService(db *sqlx.DB, repo *repository.OrderRepository, schedules *repository.PaymentScheduleRepository, wallets *repository.WalletRepository, txLedger *repository.TransactionRepository, quotations *repository.QuotationRepository, rfqs *repository.RFQRepository, reviews *repository.ReviewRepository, notifications *NotificationService, messages *MessageService) *OrderService {
+	return &OrderService{db: db, repo: repo, schedules: schedules, wallets: wallets, txLedger: txLedger, quotations: quotations, rfqs: rfqs, reviews: reviews, notifications: notifications, messages: messages}
 }
 
 var thailandLocation = time.FixedZone("Asia/Bangkok", 7*60*60)
@@ -197,7 +199,20 @@ func (s *OrderService) CreateFromQuotation(quotationID, userID int64) (*domain.O
 		ReferenceID: &order.OrderID,
 		CreatedAt:   now,
 	})
+	s.notifyAcceptedQuotationInChat(src.RFQID, src.UserID, src.FactoryID, order.OrderID)
 	return order, nil
+}
+
+func (s *OrderService) notifyAcceptedQuotationInChat(rfqID, customerID, factoryID, orderID int64) {
+	if s.messages == nil {
+		return
+	}
+	rfq, err := s.rfqs.GetByIDAny(rfqID)
+	if err != nil || rfq == nil || rfq.ConversationID == nil {
+		return
+	}
+	content := fmt.Sprintf("ลูกค้ายืนยันใบเสนอราคาแล้ว · Order #%d ถูกสร้าง", orderID)
+	_ = s.messages.AutoSendSystemMessage(context.Background(), *rfq.ConversationID, customerID, factoryID, content)
 }
 
 func (s *OrderService) CreatePayment(orderID, userID int64, role, paymentType string, amount float64) (*domain.Transaction, error) {

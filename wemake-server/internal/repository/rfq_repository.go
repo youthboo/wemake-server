@@ -16,6 +16,10 @@ func NewRFQRepository(db *sqlx.DB) *RFQRepository {
 	return &RFQRepository{db: db}
 }
 
+func (r *RFQRepository) DB() *sqlx.DB {
+	return r.db
+}
+
 func (r *RFQRepository) Create(rfq *domain.RFQ) error {
 	return r.createWithExecutor(r.db, rfq)
 }
@@ -34,7 +38,7 @@ func (r *RFQRepository) createWithExecutor(exec rfqQueryRowExecutor, rfq *domain
 			user_id, category_id, sub_category_id, title, quantity, details,
 			address_id, shipping_method_id, status, uploaded_at, created_at, updated_at,
 			material_grade, target_unit_price, target_lead_time_days, required_delivery_date, delivery_address_id,
-			certifications_required, sample_required, sample_qty, inspection_type,
+			certifications_required, sample_required, sample_qty, inspection_type, conversation_id,
 			reference_images, rfq_type, initiated_by, factory_user_id, source_showcase_id, source_conv_id,
 			boq_currency, boq_subtotal, boq_discount_amount, boq_vat_percent, boq_vat_amount, boq_grand_total,
 			boq_moq, boq_lead_time_days, boq_payment_terms, boq_validity_days, boq_note,
@@ -44,11 +48,11 @@ func (r *RFQRepository) createWithExecutor(exec rfqQueryRowExecutor, rfq *domain
 			$1, $2, $3, $4, $5, $6,
 			$7, $8, $9, $10, $11, $12,
 			$13, $14, $15, $16, $17,
-			$18, $19, $20, $21,
-			$22, $23, $24, $25, $26, $27,
-			$28, $29, $30, $31, $32, $33,
-			$34, $35, $36, $37, $38,
-			$39, $40, $41, $42
+			$18, $19, $20, $21, $22,
+			$23, $24, $25, $26, $27, $28,
+			$29, $30, $31, $32, $33, $34,
+			$35, $36, $37, $38, $39,
+			$40, $41, $42, $43
 		)
 		RETURNING rfq_id
 	`
@@ -75,6 +79,7 @@ func (r *RFQRepository) createWithExecutor(exec rfqQueryRowExecutor, rfq *domain
 		rfq.SampleRequired,
 		nullableIntValue(rfq.SampleQty),
 		nullableStringPtr(rfq.InspectionType),
+		nullableInt64Value(rfq.ConversationID),
 		rfq.ReferenceImages,
 		nullableRFQType(rfq.RFQType),
 		nullableInitiatedBy(rfq.InitiatedBy),
@@ -105,7 +110,7 @@ func (r *RFQRepository) ListByUserID(userID int64, status string) ([]domain.RFQ,
 		SELECT rfq_id, user_id, COALESCE(category_id, 0) AS category_id, sub_category_id, title, quantity, details, COALESCE(address_id, 0) AS address_id,
 		       shipping_method_id, status, uploaded_at, created_at, updated_at,
 		       material_grade, target_unit_price, target_lead_time_days, required_delivery_date, delivery_address_id,
-		       certifications_required, sample_required, sample_qty, inspection_type,
+		       certifications_required, sample_required, sample_qty, inspection_type, conversation_id,
 		       reference_images, COALESCE(rfq_type, 'RFQ') AS rfq_type, COALESCE(initiated_by, 'buyer') AS initiated_by,
 		       factory_user_id, source_showcase_id, source_conv_id,
 		       boq_currency, boq_subtotal, boq_discount_amount, boq_vat_percent, boq_vat_amount, boq_grand_total,
@@ -139,7 +144,7 @@ func (r *RFQRepository) GetByID(userID, rfqID int64) (*domain.RFQ, error) {
 		SELECT rfq_id, user_id, COALESCE(category_id, 0) AS category_id, sub_category_id, title, quantity, details, COALESCE(address_id, 0) AS address_id,
 		       shipping_method_id, status, uploaded_at, created_at, updated_at,
 		       material_grade, target_unit_price, target_lead_time_days, required_delivery_date, delivery_address_id,
-		       certifications_required, sample_required, sample_qty, inspection_type,
+		       certifications_required, sample_required, sample_qty, inspection_type, conversation_id,
 		       reference_images, COALESCE(rfq_type, 'RFQ') AS rfq_type, COALESCE(initiated_by, 'buyer') AS initiated_by,
 		       factory_user_id, source_showcase_id, source_conv_id,
 		       boq_currency, boq_subtotal, boq_discount_amount, boq_vat_percent, boq_vat_amount, boq_grand_total,
@@ -219,7 +224,7 @@ func (r *RFQRepository) GetByIDAny(rfqID int64) (*domain.RFQ, error) {
 		SELECT rfq_id, user_id, COALESCE(category_id, 0) AS category_id, sub_category_id, title, quantity, details, COALESCE(address_id, 0) AS address_id,
 		       shipping_method_id, status, uploaded_at, created_at, updated_at,
 		       material_grade, target_unit_price, target_lead_time_days, required_delivery_date, delivery_address_id,
-		       certifications_required, sample_required, sample_qty, inspection_type,
+		       certifications_required, sample_required, sample_qty, inspection_type, conversation_id,
 		       reference_images, COALESCE(rfq_type, 'RFQ') AS rfq_type, COALESCE(initiated_by, 'buyer') AS initiated_by,
 		       factory_user_id, source_showcase_id, source_conv_id,
 		       boq_currency, boq_subtotal, boq_discount_amount, boq_vat_percent, boq_vat_amount, boq_grand_total,
@@ -271,7 +276,7 @@ func (r *RFQRepository) ListMatchingForFactory(factoryID int64, status string) (
 		SELECT DISTINCT r.rfq_id, r.user_id, COALESCE(r.category_id, 0) AS category_id, r.sub_category_id, r.title, r.quantity, r.details, COALESCE(r.address_id, 0) AS address_id,
 		       r.shipping_method_id, r.status, r.uploaded_at, r.created_at, r.updated_at,
 		       r.material_grade, r.target_unit_price, r.target_lead_time_days, r.required_delivery_date, r.delivery_address_id,
-		       r.certifications_required, r.sample_required, r.sample_qty, r.inspection_type,
+		       r.certifications_required, r.sample_required, r.sample_qty, r.inspection_type, r.conversation_id,
 		       r.reference_images, COALESCE(r.rfq_type, 'RFQ') AS rfq_type, COALESCE(r.initiated_by, 'buyer') AS initiated_by,
 		       r.factory_user_id, r.source_showcase_id, r.source_conv_id,
 		       r.boq_currency, r.boq_subtotal, r.boq_discount_amount, r.boq_vat_percent, r.boq_vat_amount, r.boq_grand_total,
@@ -496,5 +501,14 @@ func (r *RFQRepository) Patch(userID, rfqID int64, rfq *domain.RFQ) error {
 		    updated_at = NOW()
 		WHERE rfq_id = :rfq_id AND user_id = :user_id AND status = 'OP'
 	`, rfq)
+	return err
+}
+
+func (r *RFQRepository) LinkConversationTx(tx *sqlx.Tx, rfqID, userID, convID int64) error {
+	_, err := tx.Exec(`
+		UPDATE rfqs
+		SET conversation_id = $3, updated_at = NOW()
+		WHERE rfq_id = $1 AND user_id = $2
+	`, rfqID, userID, convID)
 	return err
 }

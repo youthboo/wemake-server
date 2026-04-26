@@ -1,7 +1,9 @@
 package service
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -31,14 +33,20 @@ var allowedMessageReferenceTypes = map[string]struct{}{
 }
 
 var allowedMessageTypes = map[string]struct{}{
-	"TX": {},
-	"QT": {},
-	"IM": {},
-	"BQ": {},
+	"TX":             {},
+	"QT":             {},
+	"IM":             {},
+	"BQ":             {},
+	"rfq_card":       {},
+	"quotation_card": {},
+	"system":         {},
 }
 
 type messageRepository interface {
 	Create(item *domain.Message) error
+	CreateTx(exec interface {
+		Exec(query string, args ...interface{}) (sql.Result, error)
+	}, item *domain.Message) error
 	ListByReference(referenceType string, referenceID int64, userID int64) ([]domain.Message, error)
 	ListByConvID(convID int64) ([]domain.Message, error)
 	ListThreads(userID int64) ([]domain.MessageThread, error)
@@ -84,6 +92,29 @@ func (s *MessageService) Create(item *domain.Message) error {
 	return nil
 }
 
+func (s *MessageService) CreateTx(tx interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+}, item *domain.Message) error {
+	item.MessageID = "msg-" + uuid.NewString()
+	item.ReferenceType = normalizeMessageRefType(item.ReferenceType)
+	item.MessageType = normalizeMessageType(item.MessageType)
+	item.Content = strings.TrimSpace(item.Content)
+	item.AttachmentURL = strings.TrimSpace(item.AttachmentURL)
+	if item.QuoteData != nil {
+		trimmed := strings.TrimSpace(*item.QuoteData)
+		if trimmed == "" {
+			item.QuoteData = nil
+		} else {
+			item.QuoteData = &trimmed
+		}
+	}
+	if err := s.validateCreate(item); err != nil {
+		return err
+	}
+	item.CreatedAt = time.Now()
+	return s.repo.CreateTx(tx, item)
+}
+
 func normalizeMessageRefType(t string) string {
 	u := strings.ToUpper(strings.TrimSpace(t))
 	switch u {
@@ -97,11 +128,20 @@ func normalizeMessageRefType(t string) string {
 }
 
 func normalizeMessageType(t string) string {
-	u := strings.ToUpper(strings.TrimSpace(t))
-	if u == "" {
+	trimmed := strings.TrimSpace(t)
+	if trimmed == "" {
 		return "TX"
 	}
-	return u
+	switch strings.ToLower(trimmed) {
+	case "rfq_card":
+		return "rfq_card"
+	case "quotation_card":
+		return "quotation_card"
+	case "system":
+		return "system"
+	default:
+		return strings.ToUpper(trimmed)
+	}
 }
 
 func (s *MessageService) validateCreate(item *domain.Message) error {
@@ -174,7 +214,7 @@ func (s *MessageService) ListThreads(userID int64) ([]domain.MessageThread, erro
 }
 
 func (s *MessageService) notifyReceiver(item *domain.Message) {
-	if s.notifications == nil || item == nil || item.MessageType == "BQ" {
+	if s.notifications == nil || item == nil || item.MessageType == "BQ" || item.MessageType == "system" {
 		return
 	}
 
@@ -186,6 +226,10 @@ func (s *MessageService) notifyReceiver(item *domain.Message) {
 			preview = "ส่งรูปภาพใหม่"
 		case "QT":
 			preview = "ส่งใบเสนอราคาใหม่"
+		case "rfq_card":
+			preview = "แชร์ RFQ เข้ามาในแชต"
+		case "quotation_card":
+			preview = "มีใบเสนอราคาใหม่ในแชต"
 		default:
 			preview = "มีข้อความใหม่ในแชต"
 		}
@@ -234,4 +278,54 @@ func (s *MessageService) notifyReceiver(item *domain.Message) {
 		}),
 		CreatedAt: item.CreatedAt,
 	})
+}
+
+func (s *MessageService) AutoSendQuotationCard(ctx context.Context, convID int64, customerID int64, q *domain.Quotation) error {
+	_ = ctx
+	if q == nil {
+		return nil
+	}
+	validUntil := ""
+	if q.ValidUntil != nil {
+		validUntil = q.ValidUntil.Format("02 Jan 06")
+	}
+	payload, err := json.Marshal(map[string]interface{}{
+		"quotation_id": q.QuotationID,
+		"price":        q.GrandTotal,
+		"lead_time":    q.LeadTimeDays,
+		"valid_until":  validUntil,
+		"status":       "pending",
+	})
+	if err != nil {
+		return err
+	}
+	msg := &domain.Message{
+		ConvID:        &convID,
+		ReferenceType: "RQ",
+		ReferenceID:   q.RFQID,
+		SenderID:      q.FactoryID,
+		ReceiverID:    customerID,
+		Content:       fmt.Sprintf("ใบเสนอราคา ฿%.0f", q.GrandTotal),
+		MessageType:   "quotation_card",
+		QuoteData:     stringPtr(string(payload)),
+		IsRead:        false,
+	}
+	return s.Create(msg)
+}
+
+func (s *MessageService) AutoSendSystemMessage(ctx context.Context, convID int64, senderID int64, receiverID int64, content string) error {
+	_ = ctx
+	msg := &domain.Message{
+		ConvID:      &convID,
+		SenderID:    senderID,
+		ReceiverID:  receiverID,
+		Content:     content,
+		MessageType: "system",
+		IsRead:      false,
+	}
+	return s.Create(msg)
+}
+
+func stringPtr(v string) *string {
+	return &v
 }

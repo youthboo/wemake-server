@@ -84,6 +84,7 @@ type RFQ struct {
 	FactoryUserID     *int64         `db:"factory_user_id" json:"factory_user_id,omitempty"`
 	SourceShowcaseID  *int64         `db:"source_showcase_id" json:"source_showcase_id,omitempty"`
 	SourceConvID      *int64         `db:"source_conv_id" json:"source_conv_id,omitempty"`
+	ConversationID    *int64         `db:"conversation_id" json:"conversation_id,omitempty"`
 	BOQCurrency       *string        `db:"boq_currency" json:"boq_currency,omitempty"`
 	BOQSubtotal       *float64       `db:"boq_subtotal" json:"boq_subtotal,omitempty"`
 	BOQDiscountAmount *float64       `db:"boq_discount_amount" json:"boq_discount_amount,omitempty"`

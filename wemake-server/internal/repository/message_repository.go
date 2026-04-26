@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"database/sql"
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
@@ -16,6 +17,12 @@ func NewMessageRepository(db *sqlx.DB) *MessageRepository {
 }
 
 func (r *MessageRepository) Create(item *domain.Message) error {
+	return r.CreateTx(r.db, item)
+}
+
+func (r *MessageRepository) CreateTx(exec interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+}, item *domain.Message) error {
 	if item.MessageType == "" {
 		item.MessageType = "TX"
 	}
@@ -23,7 +30,7 @@ func (r *MessageRepository) Create(item *domain.Message) error {
 		INSERT INTO messages (message_id, reference_type, reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, boq_rfq_id, is_read)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	`
-	_, err := r.db.Exec(
+	_, err := exec.Exec(
 		query,
 		item.MessageID,
 		nullableMessageReferenceType(item.ReferenceType),

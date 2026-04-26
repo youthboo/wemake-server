@@ -25,6 +25,7 @@ func Start(db *sqlx.DB) {
 		nil,
 		repository.NewReviewRepository(db),
 		nil,
+		nil,
 	)
 	go runExpiration(db)
 	go runOrderAutoClose(orderService)

@@ -112,3 +112,43 @@ func (h *ConversationHandler) MarkAsRead(c *fiber.Ctx) error {
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
+
+func (h *ConversationHandler) ShareRFQ(c *fiber.Ctx) error {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+	}
+	if role := getOptionalRoleFromContext(c); role != "" && role != domain.RoleCustomer {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "buyer role required"})
+	}
+	convID, err := c.ParamsInt("conv_id")
+	if err != nil || convID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid conv_id"})
+	}
+	var req struct {
+		RFQID int64 `json:"rfq_id"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid payload"})
+	}
+	if req.RFQID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "rfq_id is required"})
+	}
+	msg, rfq, err := h.service.ShareRFQ(int64(convID), userID, req.RFQID)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrShareRFQForbidden):
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
+		case errors.Is(err, service.ErrShareRFQClosed):
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "rfq cannot be shared"})
+		case errors.Is(err, service.ErrShareRFQInvalid):
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "rfq or conversation not found"})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to share rfq"})
+		}
+	}
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"message": msg,
+		"rfq":     rfq,
+	})
+}
