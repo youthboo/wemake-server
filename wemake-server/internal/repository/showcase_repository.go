@@ -146,23 +146,70 @@ func (r *ShowcaseRepository) GetShowcasesByFactory(factoryID int64, contentType 
 		argPos++
 	}
 
+	basePriceExpr := "NULL::numeric AS base_price"
+	if hasBasePrice, _ := r.hasFactoryShowcaseColumn("base_price"); hasBasePrice {
+		basePriceExpr = "fs.base_price"
+	}
+	leadTimeExpr := "NULL::int AS lead_time_days"
+	if hasLeadTimeDays, _ := r.hasFactoryShowcaseColumn("lead_time_days"); hasLeadTimeDays {
+		leadTimeExpr = "fs.lead_time_days"
+	}
+	contentTypeExpr := "NULL::text AS content_type"
+	if hasContentType, _ := r.hasFactoryShowcaseColumn("content_type"); hasContentType {
+		contentTypeExpr = "fs.content_type"
+	} else if hasLegacyType, _ := r.hasFactoryShowcaseColumn("type"); hasLegacyType {
+		contentTypeExpr = `fs."type" AS content_type`
+	}
+	subCategoryJoin := "LEFT JOIN lbi_sub_categories sc ON fs.sub_category_id = sc.sub_category_id"
+	if ok, _ := r.hasTable("lbi_sub_categories"); !ok {
+		if hasLegacySubTable, _ := r.hasTable("sub_categories"); hasLegacySubTable {
+			subCategoryJoin = "LEFT JOIN sub_categories sc ON fs.sub_category_id = sc.sub_category_id"
+		} else {
+			subCategoryJoin = ""
+		}
+	}
+	subCategoryNameExpr := "sc.name AS sub_category_name"
+	if subCategoryJoin == "" {
+		subCategoryNameExpr = "NULL::text AS sub_category_name"
+	}
+
 	query := `
 		SELECT
-			fs.showcase_id, fs.content_type, fs.title,
+			fs.showcase_id, ` + contentTypeExpr + `, fs.title,
 			fs.excerpt, fs.image_url,
 			fs.category_id, fs.sub_category_id,
-			fs.moq,
+			fs.moq, ` + basePriceExpr + `, ` + leadTimeExpr + `,
 			fs.likes_count, fs.status, fs.created_at,
 			c.name  AS category_name,
-			sc.name AS sub_category_name
+			` + subCategoryNameExpr + `
 		FROM factory_showcases fs
 		LEFT JOIN categories c         ON fs.category_id     = c.category_id
-		LEFT JOIN lbi_sub_categories sc ON fs.sub_category_id = sc.sub_category_id
+		` + subCategoryJoin + `
 		WHERE ` + strings.Join(clauses, " AND ") + `
 		ORDER BY fs.created_at DESC`
 
 	err := r.db.Select(&items, query, args...)
 	return items, err
+}
+
+func (r *ShowcaseRepository) hasFactoryShowcaseColumn(columnName string) (bool, error) {
+	var exists bool
+	err := r.db.Get(&exists, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM information_schema.columns
+			WHERE table_schema = 'public'
+			  AND table_name = 'factory_showcases'
+			  AND column_name = $1
+		)
+	`, columnName)
+	return exists, err
+}
+
+func (r *ShowcaseRepository) hasTable(tableName string) (bool, error) {
+	var exists bool
+	err := r.db.Get(&exists, `SELECT to_regclass('public.' || $1) IS NOT NULL`, tableName)
+	return exists, err
 }
 
 // sectionRow is the flat row returned by the sections+items JOIN query.

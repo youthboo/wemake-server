@@ -9,10 +9,12 @@ type Quotation struct {
 	QuotationID      int64      `db:"quote_id" json:"quote_id"`
 	RFQID            int64      `db:"rfq_id" json:"rfq_id"`
 	FactoryID        int64      `db:"factory_id" json:"factory_id"`
+	FactoryName      *string    `db:"factory_name" json:"factory_name"`
 	PricePerPiece    float64    `db:"price_per_piece" json:"price_per_piece"`
 	MoldCost         float64    `db:"mold_cost" json:"mold_cost"`
 	LeadTimeDays     int64      `db:"lead_time_days" json:"lead_time_days"`
 	ShippingMethodID int64      `db:"shipping_method_id" json:"shipping_method_id"`
+	ShippingMethodName *string  `db:"shipping_method_name" json:"shipping_method_name"`
 	Status           string     `db:"status" json:"status"`
 	CreateTime       time.Time  `db:"create_time" json:"create_time"`
 	LogTimestamp     time.Time  `db:"log_timestamp" json:"log_timestamp"`
@@ -46,6 +48,10 @@ type Quotation struct {
 	RevisionNo        int             `db:"revision_no" json:"revision_no"`
 	ParentQuotationID *int64          `db:"parent_quotation_id" json:"parent_quotation_id,omitempty"`
 	ImageURLs         StringArray     `db:"image_urls" json:"image_urls"`
+	MaterialDetail    *string         `db:"material_detail" json:"material_detail"`
+	PaymentCondition  *string         `db:"payment_condition" json:"payment_condition"`
+	SampleCost        float64         `db:"sample_cost" json:"sample_cost"`
+	Certifications    StringArray     `db:"certifications" json:"certifications"`
 	Items             []QuotationItem `db:"-" json:"items,omitempty"`
 }
 

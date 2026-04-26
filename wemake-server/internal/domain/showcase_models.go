@@ -72,6 +72,8 @@ type ShowcaseByFactoryItem struct {
 	CategoryID      *int64    `db:"category_id" json:"category_id,omitempty"`
 	SubCategoryID   *int64    `db:"sub_category_id" json:"sub_category_id,omitempty"`
 	MOQ             *int      `db:"moq" json:"moq,omitempty"`
+	BasePrice       *float64  `db:"base_price" json:"base_price,omitempty"`
+	LeadTimeDays    *int      `db:"lead_time_days" json:"lead_time_days,omitempty"`
 	LikesCount      int       `db:"likes_count" json:"likes_count"`
 	Status          string    `db:"status" json:"status"`
 	CreatedAt       time.Time `db:"created_at" json:"created_at"`
@@ -189,6 +191,7 @@ type ShowcaseWriteInput struct {
 	CategoryID      *int64
 	SubCategoryID   *int64
 	MOQ             *int
+	LeadTimeDays    *int
 	BasePrice       *float64
 	PromoPrice      *float64
 	StartDate       *time.Time

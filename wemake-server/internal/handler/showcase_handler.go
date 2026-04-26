@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"log"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -50,15 +52,86 @@ type showcaseWriteRequest struct {
 	CategoryID      *int64    `json:"category_id"`
 	SubCategoryID   *int64    `json:"sub_category_id"`
 	MOQ             *int      `json:"moq"`
+	LeadTimeDays    *int      `json:"lead_time_days"`
 	BasePrice       *float64  `json:"base_price"`
 	PromoPrice      *float64  `json:"promo_price"`
 	StartDate       *string   `json:"start_date"`
 	EndDate         *string   `json:"end_date"`
 	Content         *string   `json:"content"`
-	LinkedShowcases *[]string `json:"linked_showcases"`
+	LinkedShowcases json.RawMessage `json:"linked_showcases"`
 	Excerpt         *string   `json:"excerpt"`
 	ImageURL        *string   `json:"image_url"`
 	Tags            *[]string `json:"tags"`
+}
+
+type linkedShowcaseObject struct {
+	ImageURL  string `json:"image_url"`
+	SortOrder int    `json:"sort_order"`
+	IsCover   bool   `json:"is_cover"`
+}
+
+func parseLinkedShowcases(raw json.RawMessage) (*[]string, *domain.ShowcaseValidationDetail) {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "null" {
+		return nil, nil
+	}
+
+	// Format 1: ["https://...", "123"]
+	var asStrings []string
+	if err := json.Unmarshal(raw, &asStrings); err == nil {
+		out := make([]string, 0, len(asStrings))
+		for _, item := range asStrings {
+			v := strings.TrimSpace(item)
+			if v == "" {
+				continue
+			}
+			out = append(out, v)
+		}
+		return &out, nil
+	}
+
+	// Format 2: [{ "image_url": "...", "sort_order": 1, "is_cover": true }]
+	var asObjects []linkedShowcaseObject
+	if err := json.Unmarshal(raw, &asObjects); err == nil {
+		type normalized struct {
+			URL      string
+			Sort     int
+			Cover    bool
+			Position int
+		}
+		norm := make([]normalized, 0, len(asObjects))
+		for idx, item := range asObjects {
+			url := strings.TrimSpace(item.ImageURL)
+			if url == "" {
+				continue
+			}
+			norm = append(norm, normalized{
+				URL:      url,
+				Sort:     item.SortOrder,
+				Cover:    item.IsCover,
+				Position: idx,
+			})
+		}
+		sort.SliceStable(norm, func(i, j int) bool {
+			if norm[i].Cover != norm[j].Cover {
+				return norm[i].Cover
+			}
+			if norm[i].Sort != norm[j].Sort {
+				return norm[i].Sort < norm[j].Sort
+			}
+			return norm[i].Position < norm[j].Position
+		})
+		out := make([]string, 0, len(norm))
+		for _, item := range norm {
+			out = append(out, item.URL)
+		}
+		return &out, nil
+	}
+
+	return nil, &domain.ShowcaseValidationDetail{
+		Field:   "linked_showcases",
+		Message: "must be an array of strings or objects with image_url",
+	}
 }
 
 func parseShowcaseDate(raw *string, field string) (*time.Time, *domain.ShowcaseValidationDetail) {
@@ -90,6 +163,10 @@ func (r showcaseWriteRequest) toInput() (domain.ShowcaseWriteInput, []domain.Sho
 	if detail != nil {
 		details = append(details, *detail)
 	}
+	linkedShowcases, detail := parseLinkedShowcases(r.LinkedShowcases)
+	if detail != nil {
+		details = append(details, *detail)
+	}
 	return domain.ShowcaseWriteInput{
 		ContentType:     typeValue,
 		Status:          r.Status,
@@ -97,12 +174,13 @@ func (r showcaseWriteRequest) toInput() (domain.ShowcaseWriteInput, []domain.Sho
 		CategoryID:      r.CategoryID,
 		SubCategoryID:   r.SubCategoryID,
 		MOQ:             r.MOQ,
+		LeadTimeDays:    r.LeadTimeDays,
 		BasePrice:       r.BasePrice,
 		PromoPrice:      r.PromoPrice,
 		StartDate:       startDate,
 		EndDate:         endDate,
 		Content:         r.Content,
-		LinkedShowcases: r.LinkedShowcases,
+		LinkedShowcases: linkedShowcases,
 		Excerpt:         r.Excerpt,
 		ImageURL:        r.ImageURL,
 		Tags:            r.Tags,
@@ -250,6 +328,7 @@ func (h *ShowcaseHandler) ListByFactory(c *fiber.Ctx) error {
 	callerID, _ := getUserIDFromHeader(c)
 	items, err := h.service.GetShowcasesByFactory(int64(factoryID), contentType, callerID)
 	if err != nil {
+		log.Printf("[showcase] ListByFactory error: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": errFetchShowcases})
 	}
 	return c.JSON(items)

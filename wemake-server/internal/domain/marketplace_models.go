@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"math"
 	"time"
 
 	"github.com/lib/pq"
@@ -59,6 +60,11 @@ type RFQ struct {
 	CreatedAt        time.Time       `db:"created_at" json:"created_at"`
 	UpdatedAt        time.Time       `db:"updated_at" json:"updated_at"`
 	MaterialGrade   *string         `db:"material_grade" json:"material_grade,omitempty"`
+	PackagingSpec   *string         `db:"packaging_spec" json:"packaging_spec"`
+	CategoryName    *string         `db:"category_name" json:"category_name"`
+	SubCategoryName *string         `db:"sub_category_name" json:"sub_category_name"`
+	ShippingMethodName *string      `db:"shipping_method_name" json:"shipping_method_name"`
+	AddressSummary  *string         `db:"address_summary" json:"address_summary"`
 
 	TargetUnitPrice      *float64   `db:"target_unit_price" json:"target_unit_price,omitempty"`
 	TargetLeadTimeDays   *int       `db:"target_lead_time_days" json:"target_lead_time_days,omitempty"`
@@ -71,4 +77,36 @@ type RFQ struct {
 	InspectionType         *string        `db:"inspection_type" json:"inspection_type,omitempty"`
 
 	ReferenceImages pq.StringArray `db:"reference_images" json:"reference_images,omitempty"`
+	ImageURLs       pq.StringArray `db:"-" json:"image_urls"`
+	Address         *Address       `db:"-" json:"address,omitempty"`
+
+	// Budget UX: target_unit_price is treated as total budget (not per-piece).
+	BudgetTotal    *float64 `db:"-" json:"budget_total"`
+	BudgetPerPiece *float64 `db:"-" json:"budget_per_piece"`
+	EstimatedTotal *float64 `db:"-" json:"estimated_total"`
+}
+
+// EnrichRFQBudgetFields sets budget_total, budget_per_piece, estimated_total from
+// target_unit_price (total budget) and quantity. Idempotent.
+func EnrichRFQBudgetFields(rfq *RFQ) {
+	if rfq == nil {
+		return
+	}
+	rfq.ImageURLs = rfq.ReferenceImages
+	rfq.BudgetTotal = nil
+	rfq.BudgetPerPiece = nil
+	rfq.EstimatedTotal = nil
+	if rfq.TargetUnitPrice == nil {
+		return
+	}
+	total := *rfq.TargetUnitPrice
+	bt := total
+	et := total
+	rfq.BudgetTotal = &bt
+	rfq.EstimatedTotal = &et
+	if rfq.Quantity <= 0 {
+		return
+	}
+	per := math.Round((total/float64(rfq.Quantity))*100) / 100
+	rfq.BudgetPerPiece = &per
 }

@@ -97,6 +97,7 @@ func (h *RFQHandler) CreateRFQ(c *fiber.Ctx) error {
 		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create rfq"})
 	}
+	domain.EnrichRFQBudgetFields(rfq)
 	return c.Status(fiber.StatusCreated).JSON(rfq)
 }
 
@@ -157,6 +158,7 @@ func (h *RFQHandler) PatchRFQ(c *fiber.Ctx) error {
 	if err := h.service.Patch(userID, int64(rfqID), rfq); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
+	domain.EnrichRFQBudgetFields(rfq)
 	return c.JSON(rfq)
 }
 
