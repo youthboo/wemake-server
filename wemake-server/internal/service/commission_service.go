@@ -83,7 +83,7 @@ func (s *CommissionService) Calculate(in CommissionInput) (*Breakdown, error) {
 			}
 		}
 	}
-	commissionAmount := round2(subtotal * commissionRate / 100)
+	commissionAmount := round2(grandTotal * commissionRate / 100)
 	factoryNet := round2(grandTotal - commissionAmount)
 
 	return &Breakdown{

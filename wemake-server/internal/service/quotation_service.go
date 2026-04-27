@@ -16,7 +16,6 @@ import (
 var (
 	ErrQuotationLocked      = errors.New("quotation is locked or not in pending status")
 	ErrNotQuotationParty    = errors.New("not authorized for this quotation")
-	ErrQuotationPatchReason = errors.New("reason is required when updating a quotation")
 	ErrInvalidLineItem      = errors.New("INVALID_LINE_ITEM")
 	ErrIncotermsInvalid     = errors.New("INCOTERMS_INVALID")
 	ErrPaymentTermsInvalid  = errors.New("PAYMENT_TERMS_INVALID")
@@ -56,6 +55,58 @@ func (s *QuotationService) Create(item *domain.Quotation) error {
 	item.LogTimestamp = now
 	item.Version = 1
 	item.IsLocked = false
+	if item.ValidityDays <= 0 {
+		item.ValidityDays = 14
+	}
+	validUntil := now.AddDate(0, 0, item.ValidityDays)
+	item.ValidUntil = &validUntil
+
+	rfqQty := float64(1)
+	if s.rfqRepo != nil {
+		if rfq, err := s.rfqRepo.GetByIDAny(item.RFQID); err == nil && rfq != nil && rfq.Quantity > 0 {
+			rfqQty = float64(rfq.Quantity)
+			if item.ShippingMethodID <= 0 && rfq.ShippingMethodID != nil {
+				item.ShippingMethodID = *rfq.ShippingMethodID
+			}
+		}
+	}
+	if err := validateQuotationTerms(nil, item.PaymentTerms, item.ValidityDays); err != nil {
+		return err
+	}
+	if item.ShippingMethodID > 0 {
+		ok, err := s.repo.ShippingMethodValid(item.ShippingMethodID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrInvalidShippingMethod
+		}
+	}
+	if s.commission != nil {
+		breakdown, err := s.commission.Calculate(CommissionInput{
+			Items: []domain.QuotationItem{{
+				Description: "สินค้า",
+				Qty:         rfqQty,
+				UnitPrice:   item.PricePerPiece,
+				DiscountPct: 0,
+			}},
+			DiscountAmount: item.DiscountAmount,
+			ShippingCost:   item.ShippingCost,
+			PackagingCost:  item.PackagingCost,
+			ToolingCost:    item.ToolingMoldCost,
+			FactoryID:      &item.FactoryID,
+		})
+		if err == nil {
+			item.Subtotal = breakdown.Subtotal
+			item.VatRate = breakdown.VatRate
+			item.VatAmount = breakdown.VatAmount
+			item.GrandTotal = breakdown.GrandTotal
+			item.PlatformCommissionRate = breakdown.PlatformCommissionRate
+			item.PlatformCommissionAmount = breakdown.PlatformCommissionAmount
+			item.FactoryNetReceivable = breakdown.FactoryNetReceivable
+			item.PlatformConfigID = &breakdown.PlatformConfigID
+		}
+	}
 	if err := s.repo.Create(item); err != nil {
 		return err
 	}
@@ -146,16 +197,29 @@ func (s *QuotationService) UpdateStatus(quoteID int64, status string, editorID *
 	})
 }
 
-func (s *QuotationService) PatchBody(quoteID, factoryUserID int64, pricePerPiece, moldCost float64, leadTimeDays, shippingMethodID int64, reason string) (*domain.Quotation, error) {
+func (s *QuotationService) PatchBody(
+	quoteID, factoryUserID int64,
+	pricePerPiece, moldCost, shippingCost, packagingCost, toolingMoldCost float64,
+	leadTimeDays, shippingMethodID int64,
+	paymentTerms *string,
+	reason string,
+) (*domain.Quotation, error) {
 	if strings.TrimSpace(reason) == "" {
-		return nil, ErrQuotationPatchReason
+		reason = "อัปเดตใบเสนอราคา"
 	}
-	ok, err := s.repo.ShippingMethodValid(shippingMethodID)
-	if err != nil {
-		return nil, err
+	if paymentTerms != nil {
+		if err := validateQuotationTerms(nil, paymentTerms, 30); err != nil {
+			return nil, err
+		}
 	}
-	if !ok {
-		return nil, ErrInvalidShippingMethod
+	if shippingMethodID > 0 {
+		ok, err := s.repo.ShippingMethodValid(shippingMethodID)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, ErrInvalidShippingMethod
+		}
 	}
 	q, err := s.repo.GetByID(quoteID)
 	if err != nil {
@@ -168,7 +232,7 @@ func (s *QuotationService) PatchBody(quoteID, factoryUserID int64, pricePerPiece
 		return nil, ErrQuotationLocked
 	}
 	newVersion := q.Version + 1
-	if err := s.repo.UpdateBody(quoteID, pricePerPiece, moldCost, leadTimeDays, shippingMethodID, factoryUserID, newVersion); err != nil {
+	if err := s.repo.UpdateBody(quoteID, pricePerPiece, moldCost, shippingCost, packagingCost, toolingMoldCost, leadTimeDays, shippingMethodID, factoryUserID, newVersion, paymentTerms); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrQuotationLocked
 		}
@@ -177,6 +241,44 @@ func (s *QuotationService) PatchBody(quoteID, factoryUserID int64, pricePerPiece
 	q2, err := s.repo.GetByID(quoteID)
 	if err != nil {
 		return nil, err
+	}
+	rfqQty := float64(1)
+	if s.rfqRepo != nil {
+		if rfq, rfqErr := s.rfqRepo.GetByIDAny(q2.RFQID); rfqErr == nil && rfq != nil && rfq.Quantity > 0 {
+			rfqQty = float64(rfq.Quantity)
+		}
+	}
+	if s.commission != nil {
+		breakdown, calcErr := s.commission.Calculate(CommissionInput{
+			Items: []domain.QuotationItem{{
+				Description: "สินค้า",
+				Qty:         rfqQty,
+				UnitPrice:   q2.PricePerPiece,
+				DiscountPct: 0,
+			}},
+			DiscountAmount: q2.DiscountAmount,
+			ShippingCost:   q2.ShippingCost,
+			PackagingCost:  q2.PackagingCost,
+			ToolingCost:    q2.ToolingMoldCost,
+			FactoryID:      &q2.FactoryID,
+		})
+		if calcErr == nil {
+			if updateErr := s.repo.UpdateTotals(
+				quoteID,
+				breakdown.VatRate,
+				breakdown.VatAmount,
+				breakdown.PlatformCommissionRate,
+				breakdown.PlatformCommissionAmount,
+				breakdown.GrandTotal,
+				breakdown.FactoryNetReceivable,
+			); updateErr != nil {
+				return nil, updateErr
+			}
+			q2, err = s.repo.GetByID(quoteID)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 	rs := strings.TrimSpace(reason)
 	eb := factoryUserID
@@ -242,7 +344,7 @@ func validateQuotationTerms(incoterms, paymentTerms *string, validityDays int) e
 	}
 	if paymentTerms != nil {
 		switch strings.TrimSpace(*paymentTerms) {
-		case "50_50", "30_70", "net_30", "lc_at_sight":
+		case "50_50", "30_70", "net_30", "lc_at_sight", "full_payment":
 		default:
 			return ErrPaymentTermsInvalid
 		}

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"sort"
 	"strconv"
@@ -90,6 +91,31 @@ func parseLinkedShowcases(raw json.RawMessage) (*[]string, *domain.ShowcaseValid
 		return &out, nil
 	}
 
+	// Format 1b: [31, "32", "https://..."] mixed numeric/string array
+	var asMixed []interface{}
+	if err := json.Unmarshal(raw, &asMixed); err == nil {
+		out := make([]string, 0, len(asMixed))
+		for _, item := range asMixed {
+			switch v := item.(type) {
+			case string:
+				trimmed := strings.TrimSpace(v)
+				if trimmed != "" {
+					out = append(out, trimmed)
+				}
+			case float64:
+				if v > 0 {
+					out = append(out, strconv.FormatInt(int64(v), 10))
+				}
+			default:
+				return nil, &domain.ShowcaseValidationDetail{
+					Field:   "linked_showcases",
+					Message: "all entries must be HTTPS URLs or numeric showcase IDs",
+				}
+			}
+		}
+		return &out, nil
+	}
+
 	// Format 2: [{ "image_url": "...", "sort_order": 1, "is_cover": true }]
 	var asObjects []linkedShowcaseObject
 	if err := json.Unmarshal(raw, &asObjects); err == nil {
@@ -130,7 +156,7 @@ func parseLinkedShowcases(raw json.RawMessage) (*[]string, *domain.ShowcaseValid
 
 	return nil, &domain.ShowcaseValidationDetail{
 		Field:   "linked_showcases",
-		Message: "must be an array of strings or objects with image_url",
+		Message: fmt.Sprintf("%s", "must be an array of strings, numbers, or objects with image_url"),
 	}
 }
 

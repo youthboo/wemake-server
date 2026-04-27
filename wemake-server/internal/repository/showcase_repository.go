@@ -3,7 +3,6 @@ package repository
 import (
 	"database/sql"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
@@ -311,26 +310,9 @@ func (r *ShowcaseRepository) GetDetail(showcaseID int64) (*domain.ShowcaseDetail
 	s.Specs = []domain.ShowcaseSpec{}
 
 	if len(s.LinkedShowcases) > 0 {
-		idRefs := make([]int64, 0, len(s.LinkedShowcases))
 		for _, ref := range s.LinkedShowcases {
 			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(ref)), "http://") || strings.HasPrefix(strings.ToLower(strings.TrimSpace(ref)), "https://") {
 				s.Images = append(s.Images, strings.TrimSpace(ref))
-				continue
-			}
-			if id, err := strconv.ParseInt(strings.TrimSpace(ref), 10, 64); err == nil && id > 0 {
-				idRefs = append(idRefs, id)
-			}
-		}
-		if len(idRefs) > 0 {
-			cards, err := r.ListLinkedShowcaseCards(idRefs)
-			if err != nil {
-				return nil, err
-			}
-			s.LinkedShowcaseCards = cards
-			for _, card := range cards {
-				if card.ImageURL != "" {
-					s.Images = append(s.Images, card.ImageURL)
-				}
 			}
 		}
 	}

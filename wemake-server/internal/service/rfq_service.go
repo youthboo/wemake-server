@@ -120,24 +120,17 @@ func (s *RFQService) ListMatchingForFactory(factoryID int64, status string) ([]d
 
 func (s *RFQService) GetForViewer(userID int64, role string, rfqID int64) (*domain.RFQ, error) {
 	if role == domain.RoleFactory {
-		rfq, err := s.repo.GetByIDAny(rfqID)
-		if err != nil {
-			return nil, err
-		}
-		ok, err := s.repo.FactoryHasMatchingCategory(userID, rfq)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			hasQ, err := s.repo.FactoryHasQuotationOnRFQ(userID, rfqID)
+		// Any approved (non-suspended) factory may view any RFQ regardless of category match.
+		if s.factoryRepo != nil {
+			approvalStatus, err := s.factoryRepo.GetApprovalStatus(userID)
 			if err != nil {
 				return nil, err
 			}
-			if !hasQ {
+			if approvalStatus == "SU" {
 				return nil, sql.ErrNoRows
 			}
 		}
-		return rfq, nil
+		return s.repo.GetByIDAny(rfqID)
 	}
 	return s.GetByID(userID, rfqID)
 }

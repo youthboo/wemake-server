@@ -78,7 +78,7 @@ func (r *QuotationRepository) createWithExecutor(exec quotationExecutor, item *d
 		item.PricePerPiece,
 		item.MoldCost,
 		item.LeadTimeDays,
-		item.ShippingMethodID,
+		nullableInt64ForZero(item.ShippingMethodID),
 		item.Status,
 		item.CreateTime,
 		item.LogTimestamp,
@@ -301,14 +301,31 @@ func (r *QuotationRepository) ListRevisionChain(root *domain.Quotation) ([]domai
 	return items, err
 }
 
-func (r *QuotationRepository) UpdateBody(quoteID int64, pricePerPiece float64, moldCost float64, leadTimeDays int64, shippingMethodID int64, editorID int64, newVersion int) error {
+func (r *QuotationRepository) UpdateBody(
+	quoteID int64,
+	pricePerPiece, moldCost, shippingCost, packagingCost, toolingMoldCost float64,
+	leadTimeDays, shippingMethodID int64,
+	editorID int64,
+	newVersion int,
+	paymentTerms *string,
+) error {
 	query := `
 		UPDATE quotations
-		SET price_per_piece = $1, mold_cost = $2, lead_time_days = $3, shipping_method_id = $4,
-		    version = $5, last_edited_at = NOW(), last_edited_by = $6, log_timestamp = NOW()
-		WHERE quote_id = $7 AND COALESCE(is_locked, false) = false AND status = 'PD'
+		SET price_per_piece = $1,
+		    mold_cost = $2,
+		    tooling_mold_cost = $3,
+		    shipping_cost = $4,
+		    packaging_cost = $5,
+		    lead_time_days = $6,
+		    shipping_method_id = CASE WHEN $7 > 0 THEN $7 ELSE shipping_method_id END,
+		    payment_terms = CASE WHEN $8::text IS NOT NULL THEN $8 ELSE payment_terms END,
+		    version = $9,
+		    last_edited_at = NOW(),
+		    last_edited_by = $10,
+		    log_timestamp = NOW()
+		WHERE quote_id = $11 AND COALESCE(is_locked, false) = false AND status = 'PD'
 	`
-	res, err := r.db.Exec(query, pricePerPiece, moldCost, leadTimeDays, shippingMethodID, newVersion, editorID, quoteID)
+	res, err := r.db.Exec(query, pricePerPiece, moldCost, toolingMoldCost, shippingCost, packagingCost, leadTimeDays, shippingMethodID, nullableStringPtr(paymentTerms), newVersion, editorID, quoteID)
 	if err != nil {
 		return err
 	}
@@ -320,6 +337,28 @@ func (r *QuotationRepository) UpdateBody(quoteID int64, pricePerPiece float64, m
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func (r *QuotationRepository) UpdateTotals(quoteID int64, vatRate, vatAmount, platformCommissionRate, platformCommissionAmount, grandTotal, factoryNetReceivable float64) error {
+	_, err := r.db.Exec(`
+		UPDATE quotations
+		SET vat_rate = $1,
+		    vat_amount = $2,
+		    platform_commission_rate = $3,
+		    platform_commission_amount = $4,
+		    grand_total = $5,
+		    factory_net_receivable = $6,
+		    log_timestamp = NOW()
+		WHERE quote_id = $7
+	`, vatRate, vatAmount, platformCommissionRate, platformCommissionAmount, grandTotal, factoryNetReceivable, quoteID)
+	return err
+}
+
+func nullableInt64ForZero(v int64) interface{} {
+	if v <= 0 {
+		return nil
+	}
+	return v
 }
 
 func (r *QuotationRepository) UpdateImageURLs(quoteID int64, imageURLs domain.StringArray) error {

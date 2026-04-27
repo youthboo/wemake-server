@@ -137,11 +137,17 @@ func (s *OrderService) CreateFromQuotation(quotationID, userID int64) (*domain.O
 		return nil, ErrOrderAlreadyExistsForQuote
 	}
 
-	total := (src.PricePerPiece * float64(src.Quantity)) + src.MoldCost
+	// Use grand_total (VAT + commission inclusive) from the quotation.
+	// Fall back to legacy formula only when grand_total was not yet calculated (old quotations).
+	total := src.GrandTotal
+	if total <= 0 {
+		total = roundCurrency((src.PricePerPiece * float64(src.Quantity)) + src.MoldCost)
+	}
 	if total <= 0 {
 		return nil, errors.New("invalid order total")
 	}
-	deposit := roundCurrency(total * 0.3)
+	// Platform policy: 100% upfront payment — deposit equals full amount.
+	deposit := total
 
 	now := time.Now()
 	est := now.AddDate(0, 0, int(src.LeadTimeDays))
