@@ -258,6 +258,7 @@ type factoryReviewScanRow struct {
 	UserID    int64          `db:"user_id"`
 	Rating    int            `db:"rating"`
 	Comment   sql.NullString `db:"comment"`
+	ImageURLs domain.StringArray `db:"image_urls"`
 	CreatedAt time.Time      `db:"created_at"`
 	FirstName sql.NullString `db:"first_name"`
 	LastName  sql.NullString `db:"last_name"`
@@ -266,7 +267,7 @@ type factoryReviewScanRow struct {
 func (r *FactoryRepository) selectFactoryReviews(factoryID int64, limit int) ([]domain.FactoryProfileReview, error) {
 	var revRows []factoryReviewScanRow
 	q := `
-		SELECT fr.review_id, fr.user_id, fr.rating, fr.comment, fr.created_at,
+		SELECT fr.review_id, fr.user_id, fr.rating, fr.comment, fr.image_urls, fr.created_at,
 		       c.first_name, c.last_name
 		FROM factory_reviews fr
 		LEFT JOIN customers c ON c.user_id = fr.user_id
@@ -283,6 +284,7 @@ func (r *FactoryRepository) selectFactoryReviews(factoryID int64, limit int) ([]
 			ReviewID:  rw.ReviewID,
 			UserID:    rw.UserID,
 			Rating:    rw.Rating,
+			ImageURLs: rw.ImageURLs,
 			CreatedAt: rw.CreatedAt,
 		}
 		if rw.Comment.Valid {
