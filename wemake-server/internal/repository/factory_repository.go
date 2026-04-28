@@ -182,6 +182,7 @@ func factoryDetailFromHead(head factoryDetailHeadRow) *domain.FactoryPublicDetai
 	}
 	if head.LeadTimeDesc.Valid {
 		out.LeadTimeDesc = &head.LeadTimeDesc.String
+		out.LeadTimeDese = &head.LeadTimeDesc.String
 	}
 	if head.Rating.Valid {
 		v := head.Rating.Float64

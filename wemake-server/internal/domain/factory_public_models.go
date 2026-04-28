@@ -79,6 +79,7 @@ type FactoryPublicDetail struct {
 	Specialization     *string                     `json:"specialization,omitempty"`
 	MinOrder           *int                        `json:"min_order,omitempty"`
 	LeadTimeDesc       *string                     `json:"lead_time_desc,omitempty"`
+	LeadTimeDese       *string                     `json:"lead_time_dese,omitempty"`
 	IsVerified         bool                        `json:"is_verified"`
 	Rating             *float64                    `json:"rating,omitempty"`
 	ReviewCount        int64                       `json:"review_count"`
