@@ -60,9 +60,8 @@ func (h *ConversationHandler) Create(c *fiber.Ctx) error {
 	if req.CustomerID <= 0 || req.FactoryID <= 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "customer_id and factory_id are required"})
 	}
-	if role := getOptionalRoleFromContext(c); role != "" && role != domain.RoleCustomer {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "buyer role required"})
-	}
+	// Allow both customer (CT) and factory (FT) to initiate a conversation room.
+	// The caller must be one of the two parties — this is the security boundary.
 	if req.CustomerID != userID && req.FactoryID != userID {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
 	}
