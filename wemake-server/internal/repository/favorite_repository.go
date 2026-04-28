@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"errors"
+
 	"github.com/jmoiron/sqlx"
 	"github.com/yourusername/wemake/internal/domain"
 )
@@ -21,24 +23,66 @@ func (r *FavoriteRepository) ListByUserID(userID int64) ([]domain.Favorite, erro
 }
 
 func (r *FavoriteRepository) Add(fav *domain.Favorite) error {
+	tx, err := r.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
 	query := `
 		INSERT INTO favorites (user_id, showcase_id)
 		VALUES (:user_id, :showcase_id)
 		RETURNING fav_id, created_at
 	`
-	rows, err := r.db.NamedQuery(query, fav)
+	rows, err := tx.NamedQuery(query, fav)
 	if err != nil {
 		return err
 	}
-	if rows.Next() {
-		err = rows.Scan(&fav.FavID, &fav.CreatedAt)
+	if !rows.Next() {
+		rows.Close()
+		return errors.New("favorite insert: no row returned")
+	}
+	if err = rows.Scan(&fav.FavID, &fav.CreatedAt); err != nil {
+		rows.Close()
+		return err
 	}
 	rows.Close()
-	return err
+
+	if _, err = tx.Exec(`
+		UPDATE factory_showcases
+		SET likes_count = likes_count + 1
+		WHERE showcase_id = $1
+	`, fav.ShowcaseID); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func (r *FavoriteRepository) Remove(userID, showcaseID int64) error {
-	query := `DELETE FROM favorites WHERE user_id = $1 AND showcase_id = $2`
-	_, err := r.db.Exec(query, userID, showcaseID)
-	return err
+	tx, err := r.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	res, err := tx.Exec(`DELETE FROM favorites WHERE user_id = $1 AND showcase_id = $2`, userID, showcaseID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		if _, err = tx.Exec(`
+			UPDATE factory_showcases
+			SET likes_count = GREATEST(likes_count - 1, 0)
+			WHERE showcase_id = $1
+		`, showcaseID); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }

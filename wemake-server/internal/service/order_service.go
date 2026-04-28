@@ -921,19 +921,8 @@ func (s *OrderService) confirmReceiptTx(orderID int64, actorUserID *int64, note 
 		GoodAfter:     roundCurrency(factoryWallet.GoodFund + movedAmount),
 	}
 
-	orderIDPtr := order.OrderID
-	settleTx := &domain.Transaction{
-		TxID:       "tx-" + uuid.NewString(),
-		WalletID:   factoryWallet.WalletID,
-		OrderID:    &orderIDPtr,
-		Type:       "SC",
-		Amount:     movedAmount,
-		Status:     "PT",
-		CreatedAt:  completedAt,
-		UpdatedAt:  completedAt,
-		UploadedAt: completedAt,
-	}
-	if err := s.txLedger.CreateTx(tx, settleTx); err != nil {
+	// Settle the factory's pending SC receivables for this order: PT → ST, uploaded_at = NOW().
+	if err := s.txLedger.SettleFactoryReceivables(tx, order.OrderID); err != nil {
 		return nil, err
 	}
 	if err := s.repo.InsertActivityTx(tx, orderID, actorUserID, activityCode, map[string]interface{}{

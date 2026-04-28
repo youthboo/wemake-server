@@ -205,13 +205,13 @@ func (s *OrderPaymentService) PayDeposit(input OrderPaymentInput) (*OrderPayment
 	customerTxID := "tx_" + uuid.NewString()
 	factoryTxID := "tx_" + uuid.NewString()
 	now := time.Now()
-	if err := insertWalletPaymentTransaction(tx, customerTxID, customerWallet.WalletID, input.OrderID, -input.Amount, "D", input.IdempotencyKey, groupID, now); err != nil {
+	if err := insertCustomerPaymentTx(tx, customerTxID, customerWallet.WalletID, input.OrderID, -input.Amount, input.IdempotencyKey, groupID, now); err != nil {
 		if isUniqueViolation(err) {
 			return s.loadPaymentReplay(input.OrderID, input.IdempotencyKey)
 		}
 		return nil, err
 	}
-	if err := insertWalletPaymentTransaction(tx, factoryTxID, factoryWallet.WalletID, input.OrderID, input.Amount, "C", input.IdempotencyKey+":f", groupID, now); err != nil {
+	if err := insertFactoryReceivableTx(tx, factoryTxID, factoryWallet.WalletID, input.OrderID, input.Amount, input.IdempotencyKey+":f", groupID, now); err != nil {
 		if isUniqueViolation(err) {
 			return s.loadPaymentReplay(input.OrderID, input.IdempotencyKey)
 		}
@@ -268,9 +268,9 @@ func (s *OrderPaymentService) PayDeposit(input OrderPaymentInput) (*OrderPayment
 		FactoryTransaction: WalletPaymentTransaction{
 			TxID:              factoryTxID,
 			Amount:            input.Amount,
-			Type:              "BU",
+			Type:              "SC",
 			Direction:         "C",
-			Status:            "ST",
+			Status:            "PT",
 			HeldInPendingFund: true,
 		},
 		OrderStatusAfter: "PR",
@@ -350,15 +350,30 @@ func lockWalletsInOrder(tx *sqlx.Tx, walletA, walletB int64) error {
 	return rows.Err()
 }
 
-func insertWalletPaymentTransaction(tx *sqlx.Tx, txID string, walletID, orderID int64, amount float64, direction, idempotencyKey string, settlementGroupID uuid.UUID, now time.Time) error {
+// insertCustomerPaymentTx records the customer's BU (buy) debit — immediately settled (ST).
+func insertCustomerPaymentTx(tx *sqlx.Tx, txID string, walletID, orderID int64, amount float64, idempotencyKey string, settlementGroupID uuid.UUID, now time.Time) error {
 	_, err := tx.Exec(`
 		INSERT INTO transactions (
 			tx_id, wallet_id, order_id, type, amount, status,
 			created_at, updated_at, uploaded_at,
 			direction, idempotency_key, settlement_group_id
 		)
-		VALUES ($1, $2, $3, 'BU', $4, 'ST', $5, $5, $5, $6, $7, $8)
-	`, txID, walletID, orderID, amount, now, direction, idempotencyKey, settlementGroupID)
+		VALUES ($1, $2, $3, 'BU', $4, 'ST', $5, $5, $5, 'D', $6, $7)
+	`, txID, walletID, orderID, amount, now, idempotencyKey, settlementGroupID)
+	return err
+}
+
+// insertFactoryReceivableTx records the factory's SC (sell/credit) receivable — held as pending (PT)
+// until the customer confirms receipt, at which point it is settled to ST via SettleFactoryReceivables.
+func insertFactoryReceivableTx(tx *sqlx.Tx, txID string, walletID, orderID int64, amount float64, idempotencyKey string, settlementGroupID uuid.UUID, now time.Time) error {
+	_, err := tx.Exec(`
+		INSERT INTO transactions (
+			tx_id, wallet_id, order_id, type, amount, status,
+			created_at, updated_at, uploaded_at,
+			direction, idempotency_key, settlement_group_id
+		)
+		VALUES ($1, $2, $3, 'SC', $4, 'PT', $5, $5, $5, 'C', $6, $7)
+	`, txID, walletID, orderID, amount, now, idempotencyKey, settlementGroupID)
 	return err
 }
 

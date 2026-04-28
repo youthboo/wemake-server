@@ -155,3 +155,18 @@ func (r *TransactionRepository) PatchStatusTx(tx *sqlx.Tx, txID string, status s
 	}
 	return nil
 }
+
+// SettleFactoryReceivables settles all pending (PT) SC transactions for the given order:
+// sets status='ST' and uploaded_at=NOW(). Called when the customer confirms receipt.
+func (r *TransactionRepository) SettleFactoryReceivables(tx *sqlx.Tx, orderID int64) error {
+	_, err := tx.Exec(`
+		UPDATE transactions
+		SET status     = 'ST',
+		    updated_at = NOW(),
+		    uploaded_at = NOW()
+		WHERE order_id = $1
+		  AND type     = 'SC'
+		  AND status   = 'PT'
+	`, orderID)
+	return err
+}
