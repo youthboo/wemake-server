@@ -63,6 +63,7 @@ type FactoryProfileReview struct {
 	UserID    int64     `json:"user_id"`
 	Rating    int       `json:"rating"`
 	Comment   *string   `json:"comment,omitempty"`
+	ImageURLs StringArray `json:"image_urls"`
 	CreatedAt time.Time `json:"created_at"`
 	FirstName *string   `json:"first_name,omitempty"`
 	LastName  *string   `json:"last_name,omitempty"`
