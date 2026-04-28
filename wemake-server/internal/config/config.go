@@ -54,16 +54,26 @@ func getEnv(key, defaultValue string) string {
 }
 
 func (c *Config) GetDSN() string {
+	// Always pin the session timezone to Bangkok so that TIMESTAMP WITHOUT
+	// TIME ZONE columns and PostgreSQL NOW() / CURRENT_TIMESTAMP produce
+	// Bangkok wall-clock values on every server environment (local or cloud).
+	const bangkokTZ = "Asia/Bangkok"
 	if c.DatabaseURL != "" {
-		return c.DatabaseURL
+		// Append as query parameter for URL-style DSNs (e.g. Render DATABASE_URL).
+		sep := "?"
+		if strings.Contains(c.DatabaseURL, "?") {
+			sep = "&"
+		}
+		return c.DatabaseURL + sep + "TimeZone=" + bangkokTZ
 	}
 	return fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s TimeZone=%s",
 		c.DBHost,
 		c.DBPort,
 		c.DBUser,
 		c.DBPassword,
 		c.DBName,
 		c.DBSSLMode,
+		bangkokTZ,
 	)
 }
