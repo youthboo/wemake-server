@@ -470,7 +470,7 @@ func (r *FrontendRepository) ListMessageThreads(userID int64) ([]FrontendMessage
 			m.reference_type,
 			m.reference_id,
 			m.content AS last_message,
-			TO_CHAR(m.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS last_message_at,
+			TO_CHAR(timezone('UTC', m.created_at), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS last_message_at,
 			CASE
 				WHEN m.sender_id = $1 THEN m.receiver_id
 				ELSE m.sender_id

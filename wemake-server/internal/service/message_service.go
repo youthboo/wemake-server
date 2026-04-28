@@ -24,10 +24,6 @@ var (
 	ErrQuoteDataRequired            = errors.New("quote_data is required when message_type is QT")
 )
 
-// bangkokTZ is UTC+7 used to stamp message created_at so the timestamp is
-// always stored as Bangkok wall-clock regardless of the server's local TZ.
-var bangkokTZ = time.FixedZone("Asia/Bangkok", 7*60*60)
-
 var allowedMessageReferenceTypes = map[string]struct{}{
 	"RQ": {},
 	"OD": {},
@@ -88,7 +84,7 @@ func (s *MessageService) Create(item *domain.Message) error {
 	if err := s.validateCreate(item); err != nil {
 		return err
 	}
-	item.CreatedAt = time.Now().In(bangkokTZ)
+	item.CreatedAt = time.Now().UTC()
 	if err := s.repo.Create(item); err != nil {
 		return err
 	}
@@ -115,7 +111,7 @@ func (s *MessageService) CreateTx(tx interface {
 	if err := s.validateCreate(item); err != nil {
 		return err
 	}
-	item.CreatedAt = time.Now().In(bangkokTZ)
+	item.CreatedAt = time.Now().UTC()
 	return s.repo.CreateTx(tx, item)
 }
 

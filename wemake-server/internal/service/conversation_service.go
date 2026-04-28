@@ -129,8 +129,7 @@ func (s *ConversationService) ShareRFQ(convID, userID, rfqID int64) (*domain.Mes
 		return nil, nil, err
 	}
 
-	bangkokTZ := time.FixedZone("Asia/Bangkok", 7*60*60)
-	nowBKK := time.Now().In(bangkokTZ)
+	nowUTC := time.Now().UTC()
 	msg := &domain.Message{
 		ConvID:        &convID,
 		ReferenceType: "RQ",
@@ -140,7 +139,7 @@ func (s *ConversationService) ShareRFQ(convID, userID, rfqID int64) (*domain.Mes
 		Content:       rfq.Title,
 		MessageType:   "rfq_card",
 		IsRead:        false,
-		CreatedAt:     nowBKK,
+		CreatedAt:     nowUTC,
 	}
 	msg.MessageID = "msg-" + msg.CreatedAt.Format("20060102150405.000000000")
 	if err := s.messages.CreateTx(tx, msg); err != nil {
@@ -154,7 +153,7 @@ func (s *ConversationService) ShareRFQ(convID, userID, rfqID int64) (*domain.Mes
 		    unread_factory = COALESCE(unread_factory, 0) + 1,
 		    updated_at = $3
 		WHERE conv_id = $1
-	`, convID, rfq.Title, nowBKK); err != nil {
+	`, convID, rfq.Title, nowUTC); err != nil {
 		return nil, nil, err
 	}
 
