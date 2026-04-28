@@ -54,6 +54,7 @@ func (r *FactoryRepository) ListPublicVerified() ([]domain.FactoryListItem, erro
 			COALESCE(fp.is_verified, FALSE) AS is_verified,
 			COALESCE(fp.completed_orders, 0)::bigint AS completed_orders,
 			fp.image_url,
+			fp.background_image_url,
 			fp.description,
 			fp.price_range,
 			fp.province_id,
@@ -77,23 +78,24 @@ func (r *FactoryRepository) ListPublicVerified() ([]domain.FactoryListItem, erro
 }
 
 type factoryDetailHeadRow struct {
-	FactoryID       int64           `db:"factory_id"`
-	FactoryName     string          `db:"factory_name"`
-	FactoryTypeID   int64           `db:"factory_type_id"`
-	FactoryTypeName sql.NullString  `db:"factory_type_name"`
-	TaxID           sql.NullString  `db:"tax_id"`
-	Specialization  sql.NullString  `db:"specialization"`
-	MinOrder        sql.NullInt64   `db:"min_order"`
-	LeadTimeDesc    sql.NullString  `db:"lead_time_desc"`
-	IsVerified      bool            `db:"is_verified"`
-	Rating          sql.NullFloat64 `db:"rating"`
-	ReviewCount     int64           `db:"review_count"`
-	CompletedOrders int64           `db:"completed_orders"`
-	ImageURL        sql.NullString  `db:"image_url"`
-	Description     sql.NullString  `db:"description"`
-	PriceRange      sql.NullString  `db:"price_range"`
-	ProvinceID      sql.NullInt64   `db:"province_id"`
-	ProvinceName    sql.NullString  `db:"province_name"`
+	FactoryID          int64           `db:"factory_id"`
+	FactoryName        string          `db:"factory_name"`
+	FactoryTypeID      int64           `db:"factory_type_id"`
+	FactoryTypeName    sql.NullString  `db:"factory_type_name"`
+	TaxID              sql.NullString  `db:"tax_id"`
+	Specialization     sql.NullString  `db:"specialization"`
+	MinOrder           sql.NullInt64   `db:"min_order"`
+	LeadTimeDesc       sql.NullString  `db:"lead_time_desc"`
+	IsVerified         bool            `db:"is_verified"`
+	Rating             sql.NullFloat64 `db:"rating"`
+	ReviewCount        int64           `db:"review_count"`
+	CompletedOrders    int64           `db:"completed_orders"`
+	ImageURL           sql.NullString  `db:"image_url"`
+	BackgroundImageURL sql.NullString  `db:"background_image_url"`
+	Description        sql.NullString  `db:"description"`
+	PriceRange         sql.NullString  `db:"price_range"`
+	ProvinceID         sql.NullInt64   `db:"province_id"`
+	ProvinceName       sql.NullString  `db:"province_name"`
 }
 
 func (r *FactoryRepository) factoryExistsActive(factoryID int64) (bool, error) {
@@ -128,6 +130,7 @@ func (r *FactoryRepository) getFactoryDetailHead(factoryID int64) (factoryDetail
 			COALESCE(rev.review_cnt, fp.review_count, 0)::bigint AS review_count,
 			COALESCE(fp.completed_orders, 0)::bigint AS completed_orders,
 			fp.image_url,
+			fp.background_image_url,
 			fp.description,
 			fp.price_range,
 			fp.province_id,
@@ -186,6 +189,9 @@ func factoryDetailFromHead(head factoryDetailHeadRow) *domain.FactoryPublicDetai
 	}
 	if head.ImageURL.Valid {
 		out.ImageURL = &head.ImageURL.String
+	}
+	if head.BackgroundImageURL.Valid {
+		out.BackgroundImageURL = &head.BackgroundImageURL.String
 	}
 	if head.Description.Valid {
 		out.Description = &head.Description.String
@@ -336,16 +342,17 @@ func (r *FactoryRepository) PatchProfile(factoryID int64, fields map[string]inte
 	}
 
 	allowed := map[string]bool{
-		"factory_name":    true,
-		"tax_id":          true,
-		"description":     true,
-		"factory_type_id": true,
-		"specialization":  true,
-		"min_order":       true,
-		"lead_time_desc":  true,
-		"image_url":       true,
-		"price_range":     true,
-		"province_id":     true,
+		"factory_name":         true,
+		"tax_id":               true,
+		"description":          true,
+		"factory_type_id":      true,
+		"specialization":       true,
+		"min_order":            true,
+		"lead_time_desc":       true,
+		"image_url":            true,
+		"background_image_url": true,
+		"price_range":          true,
+		"province_id":          true,
 	}
 
 	setClauses := make([]string, 0, len(fields))

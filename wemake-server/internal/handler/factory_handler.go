@@ -69,11 +69,12 @@ func (h *FactoryHandler) GetByID(c *fiber.Ctx) error {
 
 func (h *FactoryHandler) PatchProfile(c *fiber.Ctx) error {
 	type patchFactoryProfileRequest struct {
-		FactoryName   *string `json:"factory_name"`
-		TaxID         *string `json:"tax_id"`
-		Description   *string `json:"description"`
-		FactoryTypeID *int64  `json:"factory_type_id"`
-		ImageURL      *string `json:"image_url"`
+		FactoryName        *string `json:"factory_name"`
+		TaxID              *string `json:"tax_id"`
+		Description        *string `json:"description"`
+		FactoryTypeID      *int64  `json:"factory_type_id"`
+		ImageURL           *string `json:"image_url"`
+		BackgroundImageURL *string `json:"background_image_url"`
 	}
 
 	userID, err := getUserIDFromHeader(c)
@@ -113,6 +114,14 @@ func (h *FactoryHandler) PatchProfile(c *fiber.Ctx) error {
 			fields["image_url"] = nil
 		} else {
 			fields["image_url"] = imageURL
+		}
+	}
+	if req.BackgroundImageURL != nil {
+		backgroundImageURL := strings.TrimSpace(*req.BackgroundImageURL)
+		if backgroundImageURL == "" {
+			fields["background_image_url"] = nil
+		} else {
+			fields["background_image_url"] = backgroundImageURL
 		}
 	}
 	if req.FactoryTypeID != nil {

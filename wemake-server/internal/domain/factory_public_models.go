@@ -4,40 +4,41 @@ import "time"
 
 // FactoryAnalytics is the payload for GET /factories/me/analytics.
 type FactoryAnalytics struct {
-	FactoryID        int64   `json:"factory_id"`
-	TotalOrders      int64   `json:"total_orders"`
-	CompletedOrders  int64   `json:"completed_orders"`
-	ActiveOrders     int64   `json:"active_orders"`
-	CancelledOrders  int64   `json:"cancelled_orders"`
-	TotalRevenue     float64 `json:"total_revenue"`
-	TotalQuotations  int64   `json:"total_quotations"`
-	AcceptedQuotes   int64   `json:"accepted_quotes"`
-	PendingQuotes    int64   `json:"pending_quotes"`
-	TotalShowcases   int64   `json:"total_showcases"`
-	TotalViews       int64   `json:"total_views"`
-	TotalLikes       int64   `json:"total_likes"`
-	AverageRating    float64 `json:"average_rating"`
-	TotalReviews     int64   `json:"total_reviews"`
+	FactoryID       int64   `json:"factory_id"`
+	TotalOrders     int64   `json:"total_orders"`
+	CompletedOrders int64   `json:"completed_orders"`
+	ActiveOrders    int64   `json:"active_orders"`
+	CancelledOrders int64   `json:"cancelled_orders"`
+	TotalRevenue    float64 `json:"total_revenue"`
+	TotalQuotations int64   `json:"total_quotations"`
+	AcceptedQuotes  int64   `json:"accepted_quotes"`
+	PendingQuotes   int64   `json:"pending_quotes"`
+	TotalShowcases  int64   `json:"total_showcases"`
+	TotalViews      int64   `json:"total_views"`
+	TotalLikes      int64   `json:"total_likes"`
+	AverageRating   float64 `json:"average_rating"`
+	TotalReviews    int64   `json:"total_reviews"`
 }
 
 // FactoryListItem is the JSON shape for GET /api/v1/factories (Explore listing).
 type FactoryListItem struct {
-	FactoryID       int64    `json:"factory_id" db:"factory_id"`
-	FactoryName     string   `json:"factory_name" db:"factory_name"`
-	FactoryTypeID   int64    `json:"factory_type_id" db:"factory_type_id"`
-	FactoryTypeName *string  `json:"factory_type_name,omitempty" db:"factory_type_name"`
-	Specialization  *string  `json:"specialization,omitempty" db:"specialization"`
-	Rating          *float64 `json:"rating,omitempty" db:"rating"`
-	ReviewCount     int64    `json:"review_count" db:"review_count"`
-	MinOrder        *int     `json:"min_order,omitempty" db:"min_order"`
-	LeadTimeDesc    *string  `json:"lead_time_desc,omitempty" db:"lead_time_desc"`
-	IsVerified      bool     `json:"is_verified" db:"is_verified"`
-	CompletedOrders int64    `json:"completed_orders" db:"completed_orders"`
-	ImageURL        *string  `json:"image_url,omitempty" db:"image_url"`
-	Description     *string  `json:"description,omitempty" db:"description"`
-	PriceRange      *string  `json:"price_range,omitempty" db:"price_range"`
-	ProvinceID      *int64   `json:"province_id,omitempty" db:"province_id"`
-	ProvinceName    *string  `json:"province_name,omitempty" db:"province_name"`
+	FactoryID          int64    `json:"factory_id" db:"factory_id"`
+	FactoryName        string   `json:"factory_name" db:"factory_name"`
+	FactoryTypeID      int64    `json:"factory_type_id" db:"factory_type_id"`
+	FactoryTypeName    *string  `json:"factory_type_name,omitempty" db:"factory_type_name"`
+	Specialization     *string  `json:"specialization,omitempty" db:"specialization"`
+	Rating             *float64 `json:"rating,omitempty" db:"rating"`
+	ReviewCount        int64    `json:"review_count" db:"review_count"`
+	MinOrder           *int     `json:"min_order,omitempty" db:"min_order"`
+	LeadTimeDesc       *string  `json:"lead_time_desc,omitempty" db:"lead_time_desc"`
+	IsVerified         bool     `json:"is_verified" db:"is_verified"`
+	CompletedOrders    int64    `json:"completed_orders" db:"completed_orders"`
+	ImageURL           *string  `json:"image_url,omitempty" db:"image_url"`
+	BackgroundImageURL *string  `json:"background_image_url,omitempty" db:"background_image_url"`
+	Description        *string  `json:"description,omitempty" db:"description"`
+	PriceRange         *string  `json:"price_range,omitempty" db:"price_range"`
+	ProvinceID         *int64   `json:"province_id,omitempty" db:"province_id"`
+	ProvinceName       *string  `json:"province_name,omitempty" db:"province_name"`
 }
 
 type FactoryProfileCategory struct {
@@ -69,27 +70,28 @@ type FactoryProfileReview struct {
 
 // FactoryPublicDetail is GET /api/v1/factories/:id aggregate for FE profile page.
 type FactoryPublicDetail struct {
-	FactoryID       int64                       `json:"factory_id"`
-	FactoryName     string                      `json:"factory_name"`
-	FactoryTypeID   int64                       `json:"factory_type_id"`
-	FactoryTypeName *string                     `json:"factory_type_name,omitempty"`
-	TaxID           *string                     `json:"tax_id,omitempty"`
-	Specialization  *string                     `json:"specialization,omitempty"`
-	MinOrder        *int                        `json:"min_order,omitempty"`
-	LeadTimeDesc    *string                     `json:"lead_time_desc,omitempty"`
-	IsVerified      bool                        `json:"is_verified"`
-	Rating          *float64                    `json:"rating,omitempty"`
-	ReviewCount     int64                       `json:"review_count"`
-	CompletedOrders int64                       `json:"completed_orders"`
-	ImageURL        *string                     `json:"image_url,omitempty"`
-	Description     *string                     `json:"description,omitempty"`
-	PriceRange      *string                     `json:"price_range,omitempty"`
-	ProvinceID      *int64                      `json:"province_id,omitempty"`
-	ProvinceName    *string                     `json:"province_name,omitempty"`
-	Categories      []FactoryProfileCategory    `json:"categories"`
-	SubCategories   []FactoryProfileSubCategory `json:"sub_categories"`
-	Certificates    []FactoryProfileCertificate `json:"certificates"`
-	Reviews         []FactoryProfileReview      `json:"reviews"`
+	FactoryID          int64                       `json:"factory_id"`
+	FactoryName        string                      `json:"factory_name"`
+	FactoryTypeID      int64                       `json:"factory_type_id"`
+	FactoryTypeName    *string                     `json:"factory_type_name,omitempty"`
+	TaxID              *string                     `json:"tax_id,omitempty"`
+	Specialization     *string                     `json:"specialization,omitempty"`
+	MinOrder           *int                        `json:"min_order,omitempty"`
+	LeadTimeDesc       *string                     `json:"lead_time_desc,omitempty"`
+	IsVerified         bool                        `json:"is_verified"`
+	Rating             *float64                    `json:"rating,omitempty"`
+	ReviewCount        int64                       `json:"review_count"`
+	CompletedOrders    int64                       `json:"completed_orders"`
+	ImageURL           *string                     `json:"image_url,omitempty"`
+	BackgroundImageURL *string                     `json:"background_image_url,omitempty"`
+	Description        *string                     `json:"description,omitempty"`
+	PriceRange         *string                     `json:"price_range,omitempty"`
+	ProvinceID         *int64                      `json:"province_id,omitempty"`
+	ProvinceName       *string                     `json:"province_name,omitempty"`
+	Categories         []FactoryProfileCategory    `json:"categories"`
+	SubCategories      []FactoryProfileSubCategory `json:"sub_categories"`
+	Certificates       []FactoryProfileCertificate `json:"certificates"`
+	Reviews            []FactoryProfileReview      `json:"reviews"`
 }
 
 type FactoryDashboardCounts struct {
@@ -116,12 +118,12 @@ type FactoryDashboard struct {
 }
 
 type FactoryDashboardRFQItem struct {
-	RFQID         int64      `json:"rfq_id"`
-	Title         string     `json:"title"`
-	CategoryID    int64      `json:"category_id"`
-	SubCategoryID *int64     `json:"sub_category_id,omitempty"`
-	Status        string     `json:"status"`
-	CreatedAt     time.Time  `json:"created_at"`
+	RFQID         int64     `json:"rfq_id"`
+	Title         string    `json:"title"`
+	CategoryID    int64     `json:"category_id"`
+	SubCategoryID *int64    `json:"sub_category_id,omitempty"`
+	Status        string    `json:"status"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 type FactoryDashboardOrderItem struct {
