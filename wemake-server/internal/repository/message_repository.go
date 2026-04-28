@@ -77,10 +77,16 @@ func (r *MessageRepository) ReferenceExists(referenceType string, referenceID in
 func (r *MessageRepository) ListByReference(referenceType string, referenceID int64, userID int64) ([]domain.Message, error) {
 	var items []domain.Message
 	query := `
-		SELECT message_id, COALESCE(reference_type, '') AS reference_type, COALESCE(reference_id, 0) AS reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, boq_rfq_id, is_read
-		FROM messages
-		WHERE reference_type = $1 AND reference_id = $2 AND (sender_id = $3 OR receiver_id = $3)
-		ORDER BY created_at ASC
+		SELECT m.message_id,
+		       COALESCE(m.reference_type, '') AS reference_type,
+		       COALESCE(m.reference_id, 0)    AS reference_id,
+		       CASE WHEN m.reference_type = 'RQ' THEN rq.title ELSE NULL END AS rfq_title,
+		       m.sender_id, m.receiver_id, m.content, m.attachment_url,
+		       m.created_at, m.conv_id, m.message_type, m.quote_data, m.boq_rfq_id, m.is_read
+		FROM messages m
+		LEFT JOIN rfqs rq ON rq.rfq_id = m.reference_id AND m.reference_type = 'RQ'
+		WHERE m.reference_type = $1 AND m.reference_id = $2 AND (m.sender_id = $3 OR m.receiver_id = $3)
+		ORDER BY m.created_at ASC
 	`
 	err := r.db.Select(&items, query, referenceType, referenceID, userID)
 	return items, err
@@ -89,10 +95,16 @@ func (r *MessageRepository) ListByReference(referenceType string, referenceID in
 func (r *MessageRepository) ListByConvID(convID int64) ([]domain.Message, error) {
 	var items []domain.Message
 	query := `
-		SELECT message_id, COALESCE(reference_type, '') AS reference_type, COALESCE(reference_id, 0) AS reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, boq_rfq_id, is_read
-		FROM messages
-		WHERE conv_id = $1
-		ORDER BY created_at ASC
+		SELECT m.message_id,
+		       COALESCE(m.reference_type, '') AS reference_type,
+		       COALESCE(m.reference_id, 0)    AS reference_id,
+		       CASE WHEN m.reference_type = 'RQ' THEN rq.title ELSE NULL END AS rfq_title,
+		       m.sender_id, m.receiver_id, m.content, m.attachment_url,
+		       m.created_at, m.conv_id, m.message_type, m.quote_data, m.boq_rfq_id, m.is_read
+		FROM messages m
+		LEFT JOIN rfqs rq ON rq.rfq_id = m.reference_id AND m.reference_type = 'RQ'
+		WHERE m.conv_id = $1
+		ORDER BY m.created_at ASC
 	`
 	err := r.db.Select(&items, query, convID)
 	return items, err
