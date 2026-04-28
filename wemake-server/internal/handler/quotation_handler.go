@@ -32,6 +32,7 @@ func (h *QuotationHandler) CreateQuotation(c *fiber.Ctx) error {
 		LeadTimeDays     int64               `json:"lead_time_days"`
 		ValidityDays     int                 `json:"validity_days"`
 		ShippingMethodID int64               `json:"shipping_method_id"`
+		PaymentTerms     *string             `json:"payment_terms"`
 		ImageURLs        domain.StringArray  `json:"image_urls"`
 	}
 
@@ -50,8 +51,8 @@ func (h *QuotationHandler) CreateQuotation(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
 	}
 
-	if req.FactoryID <= 0 || req.PricePerPiece <= 0 || req.LeadTimeDays <= 0 || req.ShippingMethodID <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "factory_id, price_per_piece, lead_time_days, shipping_method_id are required"})
+	if req.FactoryID <= 0 || req.PricePerPiece <= 0 || req.LeadTimeDays <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "factory_id, price_per_piece, lead_time_days are required"})
 	}
 	if req.FactoryID != userID {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "factory_id must match authenticated user"})
@@ -78,11 +79,15 @@ func (h *QuotationHandler) CreateQuotation(c *fiber.Ctx) error {
 		LeadTimeDays:    req.LeadTimeDays,
 		ValidityDays:    validityDays,
 		ShippingMethodID: req.ShippingMethodID,
+		PaymentTerms:    req.PaymentTerms,
 		ImageURLs:       req.ImageURLs,
 	}
 	if err := h.service.Create(item); err != nil {
 		if errors.Is(err, service.ErrFactorySuspended) {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "factory account is suspended"})
+		}
+		if errors.Is(err, service.ErrPaymentTermsInvalid) || errors.Is(err, service.ErrInvalidShippingMethod) || errors.Is(err, service.ErrInvalidLineItem) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create quotation"})
 	}
@@ -380,6 +385,7 @@ func (h *QuotationHandler) PatchQuotation(c *fiber.Ctx) error {
 		LeadTimeDays     int64              `json:"lead_time_days"`
 		ValidityDays     int                `json:"validity_days"`
 		ShippingMethodID int64              `json:"shipping_method_id"`
+		PaymentTerms     *string            `json:"payment_terms"`
 		Reason           string             `json:"reason"`
 		ImageURLs        domain.StringArray `json:"image_urls"`
 	}
@@ -400,11 +406,20 @@ func (h *QuotationHandler) PatchQuotation(c *fiber.Ctx) error {
 	if req.ToolingMoldCost > 0 {
 		moldCost = req.ToolingMoldCost
 	}
-	item, err := h.service.PatchBody(int64(quotationID), userID, req.PricePerPiece, moldCost, req.LeadTimeDays, req.ShippingMethodID, req.Reason)
+	item, err := h.service.PatchBody(
+		int64(quotationID),
+		userID,
+		req.PricePerPiece,
+		moldCost,
+		req.ShippingCost,
+		req.PackagingCost,
+		req.ToolingMoldCost,
+		req.LeadTimeDays,
+		req.ShippingMethodID,
+		req.PaymentTerms,
+		req.Reason,
+	)
 	if err != nil {
-		if errors.Is(err, service.ErrQuotationPatchReason) {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
-		}
 		if errors.Is(err, service.ErrQuotationLocked) {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error()})
 		}

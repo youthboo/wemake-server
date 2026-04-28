@@ -265,7 +265,9 @@ func (r *RFQRepository) getAddressByID(addressID int64) (*domain.Address, error)
 	return &address, nil
 }
 
-// ListMatchingForFactory returns open RFQs whose category (and optional sub-category) match the factory maps.
+// ListMatchingForFactory returns open RFQs whose category (and optional sub-category) match
+// the factory's registered maps — used for the factory RFQ board only.
+// To view a specific RFQ detail regardless of category, use GetByIDAny via GetForViewer.
 func (r *RFQRepository) ListMatchingForFactory(factoryID int64, status string) ([]domain.RFQ, error) {
 	st := status
 	if st == "" {

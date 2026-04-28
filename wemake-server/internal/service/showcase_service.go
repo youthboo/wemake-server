@@ -184,17 +184,12 @@ func mergeShowcaseInput(item *domain.FactoryShowcase, input domain.ShowcaseWrite
 }
 
 func normalizeLinkedShowcases(values []string) []string {
-	seen := map[string]struct{}{}
 	out := make([]string, 0, len(values))
 	for _, raw := range values {
 		v := strings.TrimSpace(raw)
 		if v == "" {
 			continue
 		}
-		if _, ok := seen[v]; ok {
-			continue
-		}
-		seen[v] = struct{}{}
 		out = append(out, v)
 	}
 	return out

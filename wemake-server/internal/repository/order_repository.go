@@ -26,6 +26,7 @@ type QuotationOrderSource struct {
 	MoldCost      float64 `db:"mold_cost"`
 	LeadTimeDays  int64   `db:"lead_time_days"`
 	Status        string  `db:"status"`
+	GrandTotal    float64 `db:"grand_total"` // VAT-inclusive total from commission calculation
 }
 
 type OrderDetailRow struct {
@@ -53,7 +54,8 @@ func NewOrderRepository(db *sqlx.DB) *OrderRepository {
 func (r *OrderRepository) GetOrderSourceByQuotationID(quotationID, userID int64) (*QuotationOrderSource, error) {
 	var src QuotationOrderSource
 	query := `
-		SELECT q.quote_id, q.rfq_id, rfq.user_id, q.factory_id, q.price_per_piece, rfq.quantity, q.mold_cost, q.lead_time_days, q.status
+		SELECT q.quote_id, q.rfq_id, rfq.user_id, q.factory_id, q.price_per_piece, rfq.quantity,
+		       q.mold_cost, q.lead_time_days, q.status, COALESCE(q.grand_total, 0) AS grand_total
 		FROM quotations q
 		INNER JOIN rfqs rfq ON rfq.rfq_id = q.rfq_id
 		WHERE q.quote_id = $1 AND rfq.user_id = $2
@@ -119,7 +121,8 @@ func (r *OrderRepository) OrderExistsForQuoteTx(tx *sqlx.Tx, quoteID int64) (boo
 func (r *OrderRepository) GetOrderSourceByQuotationIDTx(tx *sqlx.Tx, quotationID, userID int64) (*QuotationOrderSource, error) {
 	var src QuotationOrderSource
 	query := `
-		SELECT q.quote_id, q.rfq_id, rfq.user_id, q.factory_id, q.price_per_piece, rfq.quantity, q.mold_cost, q.lead_time_days, q.status
+		SELECT q.quote_id, q.rfq_id, rfq.user_id, q.factory_id, q.price_per_piece, rfq.quantity,
+		       q.mold_cost, q.lead_time_days, q.status, COALESCE(q.grand_total, 0) AS grand_total
 		FROM quotations q
 		INNER JOIN rfqs rfq ON rfq.rfq_id = q.rfq_id
 		WHERE q.quote_id = $1 AND rfq.user_id = $2
