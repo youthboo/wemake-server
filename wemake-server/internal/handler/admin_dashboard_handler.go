@@ -29,8 +29,8 @@ func (h *AdminDashboardHandler) GetSummary(c *fiber.Ctx) error {
 }
 
 func (h *AdminDashboardHandler) GetRevenueChart(c *fiber.Ctx) error {
-	granularity := c.Query("granularity", "day")
-	from, to, err := parseAdminPeriod("custom", c.Query("date_from"), c.Query("date_to"))
+	granularity := normalizeDashboardGranularity(c.Query("granularity", "day"))
+	from, to, err := parseAdminRange(c.Query("date_from"), c.Query("date_to"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -42,7 +42,7 @@ func (h *AdminDashboardHandler) GetRevenueChart(c *fiber.Ctx) error {
 }
 
 func (h *AdminDashboardHandler) GetTopFactories(c *fiber.Ctx) error {
-	from, to, err := parseAdminPeriod("custom", c.Query("date_from"), c.Query("date_to"))
+	from, to, err := parseAdminRange(c.Query("date_from"), c.Query("date_to"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -87,5 +87,24 @@ func parseAdminPeriod(period, rawFrom, rawTo string) (time.Time, time.Time, erro
 		return from, to.Add(24 * time.Hour), nil
 	default:
 		return time.Time{}, time.Time{}, fiber.NewError(fiber.StatusBadRequest, "invalid period")
+	}
+}
+
+func parseAdminRange(rawFrom, rawTo string) (time.Time, time.Time, error) {
+	if rawFrom == "" && rawTo == "" {
+		return parseAdminPeriod("month", "", "")
+	}
+	if rawFrom == "" || rawTo == "" {
+		return time.Time{}, time.Time{}, fiber.NewError(fiber.StatusBadRequest, "date_from and date_to must be provided together")
+	}
+	return parseAdminPeriod("custom", rawFrom, rawTo)
+}
+
+func normalizeDashboardGranularity(granularity string) string {
+	switch granularity {
+	case "week", "month":
+		return granularity
+	default:
+		return "day"
 	}
 }

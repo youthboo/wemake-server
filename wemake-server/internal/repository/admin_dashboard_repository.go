@@ -22,7 +22,7 @@ func (r *AdminDashboardRepository) GetSummary(from, to time.Time, period string)
 	out := &domain.AdminDashboardSummary{
 		Period:   period,
 		DateFrom: from.Format("2006-01-02"),
-		DateTo:   to.Format("2006-01-02"),
+		DateTo:   to.AddDate(0, 0, -1).Format("2006-01-02"),
 	}
 	hasQuoteVAT, err := r.hasColumn("quotations", "vat_amount")
 	if err != nil {
