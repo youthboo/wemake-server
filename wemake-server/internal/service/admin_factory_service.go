@@ -14,16 +14,19 @@ import (
 var (
 	ErrFactoryApprovalState = errors.New("invalid factory approval state transition")
 	ErrReasonRequired       = errors.New("reason must be at least 10 characters")
+	ErrFactoryNotFound      = errors.New("factory not found")
+	ErrFactoryConfigMissing = errors.New("factory config not found")
 )
 
 type AdminFactoryService struct {
 	factories  *repository.FactoryRepository
 	audit      *repository.AdminAuditRepository
 	commission *repository.CommissionRepository
+	configs    *repository.PlatformConfigRepository
 }
 
-func NewAdminFactoryService(factories *repository.FactoryRepository, audit *repository.AdminAuditRepository, commission *repository.CommissionRepository) *AdminFactoryService {
-	return &AdminFactoryService{factories: factories, audit: audit, commission: commission}
+func NewAdminFactoryService(factories *repository.FactoryRepository, audit *repository.AdminAuditRepository, commission *repository.CommissionRepository, configs *repository.PlatformConfigRepository) *AdminFactoryService {
+	return &AdminFactoryService{factories: factories, audit: audit, commission: commission, configs: configs}
 }
 
 func (s *AdminFactoryService) Approve(factoryID, actorID int64, note string, ip *string) error {
@@ -114,6 +117,55 @@ func (s *AdminFactoryService) HydrateAdminDetail(factoryID int64) (*domain.Admin
 	item.CommissionOverride, _ = s.commission.GetActiveRuleForFactory(factoryID)
 	item.IsCommissionExempt, _ = s.commission.FactoryHasActiveExemption(factoryID)
 	return item, nil
+}
+
+func (s *AdminFactoryService) GetFactoryConfig(factoryID int64) (*domain.FactoryConfigResponse, error) {
+	item, err := s.configs.GetFactoryConfig(factoryID)
+	if err != nil {
+		if repository.IsNotFoundError(err) {
+			return nil, ErrFactoryNotFound
+		}
+		return nil, err
+	}
+	return item, nil
+}
+
+func (s *AdminFactoryService) AssignFactoryConfig(factoryID, actorID int64, req domain.AssignFactoryConfigRequest, ip *string) (*domain.FactoryConfigResponse, error) {
+	before, err := s.configs.GetFactoryAssignedConfigID(factoryID)
+	if err != nil {
+		if repository.IsNotFoundError(err) {
+			return nil, ErrFactoryNotFound
+		}
+		return nil, err
+	}
+	configID := req.ConfigID
+	if configID == 0 {
+		defaultCfg, err := s.configs.GetDefault()
+		if err != nil {
+			return nil, err
+		}
+		configID = defaultCfg.ConfigID
+	} else if _, err := s.configs.GetByID(configID); err != nil {
+		if repository.IsNotFoundError(err) {
+			return nil, ErrFactoryConfigMissing
+		}
+		return nil, err
+	}
+	if err := s.configs.AssignFactoryConfig(factoryID, configID); err != nil {
+		if repository.IsNotFoundError(err) {
+			return nil, ErrFactoryNotFound
+		}
+		return nil, err
+	}
+	payload := map[string]interface{}{
+		"before_config_id": before,
+		"after_config_id":  configID,
+		"note":             strings.TrimSpace(req.Note),
+	}
+	if err := s.insertAudit(actorID, "FACTORY_CONFIG_ASSIGN", "factory", factoryID, payload, ip); err != nil {
+		return nil, err
+	}
+	return s.GetFactoryConfig(factoryID)
 }
 
 func (s *AdminFactoryService) insertAudit(actorID int64, action, targetType string, targetID int64, payload interface{}, ip *string) error {

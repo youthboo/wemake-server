@@ -3,7 +3,6 @@ package service
 import (
 	"errors"
 	"math"
-	"time"
 
 	"github.com/yourusername/wemake/internal/domain"
 	"github.com/yourusername/wemake/internal/repository"
@@ -37,8 +36,8 @@ type CommissionInput struct {
 }
 
 type CommissionService struct {
-	configs    *repository.PlatformConfigRepository
-	overrides  *repository.CommissionRepository
+	configs   *repository.PlatformConfigRepository
+	overrides *repository.CommissionRepository
 }
 
 func NewCommissionService(configs *repository.PlatformConfigRepository, overrides *repository.CommissionRepository) *CommissionService {
@@ -49,17 +48,14 @@ func round2(v float64) float64 {
 	return math.Round(v*100) / 100
 }
 
-func resolveEffectiveRate(now time.Time, cfg *domain.PlatformConfig) float64 {
-	if cfg.PromoCommissionRate != nil &&
-		cfg.PromoStartAt != nil && cfg.PromoEndAt != nil &&
-		!now.Before(*cfg.PromoStartAt) && !now.After(*cfg.PromoEndAt) {
-		return *cfg.PromoCommissionRate
-	}
-	return cfg.DefaultCommissionRate
-}
-
 func (s *CommissionService) Calculate(in CommissionInput) (*Breakdown, error) {
-	cfg, err := s.configs.GetActive()
+	var cfg *domain.PlatformConfig
+	var err error
+	if in.FactoryID != nil {
+		cfg, err = s.configs.GetByFactoryID(*in.FactoryID)
+	} else {
+		cfg, err = s.configs.GetDefault()
+	}
 	if err != nil {
 		return nil, ErrCommissionConfigMissing
 	}
@@ -73,16 +69,7 @@ func (s *CommissionService) Calculate(in CommissionInput) (*Breakdown, error) {
 	preVatBase := round2(subtotal + in.ShippingCost + in.PackagingCost + in.ToolingCost)
 	vatAmount := round2(preVatBase * cfg.VatRate / 100)
 	grandTotal := round2(preVatBase + vatAmount)
-	commissionRate := resolveEffectiveRate(time.Now().UTC(), cfg)
-	if in.FactoryID != nil && s.overrides != nil {
-		if ex, err := s.overrides.GetActiveExemptionForFactory(*in.FactoryID); err == nil && ex != nil {
-			commissionRate = 0
-		} else if err == nil {
-			if rule, ruleErr := s.overrides.GetActiveRuleForFactory(*in.FactoryID); ruleErr == nil && rule != nil {
-				commissionRate = rule.RatePercent
-			}
-		}
-	}
+	commissionRate := cfg.DefaultCommissionRate
 	commissionAmount := round2(grandTotal * commissionRate / 100)
 	factoryNet := round2(grandTotal - commissionAmount)
 

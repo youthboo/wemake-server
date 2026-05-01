@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -86,12 +87,56 @@ func (h *AdminFactoryHandler) PatchVerification(c *fiber.Ctx) error {
 	}
 	item, _ := h.service.HydrateAdminDetail(factoryID)
 	return c.JSON(fiber.Map{
-		"factory_id":   factoryID,
-		"is_verified":  item.IsVerified,
-		"verified_at":  item.VerifiedAt,
-		"verified_by":  item.VerifiedBy,
+		"factory_id":      factoryID,
+		"is_verified":     item.IsVerified,
+		"verified_at":     item.VerifiedAt,
+		"verified_by":     item.VerifiedBy,
 		"approval_status": item.ApprovalStatus,
 	})
+}
+
+func (h *AdminFactoryHandler) GetFactoryConfig(c *fiber.Ctx) error {
+	factoryID, err := strconv.ParseInt(c.Params("factory_id"), 10, 64)
+	if err != nil || factoryID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid factory_id"})
+	}
+	item, err := h.service.GetFactoryConfig(factoryID)
+	if err != nil {
+		if errors.Is(err, service.ErrFactoryNotFound) || repository.IsNotFoundError(err) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "factory not found"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch factory config"})
+	}
+	return c.JSON(item)
+}
+
+func (h *AdminFactoryHandler) AssignFactoryConfig(c *fiber.Ctx) error {
+	factoryID, actorID, err := parseFactoryActor(c)
+	if err != nil {
+		status := fiber.StatusBadRequest
+		var fiberErr *fiber.Error
+		if errors.As(err, &fiberErr) && fiberErr.Code == fiber.StatusUnauthorized {
+			status = fiber.StatusUnauthorized
+		}
+		return c.Status(status).JSON(fiber.Map{"error": err.Error()})
+	}
+	var req domain.AssignFactoryConfigRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	ip := c.IP()
+	item, err := h.service.AssignFactoryConfig(factoryID, actorID, req, &ip)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrFactoryNotFound):
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "factory not found"})
+		case errors.Is(err, service.ErrFactoryConfigMissing):
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "platform config not found"})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to assign factory config"})
+		}
+	}
+	return c.JSON(item)
 }
 
 func (h *AdminFactoryHandler) mutateFactoryState(c *fiber.Ctx, fn func(int64, int64, string, *string) error) error {
@@ -99,7 +144,9 @@ func (h *AdminFactoryHandler) mutateFactoryState(c *fiber.Ctx, fn func(int64, in
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
-	var req struct{ Note string `json:"note"` }
+	var req struct {
+		Note string `json:"note"`
+	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
 	}
@@ -116,7 +163,9 @@ func (h *AdminFactoryHandler) mutateFactoryReasonState(c *fiber.Ctx, fn func(int
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
-	var req struct{ Reason string `json:"reason"` }
+	var req struct {
+		Reason string `json:"reason"`
+	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
 	}

@@ -4,6 +4,7 @@ import "time"
 
 type PlatformConfig struct {
 	ConfigID              int64      `db:"config_id" json:"config_id"`
+	Label                 *string    `db:"label" json:"label,omitempty"`
 	DefaultCommissionRate float64    `db:"default_commission_rate" json:"default_commission_rate"`
 	PromoCommissionRate   *float64   `db:"promo_commission_rate" json:"promo_commission_rate,omitempty"`
 	PromoStartAt          *time.Time `db:"promo_start_at" json:"promo_start_at,omitempty"`
@@ -15,6 +16,33 @@ type PlatformConfig struct {
 	EffectiveTo           *time.Time `db:"effective_to" json:"effective_to,omitempty"`
 	CreatedBy             *int64     `db:"created_by" json:"created_by,omitempty"`
 	CreatedAt             time.Time  `db:"created_at" json:"created_at"`
+}
+
+type UpdatePlatformConfigRequest struct {
+	Label                 string  `json:"label"`
+	DefaultCommissionRate float64 `json:"default_commission_rate"`
+	VatRate               float64 `json:"vat_rate"`
+}
+
+type CreatePlatformConfigRequest struct {
+	Label                 string   `json:"label"`
+	DefaultCommissionRate float64  `json:"default_commission_rate"`
+	VatRate               *float64 `json:"vat_rate"`
+	CurrencyCode          string   `json:"currency_code"`
+	EffectiveTo           *string  `json:"effective_to,omitempty"`
+}
+
+type AssignFactoryConfigRequest struct {
+	ConfigID int64  `json:"config_id"`
+	Note     string `json:"note"`
+}
+
+type FactoryConfigResponse struct {
+	FactoryID             int64   `db:"factory_id" json:"factory_id"`
+	ConfigID              int64   `db:"config_id" json:"config_id"`
+	Label                 string  `db:"label" json:"label"`
+	DefaultCommissionRate float64 `db:"default_commission_rate" json:"default_commission_rate"`
+	VatRate               float64 `db:"vat_rate" json:"vat_rate"`
 }
 
 type QuotationItem struct {
