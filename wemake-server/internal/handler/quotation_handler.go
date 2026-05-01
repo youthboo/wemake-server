@@ -215,14 +215,15 @@ func (h *QuotationHandler) Preview(c *fiber.Ctx) error {
 		PackagingCost   float64                `json:"packaging_cost"`
 		ToolingMoldCost float64                `json:"tooling_mold_cost"`
 	}
-	if _, err := getUserIDFromHeader(c); err != nil {
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
 	}
 	var req reqBody
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
 	}
-	item, err := h.service.Preview(req.Items, req.DiscountAmount, req.ShippingCost, req.PackagingCost, req.ToolingMoldCost)
+	item, err := h.service.Preview(req.Items, req.DiscountAmount, req.ShippingCost, req.PackagingCost, req.ToolingMoldCost, &userID)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}

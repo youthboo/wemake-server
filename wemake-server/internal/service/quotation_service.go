@@ -309,7 +309,7 @@ func (s *QuotationService) UpdateImageURLs(quoteID int64, imageURLs domain.Strin
 	return s.repo.UpdateImageURLs(quoteID, imageURLs)
 }
 
-func (s *QuotationService) Preview(items []domain.QuotationItem, discountAmount, shippingCost, packagingCost, toolingCost float64) (*Breakdown, error) {
+func (s *QuotationService) Preview(items []domain.QuotationItem, discountAmount, shippingCost, packagingCost, toolingCost float64, factoryID *int64) (*Breakdown, error) {
 	if err := validateQuotationItems(items); err != nil {
 		return nil, err
 	}
@@ -319,6 +319,7 @@ func (s *QuotationService) Preview(items []domain.QuotationItem, discountAmount,
 		ShippingCost:   shippingCost,
 		PackagingCost:  packagingCost,
 		ToolingCost:    toolingCost,
+		FactoryID:      factoryID,
 	})
 }
 

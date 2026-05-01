@@ -301,3 +301,85 @@ type AdminProfile struct {
 	CreatedBy   *int64     `db:"created_by" json:"created_by,omitempty"`
 	CreatedAt   time.Time  `db:"created_at" json:"created_at"`
 }
+
+// ─── Customer admin models ────────────────────────────────────────────────────
+
+type AdminCustomerListItem struct {
+	UserID        int64   `db:"user_id"        json:"user_id"`
+	Email         string  `db:"email"          json:"email"`
+	FirstName     string  `db:"first_name"     json:"first_name"`
+	LastName      string  `db:"last_name"      json:"last_name"`
+	Phone         string  `db:"phone"          json:"phone,omitempty"`
+	IsActive      bool    `db:"is_active"      json:"is_active"`
+	TotalOrders   int     `db:"total_orders"   json:"total_orders"`
+	TotalSpend    float64 `db:"total_spend"    json:"total_spend"`
+	WalletBalance float64 `db:"wallet_balance" json:"wallet_balance"`
+	CreatedAt     string  `db:"created_at"     json:"created_at"`
+}
+
+type AdminCustomerDetail struct {
+	UserID      int64   `db:"user_id"      json:"user_id"`
+	Email       string  `db:"email"        json:"email"`
+	FirstName   string  `db:"first_name"   json:"first_name"`
+	LastName    string  `db:"last_name"    json:"last_name"`
+	Phone       string  `db:"phone"        json:"phone,omitempty"`
+	Address     string  `db:"address"      json:"address,omitempty"`
+	IsActive    bool    `db:"is_active"    json:"is_active"`
+	TotalOrders int     `db:"total_orders" json:"total_orders"`
+	TotalSpend  float64 `db:"total_spend"  json:"total_spend"`
+	CreatedAt   string  `db:"created_at"   json:"created_at"`
+	WalletID    *int64  `db:"wallet_id"    json:"wallet_id,omitempty"`
+	GoodFund    float64 `db:"good_fund"    json:"good_fund"`
+	PendingFund float64 `db:"pending_fund" json:"pending_fund"`
+}
+
+type AdminWalletTxItem struct {
+	TxID      string   `db:"tx_id"     json:"tx_id"`
+	WalletID  int64    `db:"wallet_id" json:"wallet_id"`
+	OrderID   *int64   `db:"order_id"  json:"order_id,omitempty"`
+	Type      string   `db:"type"      json:"type"`
+	Amount    float64  `db:"amount"    json:"amount"`
+	Status    string   `db:"status"    json:"status"`
+	CreatedAt string   `db:"created_at" json:"created_at"`
+}
+
+type AdminCustomerWallet struct {
+	WalletID     *int64              `json:"wallet_id,omitempty"`
+	UserID       int64               `json:"user_id"`
+	GoodFund     float64             `json:"good_fund"`
+	PendingFund  float64             `json:"pending_fund"`
+	Total        float64             `json:"total"`
+	Transactions []AdminWalletTxItem `json:"transactions"`
+}
+
+type AdminTopCustomer struct {
+	UserID      int64   `db:"user_id"      json:"user_id"`
+	FirstName   string  `db:"first_name"   json:"first_name"`
+	LastName    string  `db:"last_name"    json:"last_name"`
+	Email       string  `db:"email"        json:"email"`
+	TotalOrders int     `db:"total_orders" json:"total_orders"`
+	TotalSpend  float64 `db:"total_spend"  json:"total_spend"`
+}
+
+// ─── Settlement admin models ──────────────────────────────────────────────────
+
+type AdminSettlementListItem struct {
+	SettlementID int64   `db:"settlement_id" json:"settlement_id"`
+	FactoryID    int64   `db:"factory_id"    json:"factory_id"`
+	OrderID      int64   `db:"order_id"      json:"order_id"`
+	Amount       float64 `db:"amount"        json:"amount"`
+	Status       string  `db:"status"        json:"status"`
+	CreatedAt    string  `db:"created_at"    json:"created_at"`
+	UpdatedAt    string  `db:"updated_at"    json:"updated_at,omitempty"`
+}
+
+// AdminCustomerOrderItem is a lightweight order row for customer detail page
+type AdminCustomerOrderItem struct {
+	OrderID     int64   `db:"order_id"     json:"order_id"`
+	RFQID       int64   `db:"rfq_id"       json:"rfq_id"`
+	FactoryID   int64   `db:"factory_id"   json:"factory_id"`
+	FactoryName string  `db:"factory_name" json:"factory_name"`
+	GrandTotal  float64 `db:"grand_total"  json:"grand_total"`
+	Status      string  `db:"status"       json:"status"`
+	CreatedAt   string  `db:"created_at"   json:"created_at"`
+}

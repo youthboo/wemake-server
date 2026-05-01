@@ -59,6 +59,8 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	commissionRepo := repository.NewCommissionRepository(db)
 	adminAuditRepo := repository.NewAdminAuditRepository(db)
 	adminDashboardRepo := repository.NewAdminDashboardRepository(db)
+	customerAdminRepo := repository.NewCustomerAdminRepository(db)
+	settlementAdminRepo := repository.NewSettlementAdminRepository(db)
 
 	// Initialize services
 	authService := service.NewAuthService(authRepo, cfg.JWTSecret)
@@ -136,6 +138,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	adminOrderHandler := handler.NewAdminOrderHandler(orderRepo, orderService, withdrawalRepo, disputeRepo, adminAuditRepo)
 	adminConfigHandler := handler.NewAdminConfigHandler(commissionRepo, adminAuditRepo)
 	adminUserHandler := handler.NewAdminUserHandler(authService, authRepo)
+	adminCustomerHandler := handler.NewAdminCustomerHandler(customerAdminRepo, settlementAdminRepo)
 
 	// Health check route
 	app.Get("/health", func(c *fiber.Ctx) error {
@@ -187,6 +190,18 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	admin.Get("/audit-log", middleware.RequireRole(authService, domain.RoleAdmin, domain.RoleSuperAdmin), adminConfigHandler.ListAuditLog)
 	admin.Post("/users", middleware.RequireRole(authService, domain.RoleSuperAdmin), adminUserHandler.Create)
 	admin.Get("/users", middleware.RequireRole(authService, domain.RoleSuperAdmin), adminUserHandler.List)
+
+	// Customer admin (AD + SA)
+	admin.Get("/customers", middleware.RequireRole(authService, domain.RoleAdmin, domain.RoleSuperAdmin), adminCustomerHandler.ListCustomers)
+	admin.Get("/customers/:user_id", middleware.RequireRole(authService, domain.RoleAdmin, domain.RoleSuperAdmin), adminCustomerHandler.GetCustomerDetail)
+	admin.Get("/customers/:user_id/wallet", middleware.RequireRole(authService, domain.RoleAdmin, domain.RoleSuperAdmin), adminCustomerHandler.GetCustomerWallet)
+	admin.Get("/customers/:user_id/orders", middleware.RequireRole(authService, domain.RoleAdmin, domain.RoleSuperAdmin), adminCustomerHandler.ListCustomerOrders)
+
+	// Dashboard additions
+	admin.Get("/dashboard/top-customers", middleware.RequireRole(authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), adminCustomerHandler.ListTopCustomers)
+
+	// Factory settlements
+	admin.Get("/factories/:factory_id/settlements", middleware.RequireRole(authService, domain.RoleAdmin, domain.RoleSuperAdmin), adminCustomerHandler.ListFactorySettlements)
 
 	auth := api.Group("/auth")
 	auth.Post("/register", authHandler.Register)
