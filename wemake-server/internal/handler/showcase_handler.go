@@ -224,6 +224,7 @@ func writeShowcaseError(c *fiber.Ctx, err error, fallback string) error {
 	if errors.Is(err, sql.ErrNoRows) {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": errShowcaseNotFound})
 	}
+	log.Printf("[showcase] %s: %v", fallback, err)
 	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fallback})
 }
 
