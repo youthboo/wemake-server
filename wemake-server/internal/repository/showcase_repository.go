@@ -351,7 +351,33 @@ func (r *ShowcaseRepository) Create(showcase *domain.FactoryShowcase) error {
 
 func (r *ShowcaseRepository) GetByID(showcaseID, factoryID int64) (*domain.FactoryShowcase, error) {
 	var s domain.FactoryShowcase
-	err := r.db.Get(&s, `SELECT * FROM factory_showcases WHERE showcase_id = $1 AND factory_id = $2`, showcaseID, factoryID)
+	err := r.db.Get(&s, `
+		SELECT
+			showcase_id,
+			factory_id,
+			content_type,
+			title,
+			excerpt,
+			image_url,
+			category_id,
+			sub_category_id,
+			moq,
+			base_price,
+			promo_price,
+			start_date,
+			end_date,
+			content,
+			linked_showcases,
+			COALESCE(tags, '[]'::jsonb) AS tags,
+			COALESCE(likes_count, 0) AS likes_count,
+			COALESCE(view_count, 0) AS view_count,
+			status,
+			created_at,
+			updated_at,
+			published_at
+		FROM factory_showcases
+		WHERE showcase_id = $1 AND factory_id = $2
+	`, showcaseID, factoryID)
 	if err != nil {
 		return nil, err
 	}
