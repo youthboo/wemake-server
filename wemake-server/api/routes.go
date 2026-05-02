@@ -368,6 +368,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	showcases.Post("/:showcase_id/inquire", conversationHandler.InquireShowcase)
 	showcases.Get("/:showcase_id/analytics", showcaseHandler.GetAnalytics)
 	showcases.Get("/:showcase_id/images", showcaseHandler.ListImages)
+	showcases.Post("/:showcase_id/images", showcaseHandler.CreateImage)
 	showcases.Post("/:showcase_id/view", showcaseHandler.RecordView)
 	showcases.Patch("/:showcase_id/status", showcaseHandler.PatchStatus)
 	showcases.Put("/:showcase_id", showcaseHandler.Put)

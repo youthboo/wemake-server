@@ -567,29 +567,81 @@ func (r *ShowcaseRepository) Delete(showcaseID, factoryID int64) error {
 
 // CreateImage adds a gallery image to a showcase (max 10 per showcase, ownership verified).
 func (r *ShowcaseRepository) CreateImage(img *domain.ShowcaseImage, factoryID int64) error {
-	// Verify ownership
-	var ownerID int64
-	if err := r.db.Get(&ownerID, `SELECT factory_id FROM factory_showcases WHERE showcase_id = $1`, img.ShowcaseID); err != nil {
+	var head struct {
+		FactoryID       int64                `db:"factory_id"`
+		ImageURL        *string              `db:"image_url"`
+		LinkedShowcases domain.JSONLinkArray `db:"linked_showcases"`
+	}
+	if err := r.db.Get(&head, `
+		SELECT factory_id, image_url, linked_showcases
+		FROM factory_showcases
+		WHERE showcase_id = $1
+	`, img.ShowcaseID); err != nil {
 		return sql.ErrNoRows
 	}
-	if ownerID != factoryID {
+	if head.FactoryID != factoryID {
 		return domain.ErrForbidden
 	}
 
-	// Enforce max 10 images per showcase
-	var count int
-	if err := r.db.Get(&count, `SELECT COUNT(*) FROM showcase_images WHERE showcase_id = $1`, img.ShowcaseID); err != nil {
-		return err
+	imageURL := strings.TrimSpace(img.ImageURL)
+	if imageURL == "" {
+		return nil
 	}
-	if count >= 10 {
+
+	linked := make([]string, 0, len(head.LinkedShowcases)+1)
+	seen := map[string]struct{}{}
+	for _, raw := range head.LinkedShowcases {
+		v := strings.TrimSpace(raw)
+		if v == "" || v == imageURL {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		linked = append(linked, v)
+	}
+
+	insertAt := img.SortOrder
+	if insertAt <= 0 {
+		insertAt = len(linked)
+	} else {
+		insertAt--
+	}
+	if insertAt < 0 {
+		insertAt = 0
+	}
+	if insertAt > len(linked) {
+		insertAt = len(linked)
+	}
+	linked = append(linked, "")
+	copy(linked[insertAt+1:], linked[insertAt:])
+	linked[insertAt] = imageURL
+
+	if len(linked) > 5 {
 		return domain.ErrImageLimitExceeded
 	}
 
-	return r.db.Get(img, `
-		INSERT INTO showcase_images (showcase_id, image_url, sort_order, caption)
-		VALUES ($1, $2, $3, $4)
-		RETURNING image_id, showcase_id, image_url, sort_order, caption
-	`, img.ShowcaseID, img.ImageURL, img.SortOrder, img.Caption)
+	res, err := r.db.Exec(`
+		UPDATE factory_showcases
+		SET image_url = COALESCE(NULLIF(image_url, ''), $1),
+		    linked_showcases = $2,
+		    updated_at = NOW()
+		WHERE showcase_id = $3 AND factory_id = $4
+	`, imageURL, domain.JSONLinkArray(linked), img.ShowcaseID, factoryID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	img.ImageURL = imageURL
+	img.ShowcaseID = img.ShowcaseID
+	return nil
 }
 
 func (r *ShowcaseRepository) ListImages(showcaseID, callerID int64) ([]domain.ShowcaseImage, error) {
