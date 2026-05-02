@@ -592,6 +592,56 @@ func (r *ShowcaseRepository) CreateImage(img *domain.ShowcaseImage, factoryID in
 	`, img.ShowcaseID, img.ImageURL, img.SortOrder, img.Caption)
 }
 
+func (r *ShowcaseRepository) ListImages(showcaseID, callerID int64) ([]domain.ShowcaseImage, error) {
+	var head struct {
+		FactoryID       int64                `db:"factory_id"`
+		Status          string               `db:"status"`
+		ImageURL        *string              `db:"image_url"`
+		LinkedShowcases domain.JSONLinkArray `db:"linked_showcases"`
+	}
+	if err := r.db.Get(&head, `
+		SELECT factory_id, status, image_url, linked_showcases
+		FROM factory_showcases
+		WHERE showcase_id = $1
+	`, showcaseID); err != nil {
+		return nil, err
+	}
+	if head.Status != "AC" && callerID != head.FactoryID {
+		return nil, sql.ErrNoRows
+	}
+
+	images := []domain.ShowcaseImage{}
+	sortOrder := 0
+	seen := map[string]struct{}{}
+	addVirtual := func(raw string) {
+		url := strings.TrimSpace(raw)
+		if url == "" {
+			return
+		}
+		lower := strings.ToLower(url)
+		if !strings.HasPrefix(lower, "https://") && !strings.HasPrefix(lower, "http://") {
+			return
+		}
+		if _, ok := seen[url]; ok {
+			return
+		}
+		seen[url] = struct{}{}
+		images = append(images, domain.ShowcaseImage{
+			ShowcaseID: showcaseID,
+			ImageURL:   url,
+			SortOrder:  sortOrder,
+		})
+		sortOrder++
+	}
+	if head.ImageURL != nil {
+		addVirtual(*head.ImageURL)
+	}
+	for _, ref := range head.LinkedShowcases {
+		addVirtual(ref)
+	}
+	return images, nil
+}
+
 // DeleteImage removes a gallery image (ownership verified via showcase).
 func (r *ShowcaseRepository) DeleteImage(showcaseID, imageID, factoryID int64) error {
 	res, err := r.db.Exec(`

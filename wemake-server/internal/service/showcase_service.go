@@ -438,6 +438,10 @@ func (s *ShowcaseService) CreateImage(img *domain.ShowcaseImage, factoryID int64
 	return s.repo.CreateImage(img, factoryID)
 }
 
+func (s *ShowcaseService) ListImages(showcaseID, callerID int64) ([]domain.ShowcaseImage, error) {
+	return s.repo.ListImages(showcaseID, callerID)
+}
+
 func (s *ShowcaseService) DeleteImage(showcaseID, imageID, factoryID int64) error {
 	return s.repo.DeleteImage(showcaseID, imageID, factoryID)
 }

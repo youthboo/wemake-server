@@ -46,23 +46,23 @@ func NewShowcaseHandler(service *service.ShowcaseService) *ShowcaseHandler {
 }
 
 type showcaseWriteRequest struct {
-	Type            *string   `json:"type"`
-	ContentType     *string   `json:"content_type"`
-	Status          *string   `json:"status"`
-	Title           *string   `json:"title"`
-	CategoryID      *int64    `json:"category_id"`
-	SubCategoryID   *int64    `json:"sub_category_id"`
-	MOQ             *int      `json:"moq"`
-	LeadTimeDays    *int      `json:"lead_time_days"`
-	BasePrice       *float64  `json:"base_price"`
-	PromoPrice      *float64  `json:"promo_price"`
-	StartDate       *string   `json:"start_date"`
-	EndDate         *string   `json:"end_date"`
-	Content         *string   `json:"content"`
+	Type            *string         `json:"type"`
+	ContentType     *string         `json:"content_type"`
+	Status          *string         `json:"status"`
+	Title           *string         `json:"title"`
+	CategoryID      *int64          `json:"category_id"`
+	SubCategoryID   *int64          `json:"sub_category_id"`
+	MOQ             *int            `json:"moq"`
+	LeadTimeDays    *int            `json:"lead_time_days"`
+	BasePrice       *float64        `json:"base_price"`
+	PromoPrice      *float64        `json:"promo_price"`
+	StartDate       *string         `json:"start_date"`
+	EndDate         *string         `json:"end_date"`
+	Content         *string         `json:"content"`
 	LinkedShowcases json.RawMessage `json:"linked_showcases"`
-	Excerpt         *string   `json:"excerpt"`
-	ImageURL        *string   `json:"image_url"`
-	Tags            *[]string `json:"tags"`
+	Excerpt         *string         `json:"excerpt"`
+	ImageURL        *string         `json:"image_url"`
+	Tags            *[]string       `json:"tags"`
 }
 
 type linkedShowcaseObject struct {
@@ -537,6 +537,24 @@ func (h *ShowcaseHandler) CreateImage(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to add image"})
 	}
 	return c.Status(fiber.StatusCreated).JSON(img)
+}
+
+// ListImages handles GET /showcases/:showcase_id/images
+func (h *ShowcaseHandler) ListImages(c *fiber.Ctx) error {
+	showcaseID, err := strconv.ParseInt(c.Params("showcase_id"), 10, 64)
+	if err != nil || showcaseID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": errInvalidShowcaseID})
+	}
+	callerID, _ := getUserIDFromHeader(c)
+	images, err := h.service.ListImages(showcaseID, callerID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": errShowcaseNotFound})
+		}
+		log.Printf("[showcase] failed to fetch images: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch images"})
+	}
+	return c.JSON(fiber.Map{"images": images})
 }
 
 // DeleteImage handles DELETE /showcases/:showcase_id/images/:image_id
