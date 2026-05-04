@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 	"github.com/yourusername/wemake/internal/domain"
 	"github.com/yourusername/wemake/internal/repository"
 )
@@ -25,6 +26,9 @@ var ErrOrderCannotBeCancelled = errors.New("order cannot be cancelled in its cur
 var ErrInsufficientGoodFund = errors.New("insufficient good_fund balance")
 var ErrOrderAlreadyExistsForQuote = errors.New("order already exists for this quotation")
 var ErrPaymentTypeInvalid = errors.New("payment type must be DP or FP")
+var ErrInvalidQuotationSet = errors.New("INVALID_QUOTATION_SET")
+var ErrRFQLocked = errors.New("RFQ_LOCKED")
+var ErrSelfTransaction = errors.New("SELF_TRANSACTION")
 var ErrPaymentAmountMismatch = errors.New("payment amount does not match order amount for payment type")
 var ErrPaymentAlreadyExists = errors.New("payment already exists for this order and payment type")
 var ErrPaymentStateInvalid = errors.New("payment is not in a verifiable state")
@@ -81,6 +85,32 @@ type OrderService struct {
 	reviews       *repository.ReviewRepository
 	notifications *NotificationService
 	messages      *MessageService
+}
+
+type BulkCheckoutItemInput struct {
+	QuotationID int64  `json:"quotation_id"`
+	AddressID   int64  `json:"address_id"`
+	PaymentType string `json:"payment_type"`
+}
+
+type BulkCheckoutInput struct {
+	RFQID          int64                   `json:"rfq_id"`
+	UserID         int64                   `json:"-"`
+	Items          []BulkCheckoutItemInput `json:"items"`
+	IdempotencyKey string                  `json:"idempotency_key"`
+}
+
+type BulkCheckoutSummary struct {
+	OrderCount   int     `json:"order_count"`
+	TotalAmount  float64 `json:"total_amount"`
+	TotalDeposit float64 `json:"total_deposit"`
+}
+
+type BulkCheckoutResult struct {
+	RFQID     int64               `json:"rfq_id"`
+	RFQStatus string              `json:"rfq_status"`
+	Orders    []domain.Order      `json:"orders"`
+	Summary   BulkCheckoutSummary `json:"summary"`
 }
 
 func NewOrderService(db *sqlx.DB, repo *repository.OrderRepository, schedules *repository.PaymentScheduleRepository, wallets *repository.WalletRepository, txLedger *repository.TransactionRepository, quotations *repository.QuotationRepository, rfqs *repository.RFQRepository, reviews *repository.ReviewRepository, notifications *NotificationService, messages *MessageService) *OrderService {
@@ -143,11 +173,16 @@ func (s *OrderService) CreateFromQuotation(quotationID, userID int64) (*domain.O
 	if total <= 0 {
 		total = roundCurrency((src.PricePerPiece * float64(src.Quantity)) + src.MoldCost)
 	}
-	if total <= 0 {
+	if total < 0 {
 		return nil, errors.New("invalid order total")
 	}
 	// Platform policy: 100% upfront payment — deposit equals full amount.
 	deposit := total
+	status := "PP"
+	if total == 0 {
+		deposit = 0
+		status = "PE"
+	}
 
 	now := time.Now()
 	est := now.AddDate(0, 0, int(src.LeadTimeDays))
@@ -158,7 +193,7 @@ func (s *OrderService) CreateFromQuotation(quotationID, userID int64) (*domain.O
 		FactoryID:         src.FactoryID,
 		TotalAmount:       total,
 		DepositAmount:     deposit,
-		Status:            "PP",
+		Status:            status,
 		EstimatedDelivery: &deliveryDate,
 		CreatedAt:         now,
 		UpdatedAt:         now,
@@ -207,6 +242,228 @@ func (s *OrderService) CreateFromQuotation(quotationID, userID int64) (*domain.O
 	})
 	s.notifyAcceptedQuotationInChat(src.RFQID, src.UserID, src.FactoryID, order.OrderID)
 	return order, nil
+}
+
+func (s *OrderService) BulkCheckout(input BulkCheckoutInput) (*BulkCheckoutResult, error) {
+	if input.RFQID <= 0 || input.UserID <= 0 || len(input.Items) == 0 {
+		return nil, ErrInvalidQuotationSet
+	}
+	quoteIDs := make([]int64, 0, len(input.Items))
+	seen := make(map[int64]struct{}, len(input.Items))
+	paymentTypes := make(map[int64]string, len(input.Items))
+	addressIDs := make(map[int64]struct{})
+	for _, item := range input.Items {
+		if item.QuotationID <= 0 {
+			return nil, ErrInvalidQuotationSet
+		}
+		if item.AddressID <= 0 {
+			return nil, ErrInvalidQuotationSet
+		}
+		if _, ok := seen[item.QuotationID]; ok {
+			return nil, ErrInvalidQuotationSet
+		}
+		seen[item.QuotationID] = struct{}{}
+		pt := strings.TrimSpace(strings.ToUpper(item.PaymentType))
+		switch pt {
+		case "", "FULL", "FP":
+			pt = "FP"
+		case "DEPOSIT", "DP":
+			pt = "DP"
+		default:
+			return nil, ErrPaymentTypeInvalid
+		}
+		paymentTypes[item.QuotationID] = pt
+		quoteIDs = append(quoteIDs, item.QuotationID)
+		addressIDs[item.AddressID] = struct{}{}
+	}
+
+	tx, err := s.db.Beginx()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	type lockedRFQ struct {
+		RFQID  int64  `db:"rfq_id"`
+		UserID int64  `db:"user_id"`
+		Status string `db:"status"`
+	}
+	var rfq lockedRFQ
+	if err := tx.Get(&rfq, `
+		SELECT rfq_id, user_id, status
+		FROM rfqs
+		WHERE rfq_id = $1
+		FOR UPDATE
+	`, input.RFQID); err != nil {
+		return nil, err
+	}
+	if rfq.UserID != input.UserID {
+		return nil, ErrNotQuotationParty
+	}
+	if rfq.Status != "OP" && rfq.Status != "IR" {
+		return nil, ErrRFQLocked
+	}
+	if len(addressIDs) > 0 {
+		ids := make([]int64, 0, len(addressIDs))
+		for id := range addressIDs {
+			ids = append(ids, id)
+		}
+		var ownedCount int
+		if err := tx.Get(&ownedCount, `
+			SELECT COUNT(*)
+			FROM addresses
+			WHERE user_id = $1
+			  AND address_id = ANY($2)
+		`, input.UserID, pq.Array(ids)); err != nil {
+			return nil, err
+		}
+		if ownedCount != len(ids) {
+			return nil, ErrInvalidQuotationSet
+		}
+	}
+
+	type lockedQuotation struct {
+		QuoteID       int64      `db:"quote_id"`
+		RFQID         int64      `db:"rfq_id"`
+		FactoryID     int64      `db:"factory_id"`
+		PricePerPiece float64    `db:"price_per_piece"`
+		Quantity      int64      `db:"quantity"`
+		MoldCost      float64    `db:"mold_cost"`
+		LeadTimeDays  int64      `db:"lead_time_days"`
+		Status        string     `db:"status"`
+		GrandTotal    float64    `db:"grand_total"`
+		ValidUntil    *time.Time `db:"valid_until"`
+	}
+	var quotes []lockedQuotation
+	if err := tx.Select(&quotes, `
+		SELECT q.quote_id, q.rfq_id, q.factory_id, q.price_per_piece, r.quantity,
+		       q.mold_cost, q.lead_time_days, q.status, COALESCE(q.grand_total, 0) AS grand_total,
+		       COALESCE(q.valid_until, (q.create_time + (q.validity_days::text || ' day')::interval)::date) AS valid_until
+		FROM quotations q
+		INNER JOIN rfqs r ON r.rfq_id = q.rfq_id
+		WHERE q.rfq_id = $1
+		  AND q.quote_id = ANY($2)
+		FOR UPDATE OF q
+	`, input.RFQID, pq.Array(quoteIDs)); err != nil {
+		return nil, err
+	}
+	if len(quotes) != len(quoteIDs) {
+		return nil, ErrInvalidQuotationSet
+	}
+
+	now := time.Now()
+	orders := make([]domain.Order, 0, len(quotes))
+	for _, q := range quotes {
+		if q.FactoryID == input.UserID {
+			return nil, ErrSelfTransaction
+		}
+		if q.Status != "PD" {
+			return nil, ErrQuotationInvalidState
+		}
+		if q.ValidUntil != nil && q.ValidUntil.Before(now.UTC()) {
+			return nil, ErrQuotationExpired
+		}
+		exists, err := s.repo.OrderExistsForQuoteTx(tx, q.QuoteID)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, ErrOrderAlreadyExistsForQuote
+		}
+		total := q.GrandTotal
+		if total <= 0 {
+			total = roundCurrency((q.PricePerPiece * float64(q.Quantity)) + q.MoldCost)
+		}
+		if total < 0 {
+			return nil, errors.New("invalid order total")
+		}
+		deposit := total
+		status := "PP"
+		if total == 0 {
+			status = "PE"
+			deposit = 0
+		}
+		est := now.AddDate(0, 0, int(q.LeadTimeDays))
+		deliveryDate := time.Date(est.Year(), est.Month(), est.Day(), 0, 0, 0, 0, est.Location())
+		order := &domain.Order{
+			QuotationID:       q.QuoteID,
+			UserID:            input.UserID,
+			FactoryID:         q.FactoryID,
+			TotalAmount:       total,
+			DepositAmount:     deposit,
+			Status:            status,
+			EstimatedDelivery: &deliveryDate,
+			CreatedAt:         now,
+			UpdatedAt:         now,
+		}
+		if err := s.repo.CreateTx(tx, order); err != nil {
+			return nil, err
+		}
+		if _, err := tx.Exec(`UPDATE orders SET payment_type = $1 WHERE order_id = $2`, paymentTypes[q.QuoteID], order.OrderID); err != nil {
+			return nil, err
+		}
+		if s.schedules != nil && deposit > 0 {
+			if err := s.schedules.CreateTx(tx, &domain.PaymentSchedule{
+				OrderID:       order.OrderID,
+				InstallmentNo: 1,
+				DueDate:       deriveDefaultDepositScheduleDate(order.CreatedAt),
+				Amount:        deposit,
+			}); err != nil {
+				return nil, err
+			}
+		}
+		orders = append(orders, *order)
+	}
+
+	if _, err := tx.Exec(`
+		UPDATE quotations
+		SET status = 'AC', is_locked = TRUE, log_timestamp = NOW()
+		WHERE rfq_id = $1 AND quote_id = ANY($2)
+	`, input.RFQID, pq.Array(quoteIDs)); err != nil {
+		return nil, err
+	}
+	if err := s.rfqs.MarkInReviewTx(tx, input.RFQID, input.UserID); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	result := &BulkCheckoutResult{
+		RFQID:     input.RFQID,
+		RFQStatus: "IR",
+		Orders:    orders,
+		Summary: BulkCheckoutSummary{
+			OrderCount: len(orders),
+		},
+	}
+	uid := input.UserID
+	for _, order := range orders {
+		result.Summary.TotalAmount += order.TotalAmount
+		result.Summary.TotalDeposit += order.DepositAmount
+		_ = s.repo.InsertActivity(order.OrderID, &uid, "ORDER_CREATED", map[string]interface{}{
+			"status":         order.Status,
+			"quote_id":       order.QuotationID,
+			"amount":         order.TotalAmount,
+			"deposit_amount": order.DepositAmount,
+			"bulk_checkout":  true,
+		})
+		createNotificationSafe(s.notifications, &domain.Notification{
+			UserID:  order.FactoryID,
+			Type:    "ORDER_PLACED",
+			Title:   "คำสั่งซื้อใหม่",
+			Message: fmt.Sprintf("ลูกค้าสั่งซื้อ Order #%d", order.OrderID),
+			LinkTo:  orderLink(order.OrderID),
+			Data: notificationData(map[string]interface{}{
+				"order_id": order.OrderID,
+				"quote_id": order.QuotationID,
+				"url":      orderLink(order.OrderID),
+			}),
+			ReferenceID: &order.OrderID,
+			CreatedAt:   now,
+		})
+	}
+	return result, nil
 }
 
 func (s *OrderService) notifyAcceptedQuotationInChat(rfqID, customerID, factoryID, orderID int64) {
@@ -442,12 +699,33 @@ func (s *OrderService) VerifyPayment(orderID, userID int64, role, txID string) (
 	return paymentTx, nil
 }
 
-func (s *OrderService) List(userID int64, role string, status string) ([]domain.OrderListItem, error) {
+func (s *OrderService) List(userID int64, role string, status string, rfqID *int64, requestKind string) ([]domain.OrderListItem, error) {
 	st := strings.TrimSpace(strings.ToUpper(status))
+	kinds := normalizeOrderRequestKinds(requestKind)
 	if role == domain.RoleFactory {
-		return s.repo.ListEnrichedByFactoryID(userID, st)
+		return s.repo.ListEnrichedByFactoryID(userID, st, rfqID, kinds)
 	}
-	return s.repo.ListEnrichedByUserID(userID, st)
+	return s.repo.ListEnrichedByUserID(userID, st, rfqID, kinds)
+}
+
+func normalizeOrderRequestKinds(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	seen := map[string]struct{}{}
+	for _, part := range parts {
+		item := strings.TrimSpace(strings.ToUpper(part))
+		switch item {
+		case domain.RequestKindProduction, domain.RequestKindProductSample, domain.RequestKindMaterialSample:
+		default:
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	return out
 }
 
 func (s *OrderService) GetByID(orderID, userID int64, role string) (*domain.Order, error) {

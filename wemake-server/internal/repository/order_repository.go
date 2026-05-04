@@ -174,6 +174,8 @@ type orderListRow struct {
 	RFQQuantity         int64      `db:"rfq_quantity"`
 	UnitName            string     `db:"unit_name"`
 	CustomerDisplayName string     `db:"customer_display_name"`
+	RequestKind         string     `db:"request_kind"`
+	FactoryHighlight    *string    `db:"factory_highlight"`
 	CurrentStepID       *int64     `db:"current_step_id"`
 	CurrentStepNameTH   *string    `db:"current_step_name_th"`
 	CurrentUpdateStatus *string    `db:"current_update_status"`
@@ -201,6 +203,10 @@ func (r orderListRow) toDomain() domain.OrderListItem {
 			Quantity: r.RFQQuantity,
 			UnitName: r.UnitName,
 		},
+		Quotation: domain.OrderListQuotationSummary{
+			QuoteID:          r.QuotationID,
+			FactoryHighlight: r.FactoryHighlight,
+		},
 		Customer: domain.OrderListCustomerSummary{
 			UserID:      r.UserID,
 			DisplayName: r.CustomerDisplayName,
@@ -219,6 +225,8 @@ func (r orderListRow) toDomain() domain.OrderListItem {
 		RFQQuantity:         r.RFQQuantity,
 		UnitName:            r.UnitName,
 		CustomerDisplayName: r.CustomerDisplayName,
+		RequestKind:         r.RequestKind,
+		OrderType:           orderTypeFromRequestKind(r.RequestKind),
 	}
 }
 
@@ -235,6 +243,8 @@ const orderListEnrichedSelect = `
 		o.created_at,
 		o.updated_at,
 		r.rfq_id,
+		COALESCE(r.request_kind, 'PR') AS request_kind,
+		q.factory_highlight,
 		COALESCE(r.title, '') AS rfq_title,
 		r.quantity AS rfq_quantity,
 		'' AS unit_name,
@@ -282,15 +292,15 @@ const orderListEnrichedSelect = `
 	) total_steps
 `
 
-func (r *OrderRepository) ListEnrichedByUserID(userID int64, status string) ([]domain.OrderListItem, error) {
-	return r.listEnriched("o.user_id = $1", userID, status)
+func (r *OrderRepository) ListEnrichedByUserID(userID int64, status string, rfqID *int64, requestKinds []string) ([]domain.OrderListItem, error) {
+	return r.listEnriched("o.user_id = $1", userID, status, rfqID, requestKinds)
 }
 
-func (r *OrderRepository) ListEnrichedByFactoryID(factoryID int64, status string) ([]domain.OrderListItem, error) {
-	return r.listEnriched("o.factory_id = $1", factoryID, status)
+func (r *OrderRepository) ListEnrichedByFactoryID(factoryID int64, status string, rfqID *int64, requestKinds []string) ([]domain.OrderListItem, error) {
+	return r.listEnriched("o.factory_id = $1", factoryID, status, rfqID, requestKinds)
 }
 
-func (r *OrderRepository) listEnriched(ownerClause string, ownerID int64, status string) ([]domain.OrderListItem, error) {
+func (r *OrderRepository) listEnriched(ownerClause string, ownerID int64, status string, rfqID *int64, requestKinds []string) ([]domain.OrderListItem, error) {
 	query := orderListEnrichedSelect + " WHERE " + ownerClause
 	args := []interface{}{ownerID}
 	statuses := splitOrderStatuses(status)
@@ -305,6 +315,14 @@ func (r *OrderRepository) listEnriched(ownerClause string, ownerID int64, status
 		}
 		query += " AND o.status IN (" + strings.Join(placeholders, ", ") + ")"
 	}
+	if rfqID != nil && *rfqID > 0 {
+		query += fmt.Sprintf(" AND r.rfq_id = $%d", len(args)+1)
+		args = append(args, *rfqID)
+	}
+	if len(requestKinds) > 0 {
+		query += fmt.Sprintf(" AND COALESCE(r.request_kind, 'PR') = ANY($%d)", len(args)+1)
+		args = append(args, pq.Array(requestKinds))
+	}
 	query += " ORDER BY o.created_at DESC"
 	var rows []orderListRow
 	if err := r.db.Select(&rows, query, args...); err != nil {
@@ -315,6 +333,15 @@ func (r *OrderRepository) listEnriched(ownerClause string, ownerID int64, status
 		items = append(items, row.toDomain())
 	}
 	return items, nil
+}
+
+func orderTypeFromRequestKind(kind string) string {
+	switch strings.TrimSpace(strings.ToUpper(kind)) {
+	case "PS", "MS":
+		return "sample"
+	default:
+		return "production"
+	}
 }
 
 func (r *OrderRepository) GetByID(orderID, userID int64) (*domain.Order, error) {

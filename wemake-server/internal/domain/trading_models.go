@@ -10,11 +10,15 @@ type Quotation struct {
 	RFQID              int64      `db:"rfq_id" json:"rfq_id"`
 	FactoryID          int64      `db:"factory_id" json:"factory_id"`
 	FactoryName        *string    `db:"factory_name" json:"factory_name"`
+	FactoryLogoURL     *string    `db:"factory_logo_url" json:"-"`
+	FactoryRatingAvg   *float64   `db:"factory_rating_avg" json:"-"`
+	QuoteQuantity      float64    `db:"quote_quantity" json:"-"`
 	PricePerPiece      float64    `db:"price_per_piece" json:"price_per_piece"`
 	MoldCost           float64    `db:"mold_cost" json:"mold_cost"`
 	LeadTimeDays       int64      `db:"lead_time_days" json:"lead_time_days"`
 	ShippingMethodID   int64      `db:"shipping_method_id" json:"shipping_method_id"`
 	ShippingMethodName *string    `db:"shipping_method_name" json:"shipping_method_name"`
+	FactoryHighlight   *string    `db:"factory_highlight" json:"factory_highlight,omitempty"`
 	Status             string     `db:"status" json:"status"`
 	CreateTime         time.Time  `db:"create_time" json:"create_time"`
 	LogTimestamp       time.Time  `db:"log_timestamp" json:"log_timestamp"`
@@ -53,6 +57,15 @@ type Quotation struct {
 	SampleCost        float64         `db:"sample_cost" json:"sample_cost"`
 	Certifications    StringArray     `db:"certifications" json:"certifications"`
 	Items             []QuotationItem `db:"-" json:"items,omitempty"`
+	QuoteTotal        float64         `db:"-" json:"quote_total"`
+	Factory           *FactoryBrief   `db:"-" json:"factory,omitempty"`
+}
+
+type FactoryBrief struct {
+	ID        int64    `json:"id"`
+	Name      *string  `json:"name,omitempty"`
+	LogoURL   *string  `json:"logo_url,omitempty"`
+	RatingAvg *float64 `json:"rating_avg,omitempty"`
 }
 
 type QuotationHistoryEntry struct {
@@ -102,6 +115,11 @@ type OrderListRFQSummary struct {
 	UnitName string `json:"unit_name"`
 }
 
+type OrderListQuotationSummary struct {
+	QuoteID          int64   `json:"quote_id"`
+	FactoryHighlight *string `json:"factory_highlight,omitempty"`
+}
+
 type OrderListCustomerSummary struct {
 	UserID      int64  `json:"user_id"`
 	DisplayName string `json:"display_name"`
@@ -118,24 +136,27 @@ type OrderProductionSummary struct {
 }
 
 type OrderListItem struct {
-	OrderID             int64                    `json:"order_id"`
-	QuotationID         int64                    `json:"quote_id"`
-	UserID              int64                    `json:"user_id"`
-	FactoryID           int64                    `json:"factory_id"`
-	Status              string                   `json:"status"`
-	TotalAmount         float64                  `json:"total_amount"`
-	DepositAmount       float64                  `json:"deposit_amount"`
-	EstimatedDelivery   *time.Time               `json:"estimated_delivery,omitempty"`
-	CreatedAt           time.Time                `json:"created_at"`
-	UpdatedAt           time.Time                `json:"updated_at"`
-	RFQ                 OrderListRFQSummary      `json:"rfq"`
-	Customer            OrderListCustomerSummary `json:"customer"`
-	ProductionSummary   OrderProductionSummary   `json:"production_summary"`
-	RFQID               int64                    `json:"rfq_id"`
-	RFQTitle            string                   `json:"rfq_title"`
-	RFQQuantity         int64                    `json:"rfq_quantity"`
-	UnitName            string                   `json:"unit_name"`
-	CustomerDisplayName string                   `json:"customer_display_name"`
+	OrderID             int64                     `json:"order_id"`
+	QuotationID         int64                     `json:"quote_id"`
+	UserID              int64                     `json:"user_id"`
+	FactoryID           int64                     `json:"factory_id"`
+	Status              string                    `json:"status"`
+	TotalAmount         float64                   `json:"total_amount"`
+	DepositAmount       float64                   `json:"deposit_amount"`
+	EstimatedDelivery   *time.Time                `json:"estimated_delivery,omitempty"`
+	CreatedAt           time.Time                 `json:"created_at"`
+	UpdatedAt           time.Time                 `json:"updated_at"`
+	RFQ                 OrderListRFQSummary       `json:"rfq"`
+	Quotation           OrderListQuotationSummary `json:"quotation"`
+	Customer            OrderListCustomerSummary  `json:"customer"`
+	ProductionSummary   OrderProductionSummary    `json:"production_summary"`
+	RFQID               int64                     `json:"rfq_id"`
+	RFQTitle            string                    `json:"rfq_title"`
+	RFQQuantity         int64                     `json:"rfq_quantity"`
+	UnitName            string                    `json:"unit_name"`
+	CustomerDisplayName string                    `json:"customer_display_name"`
+	RequestKind         string                    `json:"request_kind"`
+	OrderType           string                    `json:"order_type"`
 }
 
 type OrderFactorySummary struct {

@@ -20,8 +20,11 @@ func NewQuotationRepository(db *sqlx.DB) *QuotationRepository {
 func quotationSelectBase() string {
 	return `SELECT q.quote_id, q.rfq_id, q.factory_id,
 		NULLIF(TRIM(COALESCE(to_jsonb(u)->>'factory_name', CONCAT_WS(' ', to_jsonb(u)->>'first_name', to_jsonb(u)->>'last_name'))), '') AS factory_name,
+		fp.image_url AS factory_logo_url,
+		fp.rating::double precision AS factory_rating_avg,
 		q.price_per_piece, q.mold_cost, q.lead_time_days, q.shipping_method_id,
 		NULLIF(TRIM(COALESCE(to_jsonb(sm)->>'method_name', to_jsonb(sm)->>'name')), '') AS shipping_method_name,
+		q.factory_highlight,
 		q.status, q.create_time, q.log_timestamp,
 		COALESCE(q.version, 1) AS version, COALESCE(q.is_locked, false) AS is_locked, q.last_edited_at, q.last_edited_by,
 		q.subtotal, q.discount_amount, q.shipping_cost, q.shipping_method, q.packaging_cost, q.tooling_mold_cost,
@@ -36,6 +39,7 @@ func quotationSelectBase() string {
 		'[]'::jsonb AS certifications
 		FROM quotations q
 		LEFT JOIN users u ON u.user_id = q.factory_id
+		LEFT JOIN factory_profiles fp ON fp.user_id = q.factory_id
 		LEFT JOIN lbi_shipping_methods sm ON sm.shipping_method_id = q.shipping_method_id`
 }
 
@@ -58,17 +62,17 @@ func (r *QuotationRepository) createWithExecutor(exec quotationExecutor, item *d
 	}
 	query := `
 		INSERT INTO quotations (
-			rfq_id, factory_id, price_per_piece, mold_cost, lead_time_days, shipping_method_id, status, create_time, log_timestamp,
+			rfq_id, factory_id, price_per_piece, mold_cost, lead_time_days, shipping_method_id, factory_highlight, status, create_time, log_timestamp,
 			subtotal, discount_amount, shipping_cost, shipping_method, packaging_cost, tooling_mold_cost,
 			vat_rate, vat_amount, platform_commission_rate, platform_commission_amount, platform_config_id,
 			grand_total, factory_net_receivable, production_start_date, delivery_date, incoterms, payment_terms,
 			validity_days, valid_until, warranty_period_months, revision_no, parent_quotation_id, image_urls
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
-		        $10,$11,$12,$13,$14,$15,
-		        $16,$17,$18,$19,$20,
-		        $21,$22,$23,$24,$25,$26,
-		        $27,$28,$29,$30,$31,$32)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+		        $11,$12,$13,$14,$15,$16,
+		        $17,$18,$19,$20,$21,
+		        $22,$23,$24,$25,$26,$27,
+		        $28,$29,$30,$31,$32,$33)
 		RETURNING quote_id
 	`
 	if err := exec.QueryRow(
@@ -79,6 +83,7 @@ func (r *QuotationRepository) createWithExecutor(exec quotationExecutor, item *d
 		item.MoldCost,
 		item.LeadTimeDays,
 		nullableInt64ForZero(item.ShippingMethodID),
+		nullableStringPtr(item.FactoryHighlight),
 		item.Status,
 		item.CreateTime,
 		item.LogTimestamp,
@@ -117,9 +122,13 @@ func (r *QuotationRepository) ListByRFQID(rfqID int64) ([]domain.Quotation, erro
 	var items []domain.Quotation
 	query := `SELECT
 		q.quote_id, q.rfq_id, q.factory_id,
-		NULL::text AS factory_name,
+		NULLIF(TRIM(COALESCE(fp.factory_name, CONCAT_WS(' ', to_jsonb(u)->>'first_name', to_jsonb(u)->>'last_name'))), '') AS factory_name,
+		fp.image_url AS factory_logo_url,
+		fp.rating::double precision AS factory_rating_avg,
+		COALESCE(r.quantity, 1)::double precision AS quote_quantity,
 		q.price_per_piece, q.mold_cost, q.lead_time_days, q.shipping_method_id,
 		NULL::text AS shipping_method_name,
+		q.factory_highlight,
 		q.status, q.create_time, q.log_timestamp,
 		COALESCE(q.version, 1) AS version, COALESCE(q.is_locked, false) AS is_locked, q.last_edited_at, q.last_edited_by,
 		q.subtotal, q.discount_amount, q.shipping_cost, q.shipping_method, q.packaging_cost, q.tooling_mold_cost,
@@ -133,11 +142,19 @@ func (r *QuotationRepository) ListByRFQID(rfqID int64) ([]domain.Quotation, erro
 		0::double precision AS sample_cost,
 		'[]'::jsonb AS certifications
 		FROM quotations q
+		INNER JOIN rfqs r ON r.rfq_id = q.rfq_id
+		LEFT JOIN users u ON u.user_id = q.factory_id
+		LEFT JOIN factory_profiles fp ON fp.user_id = q.factory_id
 		WHERE q.rfq_id = $1
 		ORDER BY create_time DESC
 	`
-	err := r.db.Select(&items, query, rfqID)
-	return items, err
+	if err := r.db.Select(&items, query, rfqID); err != nil {
+		return items, err
+	}
+	for i := range items {
+		enrichQuotationComputed(&items[i])
+	}
+	return items, nil
 }
 
 func (r *QuotationRepository) ListByFactoryID(factoryID int64, status string) ([]domain.Quotation, error) {
@@ -158,6 +175,9 @@ func (r *QuotationRepository) ListByFactoryID(factoryID int64, status string) ([
 	}
 	query += ` ORDER BY create_time DESC`
 	err := r.db.Select(&items, query, args...)
+	for i := range items {
+		enrichQuotationComputed(&items[i])
+	}
 	return items, err
 }
 
@@ -169,6 +189,7 @@ func (r *QuotationRepository) GetByID(quotationID int64) (*domain.Quotation, err
 	if err := r.db.Get(&item, query, quotationID); err != nil {
 		return nil, err
 	}
+	enrichQuotationComputed(&item)
 	return &item, nil
 }
 
@@ -298,6 +319,9 @@ func (r *QuotationRepository) ListRevisionChain(root *domain.Quotation) ([]domai
 		WHERE quote_id = $1 OR parent_quotation_id = $1
 		ORDER BY revision_no ASC, create_time ASC
 	`, rootID)
+	for i := range items {
+		enrichQuotationComputed(&items[i])
+	}
 	return items, err
 }
 
@@ -308,6 +332,7 @@ func (r *QuotationRepository) UpdateBody(
 	editorID int64,
 	newVersion int,
 	paymentTerms *string,
+	factoryHighlight *string,
 ) error {
 	query := `
 		UPDATE quotations
@@ -319,13 +344,14 @@ func (r *QuotationRepository) UpdateBody(
 		    lead_time_days = $6,
 		    shipping_method_id = CASE WHEN $7 > 0 THEN $7 ELSE shipping_method_id END,
 		    payment_terms = CASE WHEN $8::text IS NOT NULL THEN $8 ELSE payment_terms END,
+		    factory_highlight = CASE WHEN $12::text IS NOT NULL THEN $12 ELSE factory_highlight END,
 		    version = $9,
 		    last_edited_at = NOW(),
 		    last_edited_by = $10,
 		    log_timestamp = NOW()
 		WHERE quote_id = $11 AND COALESCE(is_locked, false) = false AND status = 'PD'
 	`
-	res, err := r.db.Exec(query, pricePerPiece, moldCost, toolingMoldCost, shippingCost, packagingCost, leadTimeDays, shippingMethodID, nullableStringPtr(paymentTerms), newVersion, editorID, quoteID)
+	res, err := r.db.Exec(query, pricePerPiece, moldCost, toolingMoldCost, shippingCost, packagingCost, leadTimeDays, shippingMethodID, nullableStringPtr(paymentTerms), newVersion, editorID, quoteID, nullableStringPtr(factoryHighlight))
 	if err != nil {
 		return err
 	}
@@ -337,6 +363,30 @@ func (r *QuotationRepository) UpdateBody(
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func enrichQuotationComputed(item *domain.Quotation) {
+	if item == nil {
+		return
+	}
+	item.QuoteTotal = item.GrandTotal
+	if item.QuoteTotal <= 0 {
+		qty := item.QuoteQuantity
+		if qty <= 0 {
+			qty = 1
+		}
+		item.QuoteTotal = roundQuotationTotal((item.PricePerPiece * qty) + item.MoldCost)
+	}
+	item.Factory = &domain.FactoryBrief{
+		ID:        item.FactoryID,
+		Name:      item.FactoryName,
+		LogoURL:   item.FactoryLogoURL,
+		RatingAvg: item.FactoryRatingAvg,
+	}
+}
+
+func roundQuotationTotal(v float64) float64 {
+	return float64(int(v*100+0.5)) / 100
 }
 
 func (r *QuotationRepository) UpdateTotals(quoteID int64, vatRate, vatAmount, platformCommissionRate, platformCommissionAmount, grandTotal, factoryNetReceivable float64) error {

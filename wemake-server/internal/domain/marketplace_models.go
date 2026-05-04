@@ -7,6 +7,12 @@ import (
 	"github.com/lib/pq"
 )
 
+const (
+	RequestKindProduction     = "PR"
+	RequestKindProductSample  = "PS"
+	RequestKindMaterialSample = "MS"
+)
+
 type Category struct {
 	CategoryID int64  `db:"category_id" json:"category_id"`
 	Name       string `db:"name" json:"name"`
@@ -56,6 +62,7 @@ type RFQ struct {
 	AddressID          int64      `db:"address_id" json:"address_id"`
 	ShippingMethodID   *int64     `db:"shipping_method_id" json:"shipping_method_id,omitempty"`
 	Status             string     `db:"status" json:"status"`
+	RequestKind        string     `db:"request_kind" json:"request_kind"`
 	UploadedAt         *time.Time `db:"uploaded_at" json:"uploaded_at,omitempty"`
 	CreatedAt          time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt          time.Time  `db:"updated_at" json:"updated_at"`

@@ -55,6 +55,50 @@ func (h *OrderHandler) CreateOrder(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(order)
 }
 
+func (h *OrderHandler) BulkCheckout(c *fiber.Ctx) error {
+	type reqBody struct {
+		Items          []service.BulkCheckoutItemInput `json:"items"`
+		IdempotencyKey string                          `json:"idempotency_key"`
+	}
+	userID, err := getUserIDFromHeader(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid X-User-ID header"})
+	}
+	rfqID, err := c.ParamsInt("rfq_id")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid rfq_id"})
+	}
+	var req reqBody
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+	result, err := h.service.BulkCheckout(service.BulkCheckoutInput{
+		RFQID:          int64(rfqID),
+		UserID:         userID,
+		Items:          req.Items,
+		IdempotencyKey: req.IdempotencyKey,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrRFQLocked):
+			return c.Status(fiber.StatusLocked).JSON(fiber.Map{"error": err.Error()})
+		case errors.Is(err, service.ErrQuotationInvalidState):
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "QUOTATION_NOT_PENDING"})
+		case errors.Is(err, service.ErrSelfTransaction):
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		case errors.Is(err, service.ErrInvalidQuotationSet), errors.Is(err, service.ErrPaymentTypeInvalid):
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		case errors.Is(err, service.ErrNotQuotationParty):
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": err.Error()})
+		case errors.Is(err, service.ErrOrderAlreadyExistsForQuote):
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error()})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to bulk checkout"})
+		}
+	}
+	return c.Status(fiber.StatusCreated).JSON(result)
+}
+
 func (h *OrderHandler) ListOrders(c *fiber.Ctx) error {
 	userID, err := getUserIDFromHeader(c)
 	if err != nil {
@@ -79,7 +123,15 @@ func (h *OrderHandler) ListOrders(c *fiber.Ctx) error {
 		}
 	}
 	status := strings.TrimSpace(c.Query("status"))
-	items, err := h.service.List(userID, u.Role, status)
+	var rfqID *int64
+	if raw := strings.TrimSpace(c.Query("rfq_id")); raw != "" {
+		parsed, parseErr := strconv.ParseInt(raw, 10, 64)
+		if parseErr != nil || parsed <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid rfq_id"})
+		}
+		rfqID = &parsed
+	}
+	items, err := h.service.List(userID, u.Role, status, rfqID, c.Query("request_kind"))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch orders"})
 	}

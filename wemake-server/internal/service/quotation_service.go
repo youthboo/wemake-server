@@ -14,13 +14,14 @@ import (
 )
 
 var (
-	ErrQuotationLocked      = errors.New("quotation is locked or not in pending status")
-	ErrNotQuotationParty    = errors.New("not authorized for this quotation")
-	ErrInvalidLineItem      = errors.New("INVALID_LINE_ITEM")
-	ErrIncotermsInvalid     = errors.New("INCOTERMS_INVALID")
-	ErrPaymentTermsInvalid  = errors.New("PAYMENT_TERMS_INVALID")
-	ErrQuotationExpired     = errors.New("QUOTATION_EXPIRED")
-	ErrFactorySuspended     = errors.New("FACTORY_SUSPENDED")
+	ErrQuotationLocked         = errors.New("quotation is locked or not in pending status")
+	ErrNotQuotationParty       = errors.New("not authorized for this quotation")
+	ErrInvalidLineItem         = errors.New("INVALID_LINE_ITEM")
+	ErrIncotermsInvalid        = errors.New("INCOTERMS_INVALID")
+	ErrPaymentTermsInvalid     = errors.New("PAYMENT_TERMS_INVALID")
+	ErrQuotationExpired        = errors.New("QUOTATION_EXPIRED")
+	ErrFactorySuspended        = errors.New("FACTORY_SUSPENDED")
+	ErrFactoryHighlightInvalid = errors.New("factory_highlight must be at most 200 characters")
 )
 
 type QuotationService struct {
@@ -48,6 +49,9 @@ func (s *QuotationService) Create(item *domain.Quotation) error {
 		if approvalStatus == "SU" {
 			return ErrFactorySuspended
 		}
+	}
+	if err := normalizeFactoryHighlight(item); err != nil {
+		return err
 	}
 	now := time.Now()
 	item.Status = "PD"
@@ -202,6 +206,7 @@ func (s *QuotationService) PatchBody(
 	pricePerPiece, moldCost, shippingCost, packagingCost, toolingMoldCost float64,
 	leadTimeDays, shippingMethodID int64,
 	paymentTerms *string,
+	factoryHighlight *string,
 	reason string,
 ) (*domain.Quotation, error) {
 	if strings.TrimSpace(reason) == "" {
@@ -210,6 +215,18 @@ func (s *QuotationService) PatchBody(
 	if paymentTerms != nil {
 		if err := validateQuotationTerms(nil, paymentTerms, 30); err != nil {
 			return nil, err
+		}
+	}
+	nextHighlight := factoryHighlight
+	if nextHighlight != nil {
+		trimmed := strings.TrimSpace(*nextHighlight)
+		if trimmed == "" {
+			nextHighlight = nil
+		} else {
+			if len([]rune(trimmed)) > 200 {
+				return nil, ErrFactoryHighlightInvalid
+			}
+			nextHighlight = &trimmed
 		}
 	}
 	if shippingMethodID > 0 {
@@ -232,7 +249,7 @@ func (s *QuotationService) PatchBody(
 		return nil, ErrQuotationLocked
 	}
 	newVersion := q.Version + 1
-	if err := s.repo.UpdateBody(quoteID, pricePerPiece, moldCost, shippingCost, packagingCost, toolingMoldCost, leadTimeDays, shippingMethodID, factoryUserID, newVersion, paymentTerms); err != nil {
+	if err := s.repo.UpdateBody(quoteID, pricePerPiece, moldCost, shippingCost, packagingCost, toolingMoldCost, leadTimeDays, shippingMethodID, factoryUserID, newVersion, paymentTerms, nextHighlight); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrQuotationLocked
 		}
@@ -360,6 +377,9 @@ func (s *QuotationService) CreateDetailed(item *domain.Quotation) error {
 	if err := validateQuotationItems(item.Items); err != nil {
 		return err
 	}
+	if err := normalizeFactoryHighlight(item); err != nil {
+		return err
+	}
 	if err := validateQuotationTerms(item.Incoterms, item.PaymentTerms, item.ValidityDays); err != nil {
 		return err
 	}
@@ -414,6 +434,22 @@ func (s *QuotationService) CreateDetailed(item *domain.Quotation) error {
 	}
 	s.notifyQuotationQuoted(item)
 	s.autoSendQuotationCard(item)
+	return nil
+}
+
+func normalizeFactoryHighlight(item *domain.Quotation) error {
+	if item == nil || item.FactoryHighlight == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*item.FactoryHighlight)
+	if trimmed == "" {
+		item.FactoryHighlight = nil
+		return nil
+	}
+	if len([]rune(trimmed)) > 200 {
+		return ErrFactoryHighlightInvalid
+	}
+	item.FactoryHighlight = &trimmed
 	return nil
 }
 

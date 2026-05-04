@@ -18,6 +18,8 @@ var (
 	ErrInvalidShippingMethod = errors.New("shipping_method_id is invalid")
 	ErrRFQDetailsRequired    = errors.New("description/details must not be empty")
 	ErrRFQInspectionInvalid  = errors.New("inspection_type is invalid")
+	ErrRFQKindInvalid        = errors.New("request_kind must be PR, PS, or MS")
+	ErrRFQSampleQtyInvalid   = errors.New("sample request quantity is outside allowed range")
 )
 
 type RFQService struct {
@@ -51,6 +53,13 @@ func (s *RFQService) Create(rfq *domain.RFQ) error {
 	now := time.Now()
 	rfq.Title = strings.TrimSpace(rfq.Title)
 	rfq.Details = strings.TrimSpace(rfq.Details)
+	rfq.RequestKind = normalizeRFQKind(rfq.RequestKind)
+	if rfq.RequestKind == "" {
+		return ErrRFQKindInvalid
+	}
+	if err := validateRFQKindRules(rfq); err != nil {
+		return err
+	}
 	rfq.Status = "OP"
 	rfq.CreatedAt = now
 	rfq.UpdatedAt = now
@@ -105,7 +114,7 @@ func (s *RFQService) Cancel(userID, rfqID int64) error {
 	return s.repo.Cancel(userID, rfqID)
 }
 
-func (s *RFQService) ListMatchingForFactory(factoryID int64, status string) ([]domain.RFQ, error) {
+func (s *RFQService) ListMatchingForFactory(factoryID int64, status string, kind string) ([]domain.RFQ, error) {
 	if s.factoryRepo != nil {
 		approvalStatus, err := s.factoryRepo.GetApprovalStatus(factoryID)
 		if err != nil {
@@ -115,7 +124,49 @@ func (s *RFQService) ListMatchingForFactory(factoryID int64, status string) ([]d
 			return []domain.RFQ{}, nil
 		}
 	}
-	return s.repo.ListMatchingForFactory(factoryID, strings.TrimSpace(strings.ToUpper(status)))
+	normalizedKind := strings.TrimSpace(strings.ToUpper(kind))
+	if normalizedKind != "" && normalizeRFQKind(normalizedKind) == "" {
+		return nil, ErrRFQKindInvalid
+	}
+	return s.repo.ListMatchingForFactory(factoryID, strings.TrimSpace(strings.ToUpper(status)), normalizedKind)
+}
+
+type PreviewFactoriesResult struct {
+	Kind          string  `json:"kind"`
+	CategoryID    int64   `json:"category_id"`
+	SubCategoryID *int64  `json:"sub_category_id,omitempty"`
+	MatchCount    int     `json:"match_count"`
+	FactoryIDs    []int64 `json:"factory_ids,omitempty"`
+}
+
+func (s *RFQService) PreviewFactories(kind string, categoryID int64, subCategoryID *int64) (*PreviewFactoriesResult, error) {
+	normalizedKind := normalizeRFQKind(kind)
+	if normalizedKind == "" {
+		return nil, ErrRFQKindInvalid
+	}
+	if categoryID <= 0 {
+		return nil, ErrInvalidSubCategory
+	}
+	if subCategoryID != nil {
+		valid, err := s.repo.SubCategoryBelongsToCategory(*subCategoryID, categoryID)
+		if err != nil {
+			return nil, err
+		}
+		if !valid {
+			return nil, ErrInvalidSubCategory
+		}
+	}
+	ids, err := s.repo.ListMatchingFactoryIDsForKind(normalizedKind, categoryID, subCategoryID)
+	if err != nil {
+		return nil, err
+	}
+	return &PreviewFactoriesResult{
+		Kind:          normalizedKind,
+		CategoryID:    categoryID,
+		SubCategoryID: subCategoryID,
+		MatchCount:    len(ids),
+		FactoryIDs:    ids,
+	}, nil
 }
 
 func (s *RFQService) GetForViewer(userID int64, role string, rfqID int64) (*domain.RFQ, error) {
@@ -157,6 +208,13 @@ func (s *RFQService) Patch(userID, rfqID int64, rfq *domain.RFQ) error {
 	rfq.RFQID = rfqID
 	rfq.UserID = userID
 	rfq.Status = existing.Status
+	rfq.RequestKind = normalizeRFQKind(rfq.RequestKind)
+	if rfq.RequestKind == "" {
+		rfq.RequestKind = existing.RequestKind
+	}
+	if rfq.RequestKind == "" {
+		rfq.RequestKind = domain.RequestKindProduction
+	}
 	rfq.CreatedAt = existing.CreatedAt
 	rfq.UploadedAt = existing.UploadedAt
 	rfq.UpdatedAt = time.Now()
@@ -167,6 +225,9 @@ func (s *RFQService) Patch(userID, rfqID int64, rfq *domain.RFQ) error {
 	}
 	if rfq.Details == "" {
 		return ErrRFQDetailsRequired
+	}
+	if err := validateRFQKindRules(rfq); err != nil {
+		return err
 	}
 	if !rfq.SampleRequired {
 		rfq.SampleQty = nil
@@ -193,6 +254,47 @@ func (s *RFQService) Patch(userID, rfqID int64, rfq *domain.RFQ) error {
 		return err
 	}
 	return s.repo.Patch(userID, rfqID, rfq)
+}
+
+func normalizeRFQKind(kind string) string {
+	switch strings.TrimSpace(strings.ToUpper(kind)) {
+	case "":
+		return domain.RequestKindProduction
+	case domain.RequestKindProduction, domain.RequestKindProductSample, domain.RequestKindMaterialSample:
+		return strings.TrimSpace(strings.ToUpper(kind))
+	default:
+		return ""
+	}
+}
+
+func validateRFQKindRules(rfq *domain.RFQ) error {
+	if rfq == nil {
+		return nil
+	}
+	switch rfq.RequestKind {
+	case domain.RequestKindProductSample:
+		if rfq.Quantity < 1 || rfq.Quantity > 10 {
+			return ErrRFQSampleQtyInvalid
+		}
+		zero := float64(0)
+		rfq.TargetUnitPrice = &zero
+		rfq.SampleRequired = true
+	case domain.RequestKindMaterialSample:
+		if rfq.CategoryID <= 0 {
+			return ErrInvalidSubCategory
+		}
+		if rfq.Quantity < 1 || rfq.Quantity > 5 {
+			return ErrRFQSampleQtyInvalid
+		}
+		zero := float64(0)
+		rfq.TargetUnitPrice = &zero
+		rfq.SampleRequired = true
+	case domain.RequestKindProduction:
+		return nil
+	default:
+		return ErrRFQKindInvalid
+	}
+	return nil
 }
 
 func (s *RFQService) notifyMatchingFactories(rfq *domain.RFQ) {

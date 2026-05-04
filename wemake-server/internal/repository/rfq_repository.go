@@ -2,9 +2,11 @@ package repository
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 	"github.com/yourusername/wemake/internal/domain"
 )
 
@@ -36,7 +38,7 @@ func (r *RFQRepository) createWithExecutor(exec rfqQueryRowExecutor, rfq *domain
 	query := `
 		INSERT INTO rfqs (
 			user_id, category_id, sub_category_id, title, quantity, details,
-			address_id, shipping_method_id, status, uploaded_at, created_at, updated_at,
+			address_id, shipping_method_id, status, request_kind, uploaded_at, created_at, updated_at,
 			material_grade, target_unit_price, target_lead_time_days, required_delivery_date, delivery_address_id,
 			certifications_required, sample_required, sample_qty, inspection_type, conversation_id,
 			reference_images, rfq_type, initiated_by, factory_user_id, source_showcase_id, source_conv_id,
@@ -46,13 +48,13 @@ func (r *RFQRepository) createWithExecutor(exec rfqQueryRowExecutor, rfq *domain
 		)
 		VALUES (
 			$1, $2, $3, $4, $5, $6,
-			$7, $8, $9, $10, $11, $12,
-			$13, $14, $15, $16, $17,
-			$18, $19, $20, $21, $22,
-			$23, $24, $25, $26, $27, $28,
-			$29, $30, $31, $32, $33, $34,
-			$35, $36, $37, $38, $39,
-			$40, $41, $42, $43
+			$7, $8, $9, $10, $11, $12, $13,
+			$14, $15, $16, $17, $18,
+			$19, $20, $21, $22, $23,
+			$24, $25, $26, $27, $28, $29,
+			$30, $31, $32, $33, $34, $35,
+			$36, $37, $38, $39, $40,
+			$41, $42, $43, $44
 		)
 		RETURNING rfq_id
 	`
@@ -67,6 +69,7 @@ func (r *RFQRepository) createWithExecutor(exec rfqQueryRowExecutor, rfq *domain
 		nullableZeroInt64(rfq.AddressID),
 		nullableInt64Value(rfq.ShippingMethodID),
 		rfq.Status,
+		nullableRequestKind(rfq.RequestKind),
 		nullableTimeValue(rfq.UploadedAt),
 		rfq.CreatedAt,
 		rfq.UpdatedAt,
@@ -108,7 +111,7 @@ func (r *RFQRepository) ListByUserID(userID int64, status string) ([]domain.RFQ,
 	var rfqs []domain.RFQ
 	query := `
 		SELECT rfq_id, user_id, COALESCE(category_id, 0) AS category_id, sub_category_id, title, quantity, details, COALESCE(address_id, 0) AS address_id,
-		       shipping_method_id, status, uploaded_at, created_at, updated_at,
+		       shipping_method_id, status, COALESCE(request_kind, 'PR') AS request_kind, uploaded_at, created_at, updated_at,
 		       material_grade, target_unit_price, target_lead_time_days, required_delivery_date, delivery_address_id,
 		       certifications_required, sample_required, sample_qty, inspection_type, conversation_id,
 		       reference_images, COALESCE(rfq_type, 'RFQ') AS rfq_type, COALESCE(initiated_by, 'buyer') AS initiated_by,
@@ -142,7 +145,7 @@ func (r *RFQRepository) GetByID(userID, rfqID int64) (*domain.RFQ, error) {
 	var rfq domain.RFQ
 	query := `
 		SELECT rfq_id, user_id, COALESCE(category_id, 0) AS category_id, sub_category_id, title, quantity, details, COALESCE(address_id, 0) AS address_id,
-		       shipping_method_id, status, uploaded_at, created_at, updated_at,
+		       shipping_method_id, status, COALESCE(request_kind, 'PR') AS request_kind, uploaded_at, created_at, updated_at,
 		       material_grade, target_unit_price, target_lead_time_days, required_delivery_date, delivery_address_id,
 		       certifications_required, sample_required, sample_qty, inspection_type, conversation_id,
 		       reference_images, COALESCE(rfq_type, 'RFQ') AS rfq_type, COALESCE(initiated_by, 'buyer') AS initiated_by,
@@ -173,9 +176,18 @@ func (r *RFQRepository) GetByID(userID, rfqID int64) (*domain.RFQ, error) {
 }
 
 func (r *RFQRepository) Cancel(userID, rfqID int64) error {
-	query := "UPDATE rfqs SET status = 'CC', updated_at = NOW() WHERE user_id = $1 AND rfq_id = $2"
-	_, err := r.db.Exec(query, userID, rfqID)
-	return err
+	tx, err := r.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("UPDATE rfqs SET status = 'CC', updated_at = NOW() WHERE user_id = $1 AND rfq_id = $2", userID, rfqID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("UPDATE quotations SET status = 'EX', log_timestamp = NOW() WHERE rfq_id = $1 AND status = 'PD'", rfqID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // CloseOpenRFQForUserTx sets RFQ status from OP to CL when the customer awards an order (same transaction as order create).
@@ -222,7 +234,7 @@ func (r *RFQRepository) GetByIDAny(rfqID int64) (*domain.RFQ, error) {
 	var rfq domain.RFQ
 	query := `
 		SELECT rfq_id, user_id, COALESCE(category_id, 0) AS category_id, sub_category_id, title, quantity, details, COALESCE(address_id, 0) AS address_id,
-		       shipping_method_id, status, uploaded_at, created_at, updated_at,
+		       shipping_method_id, status, COALESCE(request_kind, 'PR') AS request_kind, uploaded_at, created_at, updated_at,
 		       material_grade, target_unit_price, target_lead_time_days, required_delivery_date, delivery_address_id,
 		       certifications_required, sample_required, sample_qty, inspection_type, conversation_id,
 		       reference_images, COALESCE(rfq_type, 'RFQ') AS rfq_type, COALESCE(initiated_by, 'buyer') AS initiated_by,
@@ -268,15 +280,19 @@ func (r *RFQRepository) getAddressByID(addressID int64) (*domain.Address, error)
 // ListMatchingForFactory returns open RFQs whose category (and optional sub-category) match
 // the factory's registered maps — used for the factory RFQ board only.
 // To view a specific RFQ detail regardless of category, use GetByIDAny via GetForViewer.
-func (r *RFQRepository) ListMatchingForFactory(factoryID int64, status string) ([]domain.RFQ, error) {
+func (r *RFQRepository) ListMatchingForFactory(factoryID int64, status string, kind string) ([]domain.RFQ, error) {
 	st := status
 	if st == "" {
 		st = "OP"
 	}
+	kinds := splitRFQKinds(kind)
+	if len(kinds) == 0 {
+		kinds = []string{domain.RequestKindProduction, domain.RequestKindProductSample, domain.RequestKindMaterialSample}
+	}
 	var rfqs []domain.RFQ
 	query := `
 		SELECT DISTINCT r.rfq_id, r.user_id, COALESCE(r.category_id, 0) AS category_id, r.sub_category_id, r.title, r.quantity, r.details, COALESCE(r.address_id, 0) AS address_id,
-		       r.shipping_method_id, r.status, r.uploaded_at, r.created_at, r.updated_at,
+		       r.shipping_method_id, r.status, COALESCE(r.request_kind, 'PR') AS request_kind, r.uploaded_at, r.created_at, r.updated_at,
 		       r.material_grade, r.target_unit_price, r.target_lead_time_days, r.required_delivery_date, r.delivery_address_id,
 		       r.certifications_required, r.sample_required, r.sample_qty, r.inspection_type, r.conversation_id,
 		       r.reference_images, COALESCE(r.rfq_type, 'RFQ') AS rfq_type, COALESCE(r.initiated_by, 'buyer') AS initiated_by,
@@ -285,20 +301,45 @@ func (r *RFQRepository) ListMatchingForFactory(factoryID int64, status string) (
 		       r.boq_moq, r.boq_lead_time_days, r.boq_payment_terms, r.boq_validity_days, r.boq_note,
 		       r.boq_sent_at, r.boq_responded_at, r.boq_response, r.boq_decline_reason
 		FROM rfqs r
-		INNER JOIN map_factory_categories mfc ON mfc.category_id = r.category_id AND mfc.factory_id = $1
 		LEFT JOIN lbi_sub_categories sc ON sc.sub_category_id = r.sub_category_id
 		WHERE r.status = $2
+		  AND COALESCE(r.request_kind, 'PR') = ANY($3)
 		  AND (
-			r.sub_category_id IS NULL
-			OR COALESCE(sc.sort_order, 0) = 99
-			OR EXISTS (
-				SELECT 1 FROM map_factory_sub_categories ms
-				WHERE ms.factory_id = $1 AND ms.sub_category_id = r.sub_category_id
+			(
+				COALESCE(r.request_kind, 'PR') IN ('PR', 'PS')
+				AND EXISTS (
+					SELECT 1
+					FROM map_factory_categories mfc
+					WHERE mfc.category_id = r.category_id
+					  AND mfc.factory_id = $1
+				)
+				AND (
+					r.sub_category_id IS NULL
+					OR COALESCE(sc.sort_order, 0) = 99
+					OR EXISTS (
+						SELECT 1 FROM map_factory_sub_categories ms
+						WHERE ms.factory_id = $1 AND ms.sub_category_id = r.sub_category_id
+					)
+				)
+			)
+			OR (
+				COALESCE(r.request_kind, 'PR') = 'MS'
+				AND EXISTS (
+					SELECT 1
+					FROM factory_showcases fs
+					WHERE fs.factory_id = $1
+					  AND fs.content_type = 'MT'
+					  AND fs.status = 'AC'
+					  AND (
+						fs.sub_category_id = r.sub_category_id
+						OR (r.sub_category_id IS NULL AND fs.category_id = r.category_id)
+					  )
+				)
 			)
 		  )
 		ORDER BY r.created_at DESC
 	`
-	err := r.db.Select(&rfqs, query, factoryID, st)
+	err := r.db.Select(&rfqs, query, factoryID, st, pq.Array(kinds))
 	if err != nil {
 		return rfqs, err
 	}
@@ -315,7 +356,29 @@ func (r *RFQRepository) ListMatchingFactoryIDs(rfq *domain.RFQ) ([]int64, error)
 	if rfq == nil {
 		return nil, nil
 	}
+	return r.ListMatchingFactoryIDsForKind(rfq.RequestKind, rfq.CategoryID, rfq.SubCategoryID)
+}
+
+func (r *RFQRepository) ListMatchingFactoryIDsForKind(kind string, categoryID int64, subCategoryID *int64) ([]int64, error) {
 	var ids []int64
+	if strings.TrimSpace(strings.ToUpper(kind)) == domain.RequestKindMaterialSample {
+		query := `
+			SELECT DISTINCT fs.factory_id
+			FROM factory_showcases fs
+			LEFT JOIN factory_profiles fp ON fp.user_id = fs.factory_id
+			WHERE fs.content_type = 'MT'
+			  AND fs.status = 'AC'
+			  AND COALESCE(fp.approval_status, 'AP') <> 'SU'
+			  AND (
+				fs.sub_category_id = $2
+				OR ($2::bigint IS NULL AND fs.category_id = $1)
+			  )
+		`
+		if err := r.db.Select(&ids, query, nullableZeroInt64(categoryID), nullableInt64Value(subCategoryID)); err != nil {
+			return nil, err
+		}
+		return ids, nil
+	}
 	query := `
 		SELECT DISTINCT mfc.factory_id
 		FROM map_factory_categories mfc
@@ -334,7 +397,7 @@ func (r *RFQRepository) ListMatchingFactoryIDs(rfq *domain.RFQ) ([]int64, error)
 			)
 		  )
 	`
-	if err := r.db.Select(&ids, query, nullableZeroInt64(rfq.CategoryID), nullableInt64Value(rfq.SubCategoryID)); err != nil {
+	if err := r.db.Select(&ids, query, nullableZeroInt64(categoryID), nullableInt64Value(subCategoryID)); err != nil {
 		return nil, err
 	}
 	return ids, nil
@@ -490,6 +553,7 @@ func (r *RFQRepository) Patch(userID, rfqID int64, rfq *domain.RFQ) error {
 		    details = :details,
 		    address_id = :address_id,
 		    shipping_method_id = :shipping_method_id,
+		    request_kind = :request_kind,
 		    material_grade = :material_grade,
 		    target_unit_price = :target_unit_price,
 		    target_lead_time_days = :target_lead_time_days,
@@ -504,6 +568,42 @@ func (r *RFQRepository) Patch(userID, rfqID int64, rfq *domain.RFQ) error {
 		WHERE rfq_id = :rfq_id AND user_id = :user_id AND status = 'OP'
 	`, rfq)
 	return err
+}
+
+func (r *RFQRepository) MarkInReviewTx(tx *sqlx.Tx, rfqID, userID int64) error {
+	_, err := tx.Exec(`
+		UPDATE rfqs
+		SET status = 'IR', updated_at = NOW()
+		WHERE rfq_id = $1 AND user_id = $2 AND status IN ('OP', 'IR')
+	`, rfqID, userID)
+	return err
+}
+
+func nullableRequestKind(v string) interface{} {
+	if strings.TrimSpace(v) == "" {
+		return domain.RequestKindProduction
+	}
+	return strings.TrimSpace(strings.ToUpper(v))
+}
+
+func splitRFQKinds(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		item := strings.TrimSpace(strings.ToUpper(part))
+		switch item {
+		case domain.RequestKindProduction, domain.RequestKindProductSample, domain.RequestKindMaterialSample:
+		default:
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	return out
 }
 
 func (r *RFQRepository) LinkConversationTx(tx *sqlx.Tx, rfqID, userID, convID int64) error {
