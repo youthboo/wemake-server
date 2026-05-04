@@ -18,7 +18,7 @@ import (
 
 // Allowed values for GET /showcases?type= (matches factory_showcases.content_type)
 var showcaseTypeQueryAllowed = map[string]struct{}{
-	"PD": {}, "PM": {}, "ID": {},
+	"PD": {}, "PM": {}, "ID": {}, "MT": {},
 }
 
 // showcaseStatusAllowed are valid values for the status field.
@@ -33,8 +33,8 @@ const (
 	errInvalidPayload     = "invalid payload"
 	errNotYourShowcase    = "not your showcase"
 	errInvalidStatus      = "invalid status: use AC, DR, HI, or AR"
-	errInvalidTypeQuery   = "invalid query type: use PD (product), PM (promotion), or ID (idea); omit type for all showcases"
-	errInvalidTypeFactory = "invalid query type: use PD, PM, or ID; omit type for all showcases for this factory"
+	errInvalidTypeQuery   = "invalid query type: use PD (product), PM (promotion), ID (idea), or MT (material); omit type for all showcases"
+	errInvalidTypeFactory = "invalid query type: use PD, PM, ID, or MT; omit type for all showcases for this factory"
 )
 
 type ShowcaseHandler struct {
