@@ -77,7 +77,6 @@ type ProfileResponse struct {
 	TaxID          *string         `json:"tax_id,omitempty"`
 	ProvinceID     *int64          `json:"province_id,omitempty"`
 	Specialization *string         `json:"specialization,omitempty"`
-	MinOrder       *int64          `json:"min_order,omitempty"`
 	LeadTimeDesc   *string         `json:"lead_time_desc,omitempty"`
 	IsVerified     *bool           `json:"is_verified,omitempty"`
 	VerifiedAt     *time.Time      `json:"verified_at,omitempty"`

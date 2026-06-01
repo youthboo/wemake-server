@@ -100,7 +100,7 @@ func (r *MasterRepository) GetProductionSteps(_ *int64) ([]domain.LBIProduction,
 
 func (r *MasterRepository) GetUnits() ([]domain.LBIUnit, error) {
 	var items []domain.LBIUnit
-	query := "SELECT unit_id, unit_name_th, unit_name_en, status FROM lbi_units WHERE status = '1' ORDER BY unit_id"
+	query := "SELECT unit_id, code, name_th, name_en, group_th, group_en, sort_order FROM lbi_units ORDER BY sort_order, unit_id"
 	err := r.db.Select(&items, query)
 	return items, err
 }

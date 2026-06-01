@@ -33,7 +33,7 @@ func (r *RFQRepository) CreateTx(tx *sqlx.Tx, rfq *domain.RFQ) error {
 }
 
 const rfqSelectColumns = `
-		rfq_id, user_id, COALESCE(category_id, 0) AS category_id, sub_category_id, title, quantity, details,
+		rfq_id, user_id, COALESCE(category_id, 0) AS category_id, sub_category_id, title, quantity, unit_id, details,
 		0::bigint AS address_id, shipping_method_id, status, COALESCE(request_kind, 'PR') AS request_kind,
 		NULL::timestamp AS uploaded_at, created_at, updated_at, expired_date,
 		material_grade, target_price, target_lead_time_days, NULL::date AS required_delivery_date, delivery_address_id,
@@ -49,7 +49,7 @@ const rfqSelectColumns = `
 `
 
 const rfqSelectColumnsR = `
-		r.rfq_id, r.user_id, COALESCE(r.category_id, 0) AS category_id, r.sub_category_id, r.title, r.quantity, r.details,
+		r.rfq_id, r.user_id, COALESCE(r.category_id, 0) AS category_id, r.sub_category_id, r.title, r.quantity, r.unit_id, r.details,
 		0::bigint AS address_id, r.shipping_method_id, r.status, COALESCE(r.request_kind, 'PR') AS request_kind,
 		NULL::timestamp AS uploaded_at, r.created_at, r.updated_at, r.expired_date,
 		r.material_grade, r.target_price, r.target_lead_time_days, NULL::date AS required_delivery_date, r.delivery_address_id,
@@ -71,7 +71,7 @@ func (r *RFQRepository) createWithExecutor(exec dbutil.QueryRower, rfq *domain.R
 	}
 	query := `
 		INSERT INTO rfqs (
-			user_id, category_id, sub_category_id, title, quantity, details,
+			user_id, category_id, sub_category_id, title, quantity, unit_id, details,
 			shipping_method_id, status, request_kind, created_at, updated_at,
 			material_grade, target_price, target_lead_time_days, delivery_address_id,
 			certifications_required, reference_images,
@@ -79,11 +79,11 @@ func (r *RFQRepository) createWithExecutor(exec dbutil.QueryRower, rfq *domain.R
 			expired_date
 		)
 		VALUES (
-			$1, $2, $3, $4, $5, $6,
-			$7, $8, $9, $10, $11,
-			$12, $13, $14, $15,
-			$16, $17,
-			$18,
+			$1, $2, $3, $4, $5, $6, $7,
+			$8, $9, $10, $11, $12,
+			$13, $14, $15, $16,
+			$17, $18,
+			$19,
 			CURRENT_TIMESTAMP + (SELECT COALESCE((value || ' days')::interval, INTERVAL '30 days') FROM tconfig WHERE key = 'rfq_expired')
 		)
 		RETURNING rfq_id
@@ -95,6 +95,7 @@ func (r *RFQRepository) createWithExecutor(exec dbutil.QueryRower, rfq *domain.R
 		domainutil.Nullable(rfq.SubCategoryID),
 		rfq.Title,
 		rfq.Quantity,
+		domainutil.Nullable(rfq.UnitID),
 		rfq.Details,
 		domainutil.Nullable(rfq.ShippingMethodID),
 		rfq.Status,
@@ -105,8 +106,8 @@ func (r *RFQRepository) createWithExecutor(exec dbutil.QueryRower, rfq *domain.R
 		domainutil.Nullable(rfq.TargetPrice),
 		domainutil.Nullable(rfq.TargetLeadTimeDays),
 		domainutil.Nullable(rfq.DeliveryAddressID),
-		rfq.CertificationsRequired,
-		rfq.ReferenceImages,
+		pq.StringArray(domainutil.NormalizeStringSlice([]string(rfq.CertificationsRequired))),
+		pq.StringArray(domainutil.NormalizeStringSlice([]string(rfq.ReferenceImages))),
 		targeting,
 	).Scan(&rfq.RFQID)
 }
@@ -466,6 +467,22 @@ func (r *RFQRepository) enrichRFQLookups(rfq *domain.RFQ) error {
 		}
 	}
 
+	if rfq.UnitID != nil {
+		type unitRow struct {
+			Code   string `db:"code"`
+			NameTH string `db:"name_th"`
+		}
+		var u unitRow
+		if err := r.db.Get(&u, `SELECT code, name_th FROM lbi_units WHERE unit_id = $1`, *rfq.UnitID); err != nil {
+			if err != sql.ErrNoRows {
+				return err
+			}
+		} else {
+			rfq.UnitCode = &u.Code
+			rfq.UnitName = &u.NameTH
+		}
+	}
+
 	var addressSummary sql.NullString
 	if rfq.AddressID <= 0 {
 		return nil
@@ -535,6 +552,7 @@ func (r *RFQRepository) Patch(userID, rfqID int64, rfq *domain.RFQ) error {
 		    sub_category_id = :sub_category_id,
 		    title = :title,
 		    quantity = :quantity,
+		    unit_id = :unit_id,
 		    details = :details,
 		    shipping_method_id = :shipping_method_id,
 		    request_kind = :request_kind,

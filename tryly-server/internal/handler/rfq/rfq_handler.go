@@ -84,6 +84,7 @@ func (h *RFQHandler) CreateRFQ(c *fiber.Ctx) error {
 		SubCategoryID:          req.SubCategoryID,
 		Title:                  req.Title,
 		Quantity:               req.Quantity,
+		UnitID:                 req.UnitID,
 		Details:                details,
 		AddressID:              req.AddressID,
 		ShippingMethodID:       req.ShippingMethodID,
@@ -174,6 +175,9 @@ func (h *RFQHandler) PatchRFQ(c *fiber.Ctx) error {
 	}
 	if req.Quantity != nil {
 		rfq.Quantity = *req.Quantity
+	}
+	if req.UnitID != nil {
+		rfq.UnitID = req.UnitID
 	}
 	if req.MaterialGrade != nil {
 		rfq.MaterialGrade = req.MaterialGrade

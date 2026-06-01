@@ -304,6 +304,12 @@ func (s *RFQService) Patch(userID, rfqID int64, rfq *domain.RFQ) error {
 	rfq.UpdatedAt = time.Now()
 	rfq.Details = strings.TrimSpace(rfq.Details)
 	rfq.ReferenceImages = pq.StringArray(domainutil.NormalizeStringSlice([]string(rfq.ReferenceImages)))
+	if rfq.CertificationsRequired == nil {
+		rfq.CertificationsRequired = existing.CertificationsRequired
+	}
+	if rfq.CertificationsRequired == nil {
+		rfq.CertificationsRequired = pq.StringArray{}
+	}
 	if len(rfq.ReferenceImages) > maxRFQImages {
 		return ErrMaxRFQReferenceImages
 	}

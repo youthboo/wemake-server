@@ -43,7 +43,6 @@ type FactoryProfile struct {
 	Rating          *float64   `db:"rating" json:"rating,omitempty"`
 	ReviewCount     int64      `db:"review_count" json:"review_count"`
 	Specialization  *string    `db:"specialization" json:"specialization,omitempty"`
-	MinOrder        *int64     `db:"min_order" json:"min_order,omitempty"`
 	LeadTimeDesc    *string    `db:"lead_time_desc" json:"lead_time_desc,omitempty"`
 	IsVerified      bool       `db:"is_verified" json:"is_verified"`
 	VerifiedAt      *time.Time `db:"verified_at" json:"verified_at,omitempty"`

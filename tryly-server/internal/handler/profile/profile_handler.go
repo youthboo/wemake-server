@@ -58,7 +58,6 @@ func (h *ProfileHandler) UpdateProfile(c *fiber.Ctx) error {
 		item, err := h.service.UpdateFactoryProfile(userID, req.Phone, nil, &domain.FactoryProfile{
 			Description:    nil,
 			Specialization: nil,
-			MinOrder:       nil,
 			LeadTimeDesc:   nil,
 			PriceRange:     nil,
 		})

@@ -70,7 +70,6 @@ func (r *FactoryRepository) ListPublicVerified(scope ...string) ([]domain.Factor
 			fp.description AS specialization,
 			COALESCE(rev.avg_rating, fp.rating, 0)::float8 AS rating,
 			COALESCE(rev.review_cnt, fp.review_count, 0)::bigint AS review_count,
-			fp.min_order,
 			fp.lead_time_desc,
 			(fp.approval_status = 'AP') AS is_verified,
 			COALESCE(fp.completed_orders, 0)::bigint AS completed_orders,
@@ -132,7 +131,6 @@ type factoryDetailHeadRow struct {
 	FactoryTypeName    sql.NullString  `db:"factory_type_name"`
 	TaxID              sql.NullString  `db:"tax_id"`
 	Specialization     sql.NullString  `db:"specialization"`
-	MinOrder           sql.NullInt64   `db:"min_order"`
 	LeadTimeDesc       sql.NullString  `db:"lead_time_desc"`
 	IsVerified         bool            `db:"is_verified"`
 	Rating             sql.NullFloat64 `db:"rating"`
@@ -171,7 +169,6 @@ func (r *FactoryRepository) getFactoryDetailHead(factoryID int64) (factoryDetail
 			ft.type_name AS factory_type_name,
 			fp.tax_id,
 			ft.type_name AS specialization,
-			fp.min_order,
 			fp.lead_time_desc,
 			(fp.approval_status = 'AP') AS is_verified,
 			COALESCE(rev.avg_rating, fp.rating, 0)::float8 AS rating,
@@ -223,10 +220,6 @@ func factoryDetailFromHead(head factoryDetailHeadRow) *domain.FactoryPublicDetai
 	}
 	if head.Specialization.Valid {
 		out.Specialization = &head.Specialization.String
-	}
-	if head.MinOrder.Valid {
-		v := int(head.MinOrder.Int64)
-		out.MinOrder = &v
 	}
 	if head.LeadTimeDesc.Valid {
 		out.LeadTimeDesc = &head.LeadTimeDesc.String
@@ -466,7 +459,6 @@ func (r *FactoryRepository) PatchProfile(factoryID int64, fields map[string]inte
 		"tax_id":               true,
 		"description":          true,
 		"factory_type_id":      true,
-		"min_order":            true,
 		"lead_time_desc":       true,
 		"image_url":            true,
 		"background_image_url": true,

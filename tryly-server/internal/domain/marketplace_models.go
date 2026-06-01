@@ -28,7 +28,6 @@ type ExploreFactory struct {
 	Location string  `json:"location"`
 	Rating   float64 `json:"rating"`
 	Reviews  int64   `json:"reviews"`
-	MinOrder int64   `json:"min_order"`
 	Verified bool    `json:"verified"`
 }
 
@@ -54,9 +53,10 @@ type SubCategory struct {
 }
 
 type Unit struct {
-	UnitID     int64  `db:"unit_id" json:"unit_id"`
-	Name       string `db:"name" json:"name"`
-	UnitNameEn string `db:"unit_name_en" json:"unit_name_en"`
+	UnitID int64  `db:"unit_id"  json:"unit_id"`
+	Code   string `db:"code"     json:"code"`
+	NameTH string `db:"name_th"  json:"name_th"`
+	NameEN string `db:"name_en"  json:"name_en"`
 }
 
 type Address struct {
@@ -90,6 +90,9 @@ type RFQ struct {
 	SubCategoryID      *int64     `db:"sub_category_id" json:"sub_category_id,omitempty"`
 	Title              string     `db:"title" json:"title"`
 	Quantity           int64      `db:"quantity" json:"quantity"`
+	UnitID             *int64     `db:"unit_id" json:"unit_id,omitempty"`
+	UnitCode           *string    `db:"unit_code" json:"unit_code,omitempty"`
+	UnitName           *string    `db:"unit_name" json:"unit_name,omitempty"`
 	Details            string     `db:"details" json:"details"`
 	AddressID          int64      `db:"address_id" json:"address_id"`
 	ShippingMethodID   *int64     `db:"shipping_method_id" json:"shipping_method_id,omitempty"`
