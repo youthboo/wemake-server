@@ -23,7 +23,7 @@ func NewProfileRepository(db *sqlx.DB) *ProfileRepository {
 func (r *ProfileRepository) GetProfile(userID int64) (*domain.ProfileResponse, error) {
 	var user domain.User
 	if err := r.db.Get(&user, `
-		SELECT user_id, role, email, COALESCE(phone, '') AS phone, image_url AS avatar_url, NULL::text AS bio, password_hash, is_active, created_at, updated_at
+		SELECT user_id, role, email, COALESCE(phone, '') AS phone, NULL::text AS avatar_url, NULL::text AS bio, password_hash, is_active, created_at, updated_at
 		FROM users
 		WHERE user_id = $1
 	`, userID); err != nil {
@@ -123,13 +123,7 @@ func (r *ProfileRepository) UpdateFactoryProfile(userID int64, user *domain.User
 }
 
 func (r *ProfileRepository) UpdateAvatar(userID int64, avatarURL string) error {
-	var imageURL interface{}
-	if strings.TrimSpace(avatarURL) == "" {
-		imageURL = nil
-	} else {
-		imageURL = avatarURL
-	}
-	_, err := r.db.Exec(`UPDATE users SET image_url = $2, updated_at = NOW() WHERE user_id = $1`, userID, imageURL)
+	_, err := r.db.Exec(`UPDATE users SET updated_at = NOW() WHERE user_id = $1`, userID)
 	return err
 }
 
