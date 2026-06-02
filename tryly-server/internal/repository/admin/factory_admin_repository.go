@@ -42,7 +42,9 @@ func (r *AdminFactoryRepository) ListAdmin(filter domain.AdminFactoryFilter) ([]
 		})
 	}
 
-	countQuery := sq.Select("COUNT(*)").
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+
+	countQuery := psql.Select("COUNT(*)").
 		From("factory_profiles fp").
 		InnerJoin("users u ON u.user_id = fp.user_id").
 		Where(conditions)
@@ -56,7 +58,7 @@ func (r *AdminFactoryRepository) ListAdmin(filter domain.AdminFactoryFilter) ([]
 		return nil, 0, err
 	}
 
-	query := sq.Select(
+	query := psql.Select(
 		"fp.user_id AS factory_id",
 		"fp.factory_name",
 		"u.email",
@@ -157,6 +159,24 @@ func (r *AdminFactoryRepository) UpdateApprovalStatus(factoryID int64, status st
 	return nil
 }
 
+// PatchCertificateStatus updates verify_status of a single certificate row.
+// Allowed statuses: 'AP' (approve), 'RJ' (reject), 'PE' (reset to pending).
+func (r *AdminFactoryRepository) PatchCertificateStatus(factoryID, mapID int64, status string) error {
+	res, err := r.db.Exec(`
+		UPDATE map_factory_certificates
+		SET verify_status = $1
+		WHERE map_id = $2 AND factory_id = $3
+	`, status, mapID, factoryID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (r *AdminFactoryRepository) GetApprovalStatus(factoryID int64) (string, error) {
 	var status string
 	err := r.db.Get(&status, `
@@ -170,7 +190,14 @@ func (r *AdminFactoryRepository) GetApprovalStatus(factoryID int64) (string, err
 func (r *AdminFactoryRepository) selectFactoryCertificates(factoryID int64) ([]domain.FactoryProfileCertificate, error) {
 	var items []domain.FactoryProfileCertificate
 	q := `
-		SELECT lc.cert_id, lc.cert_name, mfc.verify_status
+		SELECT
+			mfc.map_id,
+			lc.cert_id,
+			lc.cert_name,
+			COALESCE(mfc.verify_status, 'PE') AS verify_status,
+			NULLIF(mfc.document_url, '')       AS document_url,
+			mfc.cert_number,
+			mfc.expire_date::text              AS expire_date
 		FROM map_factory_certificates mfc
 		INNER JOIN lbi_certificates lc ON mfc.cert_id = lc.cert_id
 		WHERE mfc.factory_id = $1

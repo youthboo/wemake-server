@@ -71,6 +71,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	admin.Post("/factories/:factory_id/unsuspend", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.adminFactory.Unsuspend)
 	admin.Get("/factory-verification", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminFactory.List)
 	admin.Patch("/factories/:factory_id/verification", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.adminFactory.PatchVerification)
+	admin.Patch("/factories/:factory_id/certificates/:map_id", middleware.RequireRole(h.authService, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminFactory.PatchCertificateStatus)
 	admin.Get("/rfqs", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminRFQ.List)
 	admin.Get("/rfqs/:rfq_id", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminRFQ.GetByID)
 	admin.Patch("/rfqs/:rfq_id/status", middleware.RequireRole(h.authService, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminRFQ.PatchStatus)
