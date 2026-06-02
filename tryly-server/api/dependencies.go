@@ -18,6 +18,7 @@ import (
 	orderhandler "github.com/yourusername/wemake/internal/handler/order"
 	paymenthandler "github.com/yourusername/wemake/internal/handler/payment"
 	platformconfighandler "github.com/yourusername/wemake/internal/handler/platform_config"
+	tconfighandler "github.com/yourusername/wemake/internal/handler/tconfig"
 	productionhandler "github.com/yourusername/wemake/internal/handler/production"
 	profilehandler "github.com/yourusername/wemake/internal/handler/profile"
 	quotationhandler "github.com/yourusername/wemake/internal/handler/quotation"
@@ -41,6 +42,7 @@ import (
 	orderrepo "github.com/yourusername/wemake/internal/repository/order"
 	paymentrepo "github.com/yourusername/wemake/internal/repository/payment"
 	platformrepo "github.com/yourusername/wemake/internal/repository/platform_config"
+	tconfigrepo "github.com/yourusername/wemake/internal/repository/tconfig"
 	productionrepo "github.com/yourusername/wemake/internal/repository/production"
 	profilerepo "github.com/yourusername/wemake/internal/repository/profile"
 	quotationrepo "github.com/yourusername/wemake/internal/repository/quotation"
@@ -107,6 +109,7 @@ type routeHandlers struct {
 	quotationTemplate *quotationhandler.QuotationTemplateHandler
 	paymentSchedule   *paymenthandler.PaymentScheduleHandler
 	platformConfig    *platformconfighandler.PlatformConfigHandler
+	tconfig           *tconfighandler.TConfigHandler
 	adminFactory      *adminhandler.AdminFactoryHandler
 	adminDashboard    *adminhandler.AdminDashboardHandler
 	adminRFQ          *adminhandler.AdminRFQHandler
@@ -148,6 +151,7 @@ func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
 	quotationTemplateRepo := quotationrepo.NewQuotationTemplateRepository(db)
 	paymentScheduleRepo := paymentrepo.NewPaymentScheduleRepository(db)
 	platformConfigRepo := platformrepo.NewPlatformConfigRepository(db)
+	tconfigRepo := tconfigrepo.NewTConfigRepository(db)
 	quotationItemRepo := quotationrepo.NewQuotationItemRepository(db)
 	commissionRepo := walletrepo.NewCommissionRepository(db)
 	adminAuditRepo := adminrepo.NewAdminAuditRepository(db)
@@ -239,6 +243,7 @@ func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
 		quotationTemplate: quotationhandler.NewQuotationTemplateHandler(quotationTemplateService),
 		paymentSchedule:   paymenthandler.NewPaymentScheduleHandler(paymentScheduleService),
 		platformConfig:    platformconfighandler.NewPlatformConfigHandler(platformConfigService, authService),
+		tconfig:           tconfighandler.NewTConfigHandler(tconfigRepo),
 		adminFactory:      adminhandler.NewAdminFactoryHandler(adminFactoryRepo, adminFactoryService),
 		adminDashboard:    adminhandler.NewAdminDashboardHandler(adminDashboardService),
 		adminRFQ:          adminhandler.NewAdminRFQHandler(adminRFQRepo, adminAuditRepo),

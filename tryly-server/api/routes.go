@@ -50,7 +50,11 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	admin.Get("/platform-config", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.platformConfig.GetActive)
 	admin.Post("/platform-config", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.platformConfig.Create)
 	admin.Get("/platform-config/history", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.platformConfig.ListHistory)
+	admin.Get("/tconfig", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.tconfig.GetAll)
+	admin.Patch("/tconfig", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.tconfig.PatchBulk)
 	admin.Get("/platform-configs", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.platformConfig.ListAll)
+	// static sub-path must come before /:config_id to avoid param capture
+	admin.Get("/platform-configs/default-comm", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.platformConfig.GetDefaultComm)
 	admin.Post("/platform-configs", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.platformConfig.CreateConfig)
 	admin.Delete("/platform-configs/:config_id", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.platformConfig.DeleteConfig)
 	admin.Patch("/platform-configs/:config_id", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.platformConfig.UpdateConfig)

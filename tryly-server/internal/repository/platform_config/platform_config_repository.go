@@ -131,6 +131,24 @@ func (r *PlatformConfigRepository) GetDefault() (*domain.PlatformConfig, error) 
 	return &item, nil
 }
 
+// GetByLabel returns the first config row whose label matches exactly.
+func (r *PlatformConfigRepository) GetByLabel(label string) (*domain.PlatformConfig, error) {
+	var item domain.PlatformConfig
+	err := r.db.Get(&item, `
+		SELECT config_id, label, default_commission_rate,
+		       NULL::numeric AS promo_commission_rate, NULL::timestamp AS promo_start_at, NULL::timestamp AS promo_end_at,
+		       NULL::text AS promo_label, vat_rate, 'THB'::text AS currency_code, effective_from, effective_to, created_by, created_at
+		FROM platform_config
+		WHERE label = $1
+		ORDER BY config_id ASC
+		LIMIT 1
+	`, label)
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
 func (r *PlatformConfigRepository) UpdateConfig(tx *sqlx.Tx, id int64, cfg *domain.PlatformConfig) error {
 	return tx.Get(cfg, `
 		UPDATE platform_config

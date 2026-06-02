@@ -46,6 +46,11 @@ func (s *PlatformConfigService) ListAll() ([]domain.PlatformConfig, error) {
 	return s.repo.ListAll()
 }
 
+// GetDefaultComm returns the platform_config row where label = 'default_comm'.
+func (s *PlatformConfigService) GetDefaultComm() (*domain.PlatformConfig, error) {
+	return s.repo.GetByLabel("default_comm")
+}
+
 func (s *PlatformConfigService) CreateVersion(cfg *domain.PlatformConfig) error {
 	if cfg.CurrencyCode == "" {
 		cfg.CurrencyCode = "THB"
