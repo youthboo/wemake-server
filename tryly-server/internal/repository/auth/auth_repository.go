@@ -104,8 +104,10 @@ func (r *AuthRepository) CreateFactoryUser(user *domain.User, factory *domain.Fa
 		var factoryID int64
 		if err := tx.QueryRow(`
 			INSERT INTO factory_profiles
-				(user_id, factory_name, factory_type_id, tax_id, province_id, review_count, completed_orders, approval_status, submitted_at)
-			VALUES ($1, $2, $3, $4, $5, 0, 0, 'PE', NOW())
+				(user_id, factory_name, factory_type_id, tax_id, province_id, review_count, completed_orders, approval_status, submitted_at,
+				 config_id)
+			VALUES ($1, $2, $3, $4, $5, 0, 0, 'PE', NOW(),
+				(SELECT config_id FROM platform_config WHERE label = 'default_comm' ORDER BY config_id ASC LIMIT 1))
 			RETURNING user_id
 		`, user.UserID, factory.FactoryName, factory.FactoryTypeID, factory.TaxID, provinceID).Scan(&factoryID); err != nil {
 			return err
@@ -259,8 +261,10 @@ func (r *AuthRepository) UpgradeToFactory(userID int64, factory *domain.FactoryP
 		var factoryID int64
 		if err := tx.QueryRow(`
 			INSERT INTO factory_profiles
-				(user_id, factory_name, factory_type_id, tax_id, province_id, review_count, completed_orders, approval_status, submitted_at)
-			VALUES ($1, $2, $3, $4, $5, 0, 0, 'PE', NOW())
+				(user_id, factory_name, factory_type_id, tax_id, province_id, review_count, completed_orders, approval_status, submitted_at,
+				 config_id)
+			VALUES ($1, $2, $3, $4, $5, 0, 0, 'PE', NOW(),
+				(SELECT config_id FROM platform_config WHERE label = 'default_comm' ORDER BY config_id ASC LIMIT 1))
 			RETURNING user_id
 		`, userID, factory.FactoryName, factory.FactoryTypeID, factory.TaxID, provinceID).Scan(&factoryID); err != nil {
 			return err
