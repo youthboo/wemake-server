@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"log"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -83,6 +84,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		case authservice.ErrUserInactive:
 			return helper.WriteAPIError(c, helper.ForbiddenAPIError("USER_INACTIVE", "account is inactive"))
 		default:
+			log.Printf("[LOGIN] unexpected error for %s: %v", req.Email, err)
 			return helper.WriteAPIError(c, helper.InternalServerAPIError("LOGIN_FAILED", "failed to login"))
 		}
 	}

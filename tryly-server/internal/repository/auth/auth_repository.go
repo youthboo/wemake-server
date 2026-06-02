@@ -21,7 +21,7 @@ func NewAuthRepository(db *sqlx.DB) *AuthRepository {
 func (r *AuthRepository) GetUserByID(userID int64) (*domain.User, error) {
 	var user domain.User
 	query := `
-		SELECT user_id, role, email, phone, NULL::text AS avatar_url, NULL::text AS bio, password_hash, is_active, created_at, updated_at
+		SELECT user_id, role, email, COALESCE(phone, '') AS phone, NULL::text AS avatar_url, NULL::text AS bio, password_hash, is_active, created_at, updated_at
 		FROM users
 		WHERE user_id = $1
 	`
@@ -34,7 +34,7 @@ func (r *AuthRepository) GetUserByID(userID int64) (*domain.User, error) {
 func (r *AuthRepository) GetUserByEmail(email string) (*domain.User, error) {
 	var user domain.User
 	query := `
-		SELECT user_id, role, email, phone, NULL::text AS avatar_url, NULL::text AS bio, password_hash, is_active, created_at, updated_at
+		SELECT user_id, role, email, COALESCE(phone, '') AS phone, NULL::text AS avatar_url, NULL::text AS bio, password_hash, is_active, created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`
