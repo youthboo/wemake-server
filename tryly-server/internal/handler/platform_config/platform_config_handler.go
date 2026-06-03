@@ -44,7 +44,10 @@ func (h *PlatformConfigHandler) ListAll(c *fiber.Ctx) error {
 	if err != nil {
 		return helper.WriteAPIError(c, helper.InternalServerAPIError("FETCH_CONFIGS_FAILED", "failed to fetch platform configs"))
 	}
-	return helper.WriteListResponse(c, items, len(items))
+	return c.JSON(fiber.Map{
+		"configs": items,
+		"total":   len(items),
+	})
 }
 
 // GetDefaultComm returns the platform_config row where label = 'default_comm'.

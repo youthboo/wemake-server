@@ -122,6 +122,7 @@ func (r *PlatformConfigRepository) GetDefault() (*domain.PlatformConfig, error) 
 		       NULL::numeric AS promo_commission_rate, NULL::timestamp AS promo_start_at, NULL::timestamp AS promo_end_at,
 		       NULL::text AS promo_label, vat_rate, 'THB'::text AS currency_code, effective_from, effective_to, created_by, created_at
 		FROM platform_config
+		WHERE label = 'default_comm'
 		ORDER BY config_id ASC
 		LIMIT 1
 	`)
