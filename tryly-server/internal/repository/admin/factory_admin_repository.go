@@ -139,16 +139,12 @@ func (r *AdminFactoryRepository) GetAdminDetail(factoryID int64) (*domain.AdminF
 	return &item, nil
 }
 
-func (r *AdminFactoryRepository) UpdateApprovalStatus(factoryID int64, status string, verifiedBy *int64, reason *string, noteSetsVerified bool) error {
-	query := `
+func (r *AdminFactoryRepository) Approve(factoryID, verifiedBy int64) error {
+	res, err := r.db.Exec(`
 		UPDATE factory_profiles
-		SET approval_status = $1,
-		    verified_at = CASE WHEN $1 = 'AP' THEN NOW() ELSE NULL END,
-		    verified_by = CASE WHEN $1 = 'AP' THEN $2 ELSE verified_by END,
-		    rejection_reason = CASE WHEN $1 IN ('RJ','SU') THEN $3 ELSE NULL END
-		WHERE user_id = $4
-	`
-	res, err := r.db.Exec(query, status, domainutil.Nullable(verifiedBy), domainutil.Nullable(reason), factoryID)
+		SET approval_status = 'AP', verified_at = NOW(), verified_by = $1, rejection_reason = NULL
+		WHERE user_id = $2
+	`, verifiedBy, factoryID)
 	if err != nil {
 		return err
 	}
@@ -157,6 +153,85 @@ func (r *AdminFactoryRepository) UpdateApprovalStatus(factoryID int64, status st
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func (r *AdminFactoryRepository) Reject(factoryID int64, reason string) error {
+	res, err := r.db.Exec(`
+		UPDATE factory_profiles
+		SET approval_status = 'RJ', rejection_reason = $1, verified_at = NULL
+		WHERE user_id = $2
+	`, reason, factoryID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (r *AdminFactoryRepository) Suspend(factoryID int64, reason string) error {
+	res, err := r.db.Exec(`
+		UPDATE factory_profiles
+		SET approval_status = 'SU', rejection_reason = $1
+		WHERE user_id = $2
+	`, reason, factoryID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (r *AdminFactoryRepository) Unsuspend(factoryID, verifiedBy int64) error {
+	res, err := r.db.Exec(`
+		UPDATE factory_profiles
+		SET approval_status = 'AP', verified_at = NOW(), verified_by = $1, rejection_reason = NULL
+		WHERE user_id = $2
+	`, verifiedBy, factoryID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// UpdateApprovalStatus kept for backward compatibility with ToggleVerification.
+func (r *AdminFactoryRepository) UpdateApprovalStatus(factoryID int64, status string, verifiedBy *int64, reason *string, _ bool) error {
+	switch status {
+	case "AP":
+		vid := int64(0)
+		if verifiedBy != nil {
+			vid = *verifiedBy
+		}
+		return r.Approve(factoryID, vid)
+	case "RJ":
+		rs := ""
+		if reason != nil {
+			rs = *reason
+		}
+		return r.Reject(factoryID, rs)
+	case "SU":
+		rs := ""
+		if reason != nil {
+			rs = *reason
+		}
+		return r.Suspend(factoryID, rs)
+	default:
+		return r.Unsuspend(factoryID, func() int64 {
+			if verifiedBy != nil {
+				return *verifiedBy
+			}
+			return 0
+		}())
+	}
 }
 
 // PatchCertificateStatus updates verify_status of a single certificate row.
