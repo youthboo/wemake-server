@@ -22,7 +22,9 @@ func NormalizeOrder(value string) string {
 
 func IsValidOrder(value string) bool {
 	switch NormalizeOrder(value) {
-	case domain.OrderStatusPaymentPending,
+	case domain.OrderStatusWaitSlip,
+		domain.OrderStatusWaitApprove,
+		domain.OrderStatusPaymentPending,
 		domain.OrderStatusPaymentExpired,
 		domain.OrderStatusPaymentDone,
 		domain.OrderStatusProduction,
@@ -41,6 +43,10 @@ func IsValidOrder(value string) bool {
 
 func OrderLabelTH(value string) string {
 	switch NormalizeOrder(value) {
+	case domain.OrderStatusWaitSlip:
+		return "รอแนบสลีป"
+	case domain.OrderStatusWaitApprove:
+		return "รอยืนยันสลีป"
 	case domain.OrderStatusPaymentPending:
 		return "รอชำระเงิน"
 	case domain.OrderStatusPaymentExpired:
@@ -81,7 +87,9 @@ func IsDepositExpiredOrder(value string) bool {
 
 func IsCancellableOrder(value string) bool {
 	switch NormalizeOrder(value) {
-	case domain.OrderStatusPaymentExpired,
+	case domain.OrderStatusWaitSlip,
+		domain.OrderStatusWaitApprove,
+		domain.OrderStatusPaymentExpired,
 		domain.OrderStatusPaymentPending,
 		domain.OrderStatusProduction,
 		domain.OrderStatusWaitingFinalPayment:
@@ -162,7 +170,7 @@ func IsValidPaymentSchedulePatchStatus(value string) bool {
 
 func IsPreProductionOrder(value string) bool {
 	switch NormalizeOrder(value) {
-	case "CF", domain.OrderStatusPaymentExpired, domain.OrderStatusPaymentPending:
+	case "CF", domain.OrderStatusWaitSlip, domain.OrderStatusWaitApprove, domain.OrderStatusPaymentExpired, domain.OrderStatusPaymentPending:
 		return true
 	default:
 		return false
@@ -171,7 +179,9 @@ func IsPreProductionOrder(value string) bool {
 
 func IsProductionLockedOrder(value string) bool {
 	switch NormalizeOrder(value) {
-	case domain.OrderStatusPaymentPending,
+	case domain.OrderStatusWaitSlip,
+		domain.OrderStatusWaitApprove,
+		domain.OrderStatusPaymentPending,
 		domain.OrderStatusPaymentExpired,
 		domain.OrderStatusCancelled,
 		domain.OrderStatusComplete:
@@ -183,7 +193,9 @@ func IsProductionLockedOrder(value string) bool {
 
 func IsProductionReadLockedOrder(value string) bool {
 	switch NormalizeOrder(value) {
-	case domain.OrderStatusPaymentPending,
+	case domain.OrderStatusWaitSlip,
+		domain.OrderStatusWaitApprove,
+		domain.OrderStatusPaymentPending,
 		domain.OrderStatusPaymentExpired,
 		domain.OrderStatusCancelled:
 		return true
@@ -194,6 +206,10 @@ func IsProductionReadLockedOrder(value string) bool {
 
 func ProductionLockReason(value string) string {
 	switch NormalizeOrder(value) {
+	case domain.OrderStatusWaitSlip:
+		return "WAITING_SLIP"
+	case domain.OrderStatusWaitApprove:
+		return "WAITING_SLIP_APPROVAL"
 	case domain.OrderStatusPaymentPending:
 		return "PENDING_DEPOSIT"
 	case domain.OrderStatusPaymentExpired:
@@ -223,6 +239,10 @@ func FrontendRFQ(value string, offerCount int64) string {
 
 func FrontendOrder(value string) string {
 	switch NormalizeOrder(value) {
+	case domain.OrderStatusWaitSlip:
+		return "waiting_slip"
+	case domain.OrderStatusWaitApprove:
+		return "waiting_approval"
 	case domain.OrderStatusPaymentPending:
 		return "pending_payment"
 	case domain.OrderStatusPaymentDone, domain.OrderStatusProduction, domain.OrderStatusQualityCheck, domain.OrderStatusWaitingFinalPayment:

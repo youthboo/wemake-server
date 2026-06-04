@@ -349,34 +349,9 @@ func (s *OrderService) confirmReceiptTx(orderID int64, actorUserID *int64, note 
 			return err
 		}
 
-		if _, err := s.wallets.EnsureWallet(tx, order.FactoryID); err != nil {
-			return err
-		}
-		factoryWallet, err := s.wallets.GetByUserIDForUpdate(tx, order.FactoryID)
-		if err != nil {
-			return err
-		}
-		movedAmount := helper.RoundCurrency(helper.DecimalToFloat(order.TotalAmount))
-		if movedAmount < 0 {
-			movedAmount = 0
-		}
-		if err := s.wallets.MovePendingToGoodTx(tx, factoryWallet.WalletID, movedAmount); err != nil {
-			return err
-		}
-		settlement = ConfirmReceiptSettlement{
-			FactoryUserID: order.FactoryID,
-			WalletID:      factoryWallet.WalletID,
-			MovedAmount:   movedAmount,
-			PendingBefore: helper.DecimalToFloat(factoryWallet.PendingFund),
-			PendingAfter:  helper.RoundCurrency(helper.DecimalToFloat(factoryWallet.PendingFund) - movedAmount),
-			GoodBefore:    helper.DecimalToFloat(factoryWallet.GoodFund),
-			GoodAfter:     helper.RoundCurrency(helper.DecimalToFloat(factoryWallet.GoodFund) + movedAmount),
-		}
-
-		// Settle the factory's pending SC receivables for this order: PT -> ST.
-		if err := s.txLedger.SettleFactoryReceivables(tx, order.OrderID); err != nil {
-			return err
-		}
+		// B3: wallet / pending_fund movement is removed from order flow.
+		// Settlement (pending → good) is now handled by the finance/settlement
+		// pipeline — not triggered here. settlement stays zero-value.
 		return s.repo.InsertActivityTx(tx, orderID, actorUserID, activityCode, map[string]interface{}{
 			"status_before": statusBefore,
 			"status_after":  domain.OrderStatusComplete,

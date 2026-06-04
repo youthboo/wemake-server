@@ -27,6 +27,7 @@ import (
 	userhandler "github.com/yourusername/wemake/internal/handler/user"
 	wallethandler "github.com/yourusername/wemake/internal/handler/wallet"
 	"github.com/yourusername/wemake/internal/logger"
+	"github.com/yourusername/wemake/internal/mailer"
 	"github.com/yourusername/wemake/internal/media"
 	"github.com/yourusername/wemake/internal/sse"
 	adminrepo "github.com/yourusername/wemake/internal/repository/admin"
@@ -119,6 +120,10 @@ type routeHandlers struct {
 	adminCustomer     *adminhandler.AdminCustomerHandler
 	meRFQOrders       *mehandler.MeRFQOrdersHandler
 	factoryRFQBoard   *rfqhandler.FactoryRFQBoardHandler
+	bankAccount       *factoryhandler.BankAccountHandler
+	slip              *paymenthandler.SlipHandler
+	adminCommission   *adminhandler.AdminCommissionHandler
+	factoryInvoice    *factoryhandler.InvoiceHandler
 }
 
 func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
@@ -163,6 +168,11 @@ func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
 	adminDisputeRepo := adminrepo.NewAdminDisputeRepository(db)
 	customerAdminRepo := adminrepo.NewCustomerAdminRepository(db)
 	settlementAdminRepo := adminrepo.NewSettlementAdminRepository(db)
+	bankAccountRepo := factoryrepo.NewBankAccountRepository(db)
+	slipRepo := orderrepo.NewSlipRepository(db)
+	commissionInvoiceRepo := adminrepo.NewCommissionInvoiceRepository(db)
+
+	mailSvc := mailer.New(db)
 
 	sseHub := sse.NewHub()
 
@@ -253,5 +263,9 @@ func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
 		adminCustomer:     adminhandler.NewAdminCustomerHandler(customerAdminRepo, settlementAdminRepo),
 		meRFQOrders:       mehandler.NewMeRFQOrdersHandler(meRFQOrdersService),
 		factoryRFQBoard:   rfqhandler.NewFactoryRFQBoardHandler(rfqService, quotationService, authService, platformConfigRepo),
+		bankAccount:       factoryhandler.NewBankAccountHandler(bankAccountRepo),
+		slip:              paymenthandler.NewSlipHandler(slipRepo, walletRepo, mailSvc),
+		adminCommission:   adminhandler.NewAdminCommissionHandler(commissionInvoiceRepo, mailSvc),
+		factoryInvoice:    factoryhandler.NewInvoiceHandler(commissionInvoiceRepo, mailSvc),
 	}
 }
