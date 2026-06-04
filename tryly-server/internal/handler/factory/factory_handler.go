@@ -169,12 +169,6 @@ func (h *FactoryHandler) PatchProfile(c *fiber.Ctx) error {
 		}
 		fields["factory_type_id"] = *req.FactoryTypeID
 	}
-	if req.MinOrder != nil {
-		if *req.MinOrder < 0 {
-			return helper.WriteAPIError(c, helper.BadRequestAPIError("INVALID_MIN_ORDER", "min_order must be >= 0"))
-		}
-		fields["min_order"] = *req.MinOrder
-	}
 	if req.LeadTimeDesc != nil {
 		fields["lead_time_desc"] = helper.DereferenceString(req.LeadTimeDesc, "")
 	}
@@ -311,13 +305,13 @@ func (h *FactoryHandler) ReplaceCategories(c *fiber.Ctx) error {
 	if err := h.service.ReplaceFactoryCategories(int64(factoryID), categoryIDs); err != nil {
 		return helper.MapServiceError(c, err, helper.ErrorMessage(fiber.StatusInternalServerError, "failed to replace categories"), handlerregistry.ReplaceCategoriesErrorMap())
 	}
-	items, err := h.service.ListFactoryCategories(int64(factoryID))
+	result, err := h.service.ListFactoryCategories(int64(factoryID))
 	if err != nil {
 		return helper.WriteAPIError(c, helper.InternalServerAPIError("FETCH_LATEST_FAILED", "categories updated but failed to fetch latest data"))
 	}
 	return c.JSON(fiber.Map{
 		"factory_id": factoryID,
-		"categories": items,
+		"categories": result,
 	})
 }
 
@@ -414,7 +408,6 @@ func (h *FactoryHandler) ReplaceSubCategories(c *fiber.Ctx) error {
 			return helper.WriteAPIError(c, helper.BadRequestAPIError("INVALID_SUB_CATEGORY_IDS", "sub_category_ids must contain only positive integers"))
 		}
 	}
-
 	if err := h.service.ReplaceFactorySubCategories(int64(factoryID), subCategoryIDs); err != nil {
 		return helper.MapServiceError(c, err, helper.ErrorMessage(fiber.StatusInternalServerError, "failed to replace sub-categories"), handlerregistry.ReplaceSubCategoriesErrorMap())
 	}
@@ -513,9 +506,6 @@ func (h *FactoryHandler) SaveProfile(c *fiber.Ctx) error {
 		} else {
 			fields["background_image_url"] = v
 		}
-	}
-	if req.MinOrder != nil {
-		fields["min_order"] = *req.MinOrder
 	}
 	if req.LeadTimeDesc != nil {
 		fields["lead_time_desc"] = helper.DereferenceString(req.LeadTimeDesc, "")

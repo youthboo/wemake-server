@@ -83,10 +83,10 @@ func (s *OrderService) CreateFromQuotation(quotationID, userID int64) (*domain.O
 			return ErrInvalidOrderTotal
 		}
 		deposit = total
-		status := domain.OrderStatusPaymentPending
+		status := domain.OrderStatusWaitSlip // ลูกค้าต้องแนบสลีปก่อน
 		if helper.IsMoneyZero(total) {
 			deposit = helper.ZeroMoney()
-			status = domain.OrderStatusPaymentExpired
+			status = domain.OrderStatusPaymentDone // ยอด 0 → ข้ามชำระเงิน
 		}
 
 		shippingDays := getShippingDays(s.db)

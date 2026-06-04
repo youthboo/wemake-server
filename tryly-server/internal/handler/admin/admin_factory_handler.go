@@ -170,6 +170,37 @@ func (h *AdminFactoryHandler) mutateFactoryReasonState(c *fiber.Ctx, fn func(int
 	return c.JSON(fiber.Map{"factory_id": factoryID, "approval_status": item.ApprovalStatus, "is_verified": item.IsVerified, "rejection_reason": item.RejectionReason})
 }
 
+// PatchCertificateStatus handles PATCH /admin/factories/:factory_id/certificates/:map_id
+// Body: { "verify_status": "AP"|"RJ"|"PE" }
+func (h *AdminFactoryHandler) PatchCertificateStatus(c *fiber.Ctx) error {
+	factoryID, err := helper.ParsePositiveInt64Param(c, "factory_id")
+	if err != nil || factoryID <= 0 {
+		return helper.BadRequest(c, "invalid factory_id")
+	}
+	mapID, err := helper.ParsePositiveInt64Param(c, "map_id")
+	if err != nil || mapID <= 0 {
+		return helper.BadRequest(c, "invalid map_id")
+	}
+	var body struct {
+		VerifyStatus string `json:"verify_status"`
+	}
+	if err := helper.RequireBody(c, &body); err != nil {
+		return err
+	}
+	allowed := map[string]bool{"AP": true, "RJ": true, "PE": true}
+	if !allowed[body.VerifyStatus] {
+		return helper.BadRequest(c, "verify_status must be AP, RJ, or PE")
+	}
+	if err := h.repo.PatchCertificateStatus(factoryID, mapID, body.VerifyStatus); err != nil {
+		return helper.InternalServerError(c, "failed to update certificate status")
+	}
+	return c.JSON(fiber.Map{
+		"factory_id":    factoryID,
+		"map_id":        mapID,
+		"verify_status": body.VerifyStatus,
+	})
+}
+
 func parseFactoryActor(c *fiber.Ctx) (int64, int64, error) {
 	factoryID, err := helper.ParsePositiveInt64Param(c, "factory_id")
 	if err != nil || factoryID <= 0 {

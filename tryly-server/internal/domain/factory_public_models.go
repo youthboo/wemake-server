@@ -29,7 +29,6 @@ type FactoryListItem struct {
 	Specialization     *string     `json:"specialization,omitempty" db:"specialization"`
 	Rating             *float64    `json:"rating,omitempty" db:"rating"`
 	ReviewCount        int64       `json:"review_count" db:"review_count"`
-	MinOrder           *int        `json:"min_order,omitempty" db:"min_order"`
 	LeadTimeDesc       *string     `json:"lead_time_desc,omitempty" db:"lead_time_desc"`
 	IsVerified         bool        `json:"is_verified" db:"is_verified"`
 	CompletedOrders    int64       `json:"completed_orders" db:"completed_orders"`
@@ -93,7 +92,6 @@ type FactoryPublicDetail struct {
 	FactoryTypeName    *string                     `json:"factory_type_name,omitempty"`
 	TaxID              *string                     `json:"tax_id,omitempty"`
 	Specialization     *string                     `json:"specialization,omitempty"`
-	MinOrder           *int                        `json:"min_order,omitempty"`
 	LeadTimeDesc       *string                     `json:"lead_time_desc,omitempty"`
 	LeadTimeDese       *string                     `json:"lead_time_dese,omitempty"`
 	IsVerified         bool                        `json:"is_verified"`

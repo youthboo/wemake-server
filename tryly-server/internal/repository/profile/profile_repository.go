@@ -61,7 +61,7 @@ func (r *ProfileRepository) GetProfile(userID int64) (*domain.ProfileResponse, e
 	case domain.RoleFactory:
 		var factory domain.FactoryProfile
 		if err := r.db.Get(&factory, `
-			SELECT fp.user_id, fp.factory_name, fp.factory_type_id, fp.tax_id, fp.province_id, ft.type_name AS specialization, fp.min_order, fp.lead_time_desc,
+			SELECT fp.user_id, fp.factory_name, fp.factory_type_id, fp.tax_id, fp.province_id, ft.type_name AS specialization, fp.lead_time_desc,
 			       (fp.approval_status = 'AP') AS is_verified, fp.verified_at, fp.description, NULL::text AS price_range
 			FROM factory_profiles fp
 			LEFT JOIN lbi_factory_types ft ON ft.factory_type_id = fp.factory_type_id
@@ -74,7 +74,6 @@ func (r *ProfileRepository) GetProfile(userID int64) (*domain.ProfileResponse, e
 		out.TaxID = stringPtrIfNotEmpty(factory.TaxID)
 		out.ProvinceID = factory.ProvinceID
 		out.Specialization = factory.Specialization
-		out.MinOrder = factory.MinOrder
 		out.LeadTimeDesc = factory.LeadTimeDesc
 		out.IsVerified = &factory.IsVerified
 		out.VerifiedAt = factory.VerifiedAt
@@ -113,9 +112,9 @@ func (r *ProfileRepository) UpdateFactoryProfile(userID int64, user *domain.User
 		}
 		if _, err := tx.Exec(`
 			UPDATE factory_profiles
-			SET description = $1, min_order = $2, lead_time_desc = $3
-			WHERE user_id = $4
-		`, domainutil.Nullable(factory.Description), domainutil.Nullable(factory.MinOrder), domainutil.Nullable(factory.LeadTimeDesc), userID); err != nil {
+			SET description = $1, lead_time_desc = $2
+			WHERE user_id = $3
+		`, domainutil.Nullable(factory.Description), domainutil.Nullable(factory.LeadTimeDesc), userID); err != nil {
 			return err
 		}
 		return nil

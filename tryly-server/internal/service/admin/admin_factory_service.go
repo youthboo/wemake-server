@@ -40,7 +40,7 @@ func (s *AdminFactoryService) Approve(factoryID, actorID int64, note string, ip 
 	if detail.ApprovalStatus != "PE" && detail.ApprovalStatus != "RJ" {
 		return ErrFactoryApprovalState
 	}
-	if err := s.factories.UpdateApprovalStatus(factoryID, "AP", &actorID, nil, true); err != nil {
+	if err := s.factories.Approve(factoryID, actorID); err != nil {
 		return err
 	}
 	return s.insertAudit(actorID, "FACTORY_APPROVE", "factory", factoryID, map[string]interface{}{"before": detail, "note": note}, ip)
@@ -58,7 +58,7 @@ func (s *AdminFactoryService) Reject(factoryID, actorID int64, reason string, ip
 	if detail.ApprovalStatus != "PE" && detail.ApprovalStatus != "AP" {
 		return ErrFactoryApprovalState
 	}
-	if err := s.factories.UpdateApprovalStatus(factoryID, "RJ", &actorID, &reason, false); err != nil {
+	if err := s.factories.Reject(factoryID, reason); err != nil {
 		return err
 	}
 	return s.insertAudit(actorID, "FACTORY_REJECT", "factory", factoryID, map[string]interface{}{"before": detail, "reason": reason}, ip)
@@ -76,7 +76,7 @@ func (s *AdminFactoryService) Suspend(factoryID, actorID int64, reason string, i
 	if detail.ApprovalStatus != "AP" {
 		return ErrFactoryApprovalState
 	}
-	if err := s.factories.UpdateApprovalStatus(factoryID, "SU", &actorID, &reason, false); err != nil {
+	if err := s.factories.Suspend(factoryID, reason); err != nil {
 		return err
 	}
 	return s.insertAudit(actorID, "FACTORY_SUSPEND", "factory", factoryID, map[string]interface{}{"before": detail, "reason": reason}, ip)
@@ -90,7 +90,7 @@ func (s *AdminFactoryService) Unsuspend(factoryID, actorID int64, note string, i
 	if detail.ApprovalStatus != "SU" {
 		return ErrFactoryApprovalState
 	}
-	if err := s.factories.UpdateApprovalStatus(factoryID, "AP", &actorID, nil, true); err != nil {
+	if err := s.factories.Unsuspend(factoryID, actorID); err != nil {
 		return err
 	}
 	return s.insertAudit(actorID, "FACTORY_UNSUSPEND", "factory", factoryID, map[string]interface{}{"before": detail, "note": note}, ip)

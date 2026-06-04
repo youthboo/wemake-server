@@ -22,7 +22,6 @@ type PatchFactoryProfileRequest struct {
 	FactoryTypeID      *int64  `json:"factory_type_id"`
 	ImageURL           *string `json:"image_url"`
 	BackgroundImageURL *string `json:"background_image_url"`
-	MinOrder           *int64  `json:"min_order"`
 	LeadTimeDesc       *string `json:"lead_time_desc"`
 }
 
@@ -33,7 +32,6 @@ type SaveProfileRequest struct {
 	FactoryTypeID      *int64  `json:"factory_type_id"`
 	ImageURL           *string `json:"image_url"`
 	BackgroundImageURL *string `json:"background_image_url"`
-	MinOrder           *int64  `json:"min_order"`
 	LeadTimeDesc       *string `json:"lead_time_desc"`
 	CategoryIDs        []int64 `json:"category_ids"`
 	SubCategoryIDs     []int64 `json:"sub_category_ids"`

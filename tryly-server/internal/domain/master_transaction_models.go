@@ -75,10 +75,13 @@ type LBIProduction struct {
 }
 
 type LBIUnit struct {
-	UnitID     int64  `db:"unit_id" json:"unit_id"`
-	UnitNameTH string `db:"unit_name_th" json:"unit_name_th"`
-	UnitNameEN string `db:"unit_name_en" json:"unit_name_en"`
-	Status     string `db:"status" json:"status"`
+	UnitID    int64  `db:"unit_id"    json:"unit_id"`
+	Code      string `db:"code"       json:"code"`
+	NameTH    string `db:"name_th"    json:"name_th"`
+	NameEN    string `db:"name_en"    json:"name_en"`
+	GroupTH   string `db:"group_th"   json:"group_th"`
+	GroupEN   string `db:"group_en"   json:"group_en"`
+	SortOrder int    `db:"sort_order" json:"sort_order"`
 }
 
 type LBIShippingMethod struct {

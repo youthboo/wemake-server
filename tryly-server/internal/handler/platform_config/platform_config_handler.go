@@ -44,7 +44,20 @@ func (h *PlatformConfigHandler) ListAll(c *fiber.Ctx) error {
 	if err != nil {
 		return helper.WriteAPIError(c, helper.InternalServerAPIError("FETCH_CONFIGS_FAILED", "failed to fetch platform configs"))
 	}
-	return helper.WriteListResponse(c, items, len(items))
+	return c.JSON(fiber.Map{
+		"configs": items,
+		"total":   len(items),
+	})
+}
+
+// GetDefaultComm returns the platform_config row where label = 'default_comm'.
+// GET /admin/platform-configs/default-comm
+func (h *PlatformConfigHandler) GetDefaultComm(c *fiber.Ctx) error {
+	item, err := h.service.GetDefaultComm()
+	if err != nil {
+		return helper.WriteAPIError(c, helper.NotFoundAPIError("DEFAULT_COMM_NOT_FOUND", "default commission config not found"))
+	}
+	return c.JSON(item)
 }
 
 func (h *PlatformConfigHandler) Create(c *fiber.Ctx) error {

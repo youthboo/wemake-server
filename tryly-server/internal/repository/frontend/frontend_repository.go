@@ -62,7 +62,6 @@ type FrontendFactoryRow struct {
 	Description     sql.NullString  `db:"description"`
 	Rating          float64         `db:"rating"`
 	ReviewCount     int64           `db:"review_count"`
-	MinOrder        sql.NullInt64   `db:"min_order"`
 	LeadTimeDesc    sql.NullString  `db:"lead_time_desc"`
 	ImageURL        sql.NullString  `db:"image_url"`
 	PriceRange      sql.NullString  `db:"price_range"`
@@ -82,7 +81,6 @@ type FrontendFactoryDetailRow struct {
 	Description     sql.NullString  `db:"description"`
 	Rating          float64         `db:"rating"`
 	ReviewCount     int64           `db:"review_count"`
-	MinOrder        sql.NullInt64   `db:"min_order"`
 	LeadTimeDesc    sql.NullString  `db:"lead_time_desc"`
 	ImageURL        sql.NullString  `db:"image_url"`
 	PriceRange      sql.NullString  `db:"price_range"`
@@ -240,7 +238,6 @@ func (r *FrontendRepository) ListFactories(scope ...string) ([]FrontendFactoryRo
 			COALESCE(fp.description, '') AS description,
 			COALESCE(rev.avg_rating, fp.rating, 0)::float8 AS rating,
 			COALESCE(rev.review_cnt, fp.review_count, 0) AS review_count,
-			fp.min_order,
 			fp.lead_time_desc,
 			fp.image_url,
 			NULL::text AS price_range,
@@ -303,7 +300,6 @@ func (r *FrontendRepository) GetFactoryDetail(factoryID int64) (*FrontendFactory
 			COALESCE(fp.description, '') AS description,
 			COALESCE(rev.avg_rating, fp.rating, 0)::float8 AS rating,
 			COALESCE(rev.review_cnt, fp.review_count, 0) AS review_count,
-			fp.min_order,
 			fp.lead_time_desc,
 			fp.image_url,
 			NULL::text AS price_range,

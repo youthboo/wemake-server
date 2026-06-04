@@ -193,7 +193,8 @@ func (s *ProductionService) Upsert(orderID, userID int64, input ProductionWriteI
 		if step.SortOrder > 0 {
 			prevStep := s.repo.StepBySortOrder(steps, step.SortOrder-1)
 			prev := s.repo.GetUpdateByOrderAndStep(orderID, prevStep.StepID, inflated)
-			if input.Status == "IP" && (prev == nil || prev.Status != "CD") {
+			// Block both IP and CD if the previous step hasn't been completed
+			if (input.Status == "IP" || input.Status == "CD") && (prev == nil || prev.Status != "CD") {
 				return &ProductionRuleError{
 					Err:     ErrProductionStepOrderViolation,
 					Details: map[string]interface{}{"required_previous_step": prevStep.StepCode},

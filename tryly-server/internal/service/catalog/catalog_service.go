@@ -51,10 +51,6 @@ func (s *CatalogService) GetExplore() (*domain.ExploreResponse, error) {
 			factoryRows = factoryRows[:8]
 		}
 		for _, f := range factoryRows {
-			minOrder := int64(0)
-			if f.MinOrder.Valid {
-				minOrder = f.MinOrder.Int64
-			}
 			exploreFactories = append(exploreFactories, domain.ExploreFactory{
 				ID:       f.ID,
 				Name:     f.Name,
@@ -62,7 +58,6 @@ func (s *CatalogService) GetExplore() (*domain.ExploreResponse, error) {
 				Location: f.Location.String,
 				Rating:   f.Rating,
 				Reviews:  f.ReviewCount,
-				MinOrder: minOrder,
 				Verified: f.Verified,
 			})
 		}

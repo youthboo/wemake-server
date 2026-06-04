@@ -18,6 +18,7 @@ import (
 	orderhandler "github.com/yourusername/wemake/internal/handler/order"
 	paymenthandler "github.com/yourusername/wemake/internal/handler/payment"
 	platformconfighandler "github.com/yourusername/wemake/internal/handler/platform_config"
+	tconfighandler "github.com/yourusername/wemake/internal/handler/tconfig"
 	productionhandler "github.com/yourusername/wemake/internal/handler/production"
 	profilehandler "github.com/yourusername/wemake/internal/handler/profile"
 	quotationhandler "github.com/yourusername/wemake/internal/handler/quotation"
@@ -26,6 +27,7 @@ import (
 	userhandler "github.com/yourusername/wemake/internal/handler/user"
 	wallethandler "github.com/yourusername/wemake/internal/handler/wallet"
 	"github.com/yourusername/wemake/internal/logger"
+	"github.com/yourusername/wemake/internal/mailer"
 	"github.com/yourusername/wemake/internal/media"
 	"github.com/yourusername/wemake/internal/sse"
 	adminrepo "github.com/yourusername/wemake/internal/repository/admin"
@@ -41,6 +43,7 @@ import (
 	orderrepo "github.com/yourusername/wemake/internal/repository/order"
 	paymentrepo "github.com/yourusername/wemake/internal/repository/payment"
 	platformrepo "github.com/yourusername/wemake/internal/repository/platform_config"
+	tconfigrepo "github.com/yourusername/wemake/internal/repository/tconfig"
 	productionrepo "github.com/yourusername/wemake/internal/repository/production"
 	profilerepo "github.com/yourusername/wemake/internal/repository/profile"
 	quotationrepo "github.com/yourusername/wemake/internal/repository/quotation"
@@ -107,6 +110,7 @@ type routeHandlers struct {
 	quotationTemplate *quotationhandler.QuotationTemplateHandler
 	paymentSchedule   *paymenthandler.PaymentScheduleHandler
 	platformConfig    *platformconfighandler.PlatformConfigHandler
+	tconfig           *tconfighandler.TConfigHandler
 	adminFactory      *adminhandler.AdminFactoryHandler
 	adminDashboard    *adminhandler.AdminDashboardHandler
 	adminRFQ          *adminhandler.AdminRFQHandler
@@ -116,6 +120,10 @@ type routeHandlers struct {
 	adminCustomer     *adminhandler.AdminCustomerHandler
 	meRFQOrders       *mehandler.MeRFQOrdersHandler
 	factoryRFQBoard   *rfqhandler.FactoryRFQBoardHandler
+	bankAccount       *factoryhandler.BankAccountHandler
+	slip              *paymenthandler.SlipHandler
+	adminCommission   *adminhandler.AdminCommissionHandler
+	factoryInvoice    *factoryhandler.InvoiceHandler
 }
 
 func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
@@ -148,6 +156,7 @@ func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
 	quotationTemplateRepo := quotationrepo.NewQuotationTemplateRepository(db)
 	paymentScheduleRepo := paymentrepo.NewPaymentScheduleRepository(db)
 	platformConfigRepo := platformrepo.NewPlatformConfigRepository(db)
+	tconfigRepo := tconfigrepo.NewTConfigRepository(db)
 	quotationItemRepo := quotationrepo.NewQuotationItemRepository(db)
 	commissionRepo := walletrepo.NewCommissionRepository(db)
 	adminAuditRepo := adminrepo.NewAdminAuditRepository(db)
@@ -159,6 +168,11 @@ func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
 	adminDisputeRepo := adminrepo.NewAdminDisputeRepository(db)
 	customerAdminRepo := adminrepo.NewCustomerAdminRepository(db)
 	settlementAdminRepo := adminrepo.NewSettlementAdminRepository(db)
+	bankAccountRepo := factoryrepo.NewBankAccountRepository(db)
+	slipRepo := orderrepo.NewSlipRepository(db)
+	commissionInvoiceRepo := adminrepo.NewCommissionInvoiceRepository(db)
+
+	mailSvc := mailer.New(db)
 
 	sseHub := sse.NewHub()
 
@@ -239,6 +253,7 @@ func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
 		quotationTemplate: quotationhandler.NewQuotationTemplateHandler(quotationTemplateService),
 		paymentSchedule:   paymenthandler.NewPaymentScheduleHandler(paymentScheduleService),
 		platformConfig:    platformconfighandler.NewPlatformConfigHandler(platformConfigService, authService),
+		tconfig:           tconfighandler.NewTConfigHandler(tconfigRepo),
 		adminFactory:      adminhandler.NewAdminFactoryHandler(adminFactoryRepo, adminFactoryService),
 		adminDashboard:    adminhandler.NewAdminDashboardHandler(adminDashboardService),
 		adminRFQ:          adminhandler.NewAdminRFQHandler(adminRFQRepo, adminAuditRepo),
@@ -248,5 +263,9 @@ func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
 		adminCustomer:     adminhandler.NewAdminCustomerHandler(customerAdminRepo, settlementAdminRepo),
 		meRFQOrders:       mehandler.NewMeRFQOrdersHandler(meRFQOrdersService),
 		factoryRFQBoard:   rfqhandler.NewFactoryRFQBoardHandler(rfqService, quotationService, authService, platformConfigRepo),
+		bankAccount:       factoryhandler.NewBankAccountHandler(bankAccountRepo),
+		slip:              paymenthandler.NewSlipHandler(slipRepo, walletRepo, mailSvc),
+		adminCommission:   adminhandler.NewAdminCommissionHandler(commissionInvoiceRepo, mailSvc),
+		factoryInvoice:    factoryhandler.NewInvoiceHandler(commissionInvoiceRepo, mailSvc),
 	}
 }

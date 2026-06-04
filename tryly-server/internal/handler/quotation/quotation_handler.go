@@ -1,6 +1,8 @@
 package quotation
 
 import (
+	"log/slog"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/yourusername/wemake/internal/dbutil"
 	"github.com/yourusername/wemake/internal/domain"
@@ -208,6 +210,9 @@ func (h *QuotationHandler) CreateDetailed(c *fiber.Ctx) error {
 		FactoryNote:          req.FactoryNote,
 	}
 	helper.AssignIfNotNil(&item.LeadTimeDays, req.LeadTimeDays)
+	if req.ShippingMethodID != nil && *req.ShippingMethodID > 0 {
+		item.ShippingMethodID = *req.ShippingMethodID
+	}
 	if helper.DereferenceString(req.ProductionStartDate, "") != "" {
 		d, err := helper.ParseDate(*req.ProductionStartDate, "production_start_date")
 		if err != nil {
@@ -223,6 +228,7 @@ func (h *QuotationHandler) CreateDetailed(c *fiber.Ctx) error {
 		item.DeliveryDate = &d
 	}
 	if err := h.service.CreateDetailed(item); err != nil {
+		slog.Error("CreateDetailed failed", "error", err, "rfq_id", item.RFQID, "factory_id", item.FactoryID)
 		return helper.MapServiceError(c, err, helper.ErrorMessage(fiber.StatusBadRequest, "failed to create detailed quotation"), handlerregistry.CreateDetailedErrorMap())
 	}
 	return c.Status(fiber.StatusCreated).JSON(item)

@@ -1,6 +1,8 @@
 package domain
 
 const (
+	OrderStatusWaitSlip            = "WS" // รอลูกค้าแนบสลีป
+	OrderStatusWaitApprove         = "WA" // รอโรงงานตรวจสอบสลีป
 	OrderStatusPaymentPending      = "PP"
 	OrderStatusPaymentExpired      = "PE"
 	OrderStatusPaymentDone         = "PD"

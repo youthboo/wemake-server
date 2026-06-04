@@ -46,11 +46,16 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	api.Use(middleware.AuthContext(cfg.JWTSecret))
 
 	admin := app.Group("/api/admin")
-	admin.Use(middleware.AuthContext(cfg.JWTSecret))
+	// Admin routes must use a signed JWT — X-User-ID bypass is blocked here.
+	admin.Use(middleware.RequireJWT(cfg.JWTSecret))
 	admin.Get("/platform-config", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.platformConfig.GetActive)
 	admin.Post("/platform-config", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.platformConfig.Create)
 	admin.Get("/platform-config/history", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.platformConfig.ListHistory)
+	admin.Get("/tconfig", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.tconfig.GetAll)
+	admin.Patch("/tconfig", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.tconfig.PatchBulk)
 	admin.Get("/platform-configs", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.platformConfig.ListAll)
+	// static sub-path must come before /:config_id to avoid param capture
+	admin.Get("/platform-configs/default-comm", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.platformConfig.GetDefaultComm)
 	admin.Post("/platform-configs", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.platformConfig.CreateConfig)
 	admin.Delete("/platform-configs/:config_id", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.platformConfig.DeleteConfig)
 	admin.Patch("/platform-configs/:config_id", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.platformConfig.UpdateConfig)
@@ -67,6 +72,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	admin.Post("/factories/:factory_id/unsuspend", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.adminFactory.Unsuspend)
 	admin.Get("/factory-verification", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminFactory.List)
 	admin.Patch("/factories/:factory_id/verification", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.adminFactory.PatchVerification)
+	admin.Patch("/factories/:factory_id/certificates/:map_id", middleware.RequireRole(h.authService, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminFactory.PatchCertificateStatus)
 	admin.Get("/rfqs", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminRFQ.List)
 	admin.Get("/rfqs/:rfq_id", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminRFQ.GetByID)
 	admin.Patch("/rfqs/:rfq_id/status", middleware.RequireRole(h.authService, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminRFQ.PatchStatus)
@@ -100,6 +106,14 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	// Factory settlements
 	admin.Get("/factories/:factory_id/settlements", middleware.RequireRole(h.authService, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminCustomer.ListFactorySettlements)
 
+	// Commission invoices (B6, B7, B8)
+	admin.Post("/invoices/generate", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.adminCommission.GenerateInvoices)
+	admin.Get("/invoices", middleware.RequireRole(h.authService, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminCommission.ListInvoices)
+	admin.Get("/invoices/:invoice_id", middleware.RequireRole(h.authService, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminCommission.GetInvoice)
+	admin.Patch("/invoices/:invoice_id/verify", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.adminCommission.VerifyInvoiceSlip)
+	admin.Post("/invoices/:invoice_id/send", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.adminCommission.SendInvoice)
+	admin.Get("/commission/summary", middleware.RequireRole(h.authService, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminCommission.GetSummary)
+
 	auth := api.Group("/auth")
 	auth.Post("/register", h.auth.Register)
 	auth.Post("/login", h.auth.Login)
@@ -126,7 +140,19 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	api.Get("/factories/me/dashboard", h.factory.GetDashboard)
 	api.Get("/factories/me/analytics", h.factory.GetAnalytics)
 
+	// Factory bank accounts (B1)
+	api.Get("/factories/me/bank-accounts", middleware.RequireRole(h.authService, domain.RoleFactory), h.bankAccount.List)
+	api.Post("/factories/me/bank-accounts", middleware.RequireRole(h.authService, domain.RoleFactory), h.bankAccount.Create)
+	api.Patch("/factories/me/bank-accounts/:account_id", middleware.RequireRole(h.authService, domain.RoleFactory), h.bankAccount.Update)
+	api.Delete("/factories/me/bank-accounts/:account_id", middleware.RequireRole(h.authService, domain.RoleFactory), h.bankAccount.Delete)
+
+	// Factory invoices (B7 — factory side)
+	api.Get("/factories/me/invoices", middleware.RequireRole(h.authService, domain.RoleFactory), h.factoryInvoice.ListMyInvoices)
+	api.Get("/factories/me/invoices/:invoice_id", middleware.RequireRole(h.authService, domain.RoleFactory), h.factoryInvoice.GetMyInvoice)
+	api.Post("/factories/me/invoices/:invoice_id/slip", middleware.RequireRole(h.authService, domain.RoleFactory), h.factoryInvoice.AttachCommSlip)
+
 	factories := api.Group("/factories")
+	factories.Get("/:factory_id/bank-account", h.bankAccount.GetPublicDefault) // public default account
 	factories.Get("/:factory_id/categories", h.factory.ListCategories)
 	factories.Post("/:factory_id/categories", h.factory.AddCategory)
 	factories.Put("/:factory_id/categories", h.factory.ReplaceCategories)
@@ -154,6 +180,9 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	addresses.Post("/", h.address.CreateAddress)
 	addresses.Patch("/:address_id", h.address.PatchAddress)
 	addresses.Delete("/:address_id", h.address.DeleteAddress)
+
+	// Factory verify slip (B4)
+	api.Patch("/factory/orders/:order_id/verify-slip", middleware.RequireRole(h.authService, domain.RoleFactory), h.slip.VerifySlip)
 
 	api.Get("/factory/rfq-board", h.factoryRFQBoard.GetBoard)
 	api.Get("/factory/rfqs/:rfq_id/detail", h.factoryRFQBoard.GetDetail)
@@ -210,6 +239,9 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	orders.Get("/", h.order.ListOrders)
 	orders.Get("/:order_id/activity", h.order.ListActivity)
 	orders.Get("/:order_id", h.order.GetOrder)
+	// Payment slip (B2, B4)
+	orders.Post("/:order_id/slip", h.slip.AttachSlip)
+	orders.Get("/:order_id/slip", h.slip.GetSlip)
 	orders.Get("/:order_id/review", h.order.GetReviewState)
 	orders.Post("/:order_id/review", h.order.CreateReview)
 	orders.Post("/:order_id/confirm-receipt", h.order.ConfirmReceipt)

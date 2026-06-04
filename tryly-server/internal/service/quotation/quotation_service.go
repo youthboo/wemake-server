@@ -92,6 +92,9 @@ func (s *QuotationService) Create(item *domain.Quotation) error {
 			}
 		}
 	}
+	if item.ShippingMethodID <= 0 {
+		item.ShippingMethodID = 2 // default: จัดส่งเดลิเวอรี่
+	}
 	if err := validateQuotationTerms(nil, item.PaymentTerms, item.ValidityDays); err != nil {
 		return err
 	}
@@ -440,6 +443,9 @@ func (s *QuotationService) CreateDetailed(item *domain.Quotation) error {
 	}
 	if err := validateQuotationTerms(item.Incoterms, item.PaymentTerms, item.ValidityDays); err != nil {
 		return err
+	}
+	if item.ShippingMethodID <= 0 {
+		item.ShippingMethodID = 2 // default: จัดส่งเดลิเวอรี่
 	}
 	breakdown, err := s.commission.Calculate(walletservice.CommissionInput{
 		Items:          item.Items,

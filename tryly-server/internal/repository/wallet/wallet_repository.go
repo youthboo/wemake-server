@@ -89,6 +89,30 @@ func (r *WalletRepository) EnsureWallet(tx *sqlx.Tx, userID int64) (int64, error
 	return id, err
 }
 
+// EnsureWalletDirect returns wallet_id for user_id, inserting if missing (no tx needed).
+func (r *WalletRepository) EnsureWalletDirect(userID int64) (int64, error) {
+	var id int64
+	err := r.db.Get(&id, `SELECT wallet_id FROM wallets WHERE user_id = $1`, userID)
+	if err == nil {
+		return id, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+	err = r.db.QueryRow(`
+		INSERT INTO wallets (user_id, good_fund, pending_fund)
+		VALUES ($1, 0, 0)
+		RETURNING wallet_id
+	`, userID).Scan(&id)
+	if err != nil {
+		// Race condition: another request inserted first — try again
+		if err2 := r.db.Get(&id, `SELECT wallet_id FROM wallets WHERE user_id = $1`, userID); err2 == nil {
+			return id, nil
+		}
+	}
+	return id, err
+}
+
 // DebitGoodFund subtracts amount if good_fund is sufficient. Returns false if balance too low.
 func (r *WalletRepository) DebitGoodFund(tx *sqlx.Tx, walletID int64, amount float64) (bool, error) {
 	if amount <= 0 {

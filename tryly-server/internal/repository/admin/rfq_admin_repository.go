@@ -45,7 +45,9 @@ func (r *AdminRFQRepository) ListAdmin(filter domain.AdminRFQFilter) ([]domain.A
 		conditions = append(conditions, sq.Like{"LOWER(r.title)": searchTerm})
 	}
 
-	countQuery := sq.Select("COUNT(*)").
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+
+	countQuery := psql.Select("COUNT(*)").
 		From("rfqs r").
 		Where(conditions)
 
@@ -58,7 +60,7 @@ func (r *AdminRFQRepository) ListAdmin(filter domain.AdminRFQFilter) ([]domain.A
 		return nil, 0, err
 	}
 
-	query := sq.Select(
+	query := psql.Select(
 		"r.rfq_id",
 		"r.title",
 		"r.user_id",
@@ -115,7 +117,7 @@ func (r *AdminRFQRepository) GetAdminDetail(rfqID int64) (*domain.AdminRFQDetail
 		QuotationCount int64          `db:"quotation_count"`
 	}
 
-	query := sq.Select(
+	query := sq.StatementBuilder.PlaceholderFormat(sq.Dollar).Select(
 		"COALESCE(NULLIF(TRIM(CONCAT(c.first_name, ' ', c.last_name)), ''), 'ลูกค้า #' || u.user_id::text) AS customer_name",
 		"u.email AS customer_email",
 		"NULLIF(u.phone, '') AS customer_phone",

@@ -51,12 +51,12 @@ func (r *CustomerAdminRepository) ListCustomers(search string, isActive *bool, l
 			COALESCE(u.phone, '')                                         AS phone,
 			u.is_active,
 			COUNT(DISTINCT o.order_id)::int                               AS total_orders,
-			COALESCE(SUM(o.grand_total) FILTER (WHERE o.status <> 'CA'), 0) AS total_spend,
+			COALESCE(SUM(o.total_amount) FILTER (WHERE o.status <> 'CA'), 0) AS total_spend,
 			COALESCE(w.good_fund, 0) + COALESCE(w.pending_fund, 0)       AS wallet_balance,
 			u.created_at::text                                            AS created_at
 		FROM users u
 		LEFT JOIN customers c ON c.user_id = u.user_id
-		LEFT JOIN orders o    ON o.user_id = u.user_id
+		LEFT JOIN orders o    ON o.customer_id = u.user_id
 		LEFT JOIN wallets w   ON w.user_id = u.user_id
 		WHERE u.role = 'CT'
 		  AND ($1 = '' OR u.email ILIKE '%' || $1 || '%'
@@ -96,14 +96,14 @@ func (r *CustomerAdminRepository) GetCustomerDetail(userID int64) (*domain.Admin
 			)), ''), '')                                                   AS address,
 			u.is_active,
 			COUNT(DISTINCT o.order_id)::int                               AS total_orders,
-			COALESCE(SUM(o.grand_total) FILTER (WHERE o.status <> 'CA'), 0) AS total_spend,
+			COALESCE(SUM(o.total_amount) FILTER (WHERE o.status <> 'CA'), 0) AS total_spend,
 			u.created_at::text                                            AS created_at,
 			w.wallet_id,
 			COALESCE(w.good_fund, 0)                                      AS good_fund,
 			COALESCE(w.pending_fund, 0)                                   AS pending_fund
 		FROM users u
 		LEFT JOIN customers c ON c.user_id = u.user_id
-		LEFT JOIN orders o    ON o.user_id = u.user_id
+		LEFT JOIN orders o    ON o.customer_id = u.user_id
 		LEFT JOIN wallets w   ON w.user_id = u.user_id
 		WHERE u.user_id = $1 AND u.role = 'CT'
 		GROUP BY u.user_id, u.email, c.first_name, c.last_name, u.phone,
@@ -191,12 +191,12 @@ func (r *CustomerAdminRepository) ListCustomerOrders(userID int64, limit, offset
 			o.rfq_id,
 			o.factory_id,
 			COALESCE(fp.factory_name, '')    AS factory_name,
-			COALESCE(o.grand_total, 0)       AS grand_total,
+			COALESCE(o.total_amount, 0)       AS grand_total,
 			o.status,
 			o.created_at::text               AS created_at
 		FROM orders o
 		LEFT JOIN factory_profiles fp ON fp.user_id = o.factory_id
-		WHERE o.user_id = $1
+		WHERE o.customer_id = $1
 		ORDER BY o.created_at DESC
 		LIMIT $2 OFFSET $3
 	`, userID, limit, offset); err != nil {
@@ -220,10 +220,10 @@ func (r *CustomerAdminRepository) ListTopCustomers(limit int) ([]domain.AdminTop
 			COALESCE(c.last_name, '')  AS last_name,
 			u.email,
 			COUNT(o.order_id)::int     AS total_orders,
-			COALESCE(SUM(o.grand_total) FILTER (WHERE o.status <> 'CA'), 0) AS total_spend
+			COALESCE(SUM(o.total_amount) FILTER (WHERE o.status <> 'CA'), 0) AS total_spend
 		FROM users u
 		LEFT JOIN customers c ON c.user_id = u.user_id
-		LEFT JOIN orders o    ON o.user_id = u.user_id
+		LEFT JOIN orders o    ON o.customer_id = u.user_id
 		WHERE u.role = 'CT'
 		GROUP BY u.user_id, c.first_name, c.last_name, u.email
 		ORDER BY total_spend DESC, total_orders DESC

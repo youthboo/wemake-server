@@ -7,6 +7,7 @@ type CreateRFQRequest struct {
 	Title                  string   `json:"title" validate:"notblank"`
 	Description            string   `json:"description"`
 	Quantity               int64    `json:"quantity" validate:"gt=0"`
+	UnitID                 *int64   `json:"unit_id"`
 	Unit                   string   `json:"unit"`
 	Details                string   `json:"details"`
 	AddressID              int64    `json:"address_id"`
@@ -30,6 +31,7 @@ type PatchRFQRequest struct {
 	Title                  *string  `json:"title"`
 	Description            *string  `json:"description"`
 	Quantity               *int64   `json:"quantity"`
+	UnitID                 *int64   `json:"unit_id"`
 	Unit                   *string  `json:"unit"`
 	Details                *string  `json:"details"`
 	MaterialGrade          *string  `json:"material_grade"`

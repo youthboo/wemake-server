@@ -33,6 +33,7 @@ type CreateDetailedQuotationRequest struct {
 	DiscountAmount       float64                `json:"discount_amount"`
 	ShippingCost         float64                `json:"shipping_cost"`
 	ShippingMethod       *string                `json:"shipping_method"`
+	ShippingMethodID     *int64                 `json:"shipping_method_id"`
 	PackagingCost        float64                `json:"packaging_cost"`
 	ToolingMoldCost      float64                `json:"tooling_mold_cost"`
 	LeadTimeDays         *int64                 `json:"lead_time_days"`

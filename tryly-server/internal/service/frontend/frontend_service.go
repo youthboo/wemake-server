@@ -321,7 +321,6 @@ func (s *FrontendService) GetFactoryDetail(factoryID int64) (*domain.FrontendFac
 			Description:     row.Description,
 			Rating:          row.Rating,
 			ReviewCount:     row.ReviewCount,
-			MinOrder:        row.MinOrder,
 			LeadTimeDesc:    row.LeadTimeDesc,
 			ImageURL:        row.ImageURL,
 			PriceRange:      row.PriceRange,
@@ -614,11 +613,6 @@ func mapFactoryCard(row frontendrepo.FrontendFactoryRow) domain.FrontendFactoryC
 		tags = append(tags, "Verified")
 	}
 
-	minOrder := int64(0)
-	if row.MinOrder.Valid {
-		minOrder = row.MinOrder.Int64
-	}
-
 	categoryScopes := []string{}
 	if len(row.CategoryScopes) > 0 {
 		categoryScopes = []string(row.CategoryScopes)
@@ -632,7 +626,6 @@ func mapFactoryCard(row frontendrepo.FrontendFactoryRow) domain.FrontendFactoryC
 		Reviews:         row.ReviewCount,
 		Specialization:  specialization,
 		Tags:            tags,
-		MinOrder:        minOrder,
 		LeadTime:        leadTime,
 		Image:           row.ImageURL.String,
 		Verified:        row.Verified,
@@ -889,11 +882,6 @@ func mapMockFactory(row frontendrepo.FrontendFactoryRow) domain.MockFactory {
 		tags = append(tags, "OEM")
 	}
 
-	minOrder := int64(100 + ((row.ID % 5) * 100))
-	if row.CompletedOrders == 0 {
-		minOrder = 100
-	}
-
 	return domain.MockFactory{
 		ID:              fmt.Sprintf("f%d", row.ID),
 		Name:            row.Name,
@@ -902,7 +890,6 @@ func mapMockFactory(row frontendrepo.FrontendFactoryRow) domain.MockFactory {
 		Reviews:         reviews,
 		Specialization:  fallbackString(row.Specialization.String, "โรงงานรับผลิตสินค้า"),
 		Tags:            tags,
-		MinOrder:        minOrder,
 		LeadTime:        fallbackString(helper.FormatLeadTimeRange(row.AverageLeadDays.Float64), "7-14 วัน"),
 		Image:           helper.FactoryImageURL(row.ID),
 		Verified:        row.Verified,
@@ -990,7 +977,6 @@ func buildMockShowcases(factory domain.MockFactory, index int) []domain.MockShow
 		Category:    baseCategory,
 		PostedAt:    helper.DateDaysAgo(index + 1),
 		Likes:       60 + int64(index*12),
-		MinOrder:    factory.MinOrder,
 		LeadTime:    factory.LeadTime,
 		Tags:        factory.Tags,
 	}
@@ -1009,7 +995,6 @@ func buildMockShowcases(factory domain.MockFactory, index int) []domain.MockShow
 		Category:    baseCategory,
 		PostedAt:    helper.DateDaysAgo(index + 2),
 		Likes:       42 + int64(index*9),
-		MinOrder:    factory.MinOrder,
 		LeadTime:    factory.LeadTime,
 		Tags:        factory.Tags,
 	}

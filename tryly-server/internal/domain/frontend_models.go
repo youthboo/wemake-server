@@ -34,7 +34,6 @@ type FrontendFactoryCard struct {
 	Reviews         int64    `json:"reviews"`
 	Specialization  string   `json:"specialization"`
 	Tags            []string `json:"tags"`
-	MinOrder        int64    `json:"minOrder"`
 	LeadTime        string   `json:"leadTime"`
 	Image           string   `json:"image"`
 	Verified        bool     `json:"verified"`
@@ -204,7 +203,6 @@ type MockFactory struct {
 	Reviews         int64    `json:"reviews"`
 	Specialization  string   `json:"specialization"`
 	Tags            []string `json:"tags"`
-	MinOrder        int64    `json:"minOrder"`
 	LeadTime        string   `json:"leadTime"`
 	Image           string   `json:"image"`
 	Verified        bool     `json:"verified"`
@@ -250,7 +248,6 @@ type MockShowcase struct {
 	Category    string   `json:"category"`
 	PostedAt    string   `json:"postedAt"`
 	Likes       int64    `json:"likes"`
-	MinOrder    int64    `json:"minOrder"`
 	LeadTime    string   `json:"leadTime"`
 	Tags        []string `json:"tags"`
 }
