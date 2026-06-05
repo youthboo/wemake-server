@@ -11,6 +11,7 @@ type ShowcaseWriteRequest struct {
 	CategoryID      *int64          `json:"category_id"`
 	SubCategoryID   *int64          `json:"sub_category_id"`
 	MOQ             *int            `json:"moq"`
+	UnitID          *int            `json:"unit_id"`
 	LeadTimeDays    *int            `json:"lead_time_days"`
 	BasePrice       *float64        `json:"base_price"`
 	PromoPrice      *float64        `json:"promo_price"`

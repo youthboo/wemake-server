@@ -13,6 +13,7 @@ type FactoryShowcase struct {
 	CategoryID      *int64          `db:"category_id" json:"category_id,omitempty"`
 	SubCategoryID   *int64          `db:"sub_category_id" json:"sub_category_id,omitempty"`
 	MOQ             *int            `db:"moq" json:"moq,omitempty"`
+	UnitID          *int            `db:"unit_id" json:"unit_id,omitempty"`
 	LeadTimeDays    *int            `db:"lead_time_days" json:"lead_time_days,omitempty"`
 	BasePrice       *float64        `db:"base_price" json:"base_price,omitempty"`
 	PromoPrice      *float64        `db:"promo_price" json:"promo_price,omitempty"`
@@ -41,6 +42,7 @@ type ShowcaseExploreItem struct {
 	CategoryID      *int64          `db:"category_id" json:"category_id,omitempty"`
 	SubCategoryID   *int64          `db:"sub_category_id" json:"sub_category_id,omitempty"`
 	MOQ             *int            `db:"moq" json:"moq,omitempty"`
+	UnitID          *int            `db:"unit_id" json:"unit_id,omitempty"`
 	BasePrice       *float64        `db:"base_price" json:"base_price,omitempty"`
 	PromoPrice      *float64        `db:"promo_price" json:"promo_price,omitempty"`
 	StartDate       *time.Time      `db:"start_date" json:"start_date,omitempty"`
@@ -92,6 +94,7 @@ type ShowcaseByFactoryItem struct {
 	CategoryID      *int64    `db:"category_id" json:"category_id,omitempty"`
 	SubCategoryID   *int64    `db:"sub_category_id" json:"sub_category_id,omitempty"`
 	MOQ             *int      `db:"moq" json:"moq,omitempty"`
+	UnitID          *int      `db:"unit_id" json:"unit_id,omitempty"`
 	BasePrice       *float64  `db:"base_price" json:"base_price,omitempty"`
 	LeadTimeDays    *int      `db:"lead_time_days" json:"lead_time_days,omitempty"`
 	LikesCount      int       `db:"likes_count" json:"likes_count"`
@@ -156,6 +159,7 @@ type ShowcaseDetail struct {
 	CategoryID            *int64               `db:"category_id" json:"category_id,omitempty"`
 	SubCategoryID         *int64               `db:"sub_category_id" json:"sub_category_id,omitempty"`
 	MOQ                   *int                 `db:"moq" json:"moq,omitempty"`
+	UnitID                *int                 `db:"unit_id" json:"unit_id,omitempty"`
 	LeadTimeDays          *int                 `db:"lead_time_days" json:"lead_time_days,omitempty"`
 	BasePrice             *float64             `db:"base_price" json:"base_price,omitempty"`
 	PromoPrice            *float64             `db:"promo_price" json:"promo_price,omitempty"`
@@ -234,6 +238,7 @@ type ShowcaseWriteInput struct {
 	CategoryID      *int64
 	SubCategoryID   *int64
 	MOQ             *int
+	UnitID          *int
 	LeadTimeDays    *int
 	BasePrice       *float64
 	PromoPrice      *float64

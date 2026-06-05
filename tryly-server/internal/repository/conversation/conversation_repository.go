@@ -33,7 +33,7 @@ const conversationPartySelect = `
 		fp.factory_name AS factory_name,
 		fp.image_url AS factory_image_url,
 		(fp.approval_status = 'AP') AS factory_is_verified,
-		ft.type_name AS factory_specialization`
+		fp.description AS factory_specialization`
 
 func (r *ConversationRepository) ListByUserID(userID int64) ([]domain.ConversationRow, error) {
 	var items []domain.ConversationRow
@@ -41,7 +41,6 @@ func (r *ConversationRepository) ListByUserID(userID int64) ([]domain.Conversati
 		FROM conversations c
 		LEFT JOIN customers cust ON cust.user_id = c.customer_id
 		LEFT JOIN factory_profiles fp ON fp.user_id = c.factory_id
-		LEFT JOIN lbi_factory_types ft ON ft.factory_type_id = fp.factory_type_id
 		WHERE c.customer_id = $1 OR c.factory_id = $1
 		ORDER BY c.updated_at DESC`
 	err := r.db.Select(&items, query, userID)
@@ -54,7 +53,6 @@ func (r *ConversationRepository) GetByID(convID int64) (*domain.ConversationRow,
 		FROM conversations c
 		LEFT JOIN customers cust ON cust.user_id = c.customer_id
 		LEFT JOIN factory_profiles fp ON fp.user_id = c.factory_id
-		LEFT JOIN lbi_factory_types ft ON ft.factory_type_id = fp.factory_type_id
 		WHERE c.conv_id = $1`
 	err := r.db.Get(&item, query, convID)
 	return &item, err
@@ -73,7 +71,6 @@ func (r *ConversationRepository) Create(conv *domain.Conversation) error {
 		FROM conversations c
 		LEFT JOIN customers cust ON cust.user_id = c.customer_id
 		LEFT JOIN factory_profiles fp ON fp.user_id = c.factory_id
-		LEFT JOIN lbi_factory_types ft ON ft.factory_type_id = fp.factory_type_id
 		WHERE c.customer_id = $1 AND c.factory_id = $2
 		LIMIT 1`, conv.CustomerID, conv.FactoryID)
 	if err == nil {

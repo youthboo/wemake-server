@@ -37,7 +37,6 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		FirstName:      req.FirstName,
 		LastName:       req.LastName,
 		FactoryName:    req.FactoryName,
-		FactoryTypeID:  req.FactoryTypeID,
 		TaxID:          req.TaxID,
 		ProvinceID:     req.ProvinceID,
 		CategoryIDs:    req.CategoryIDs,
@@ -124,14 +123,12 @@ func (h *AuthHandler) UpgradeToFactory(c *fiber.Ctx) error {
 	var req dto.UpgradeToFactoryRequest
 	if err := helper.ParseAndValidateBody(c, &req, map[string]string{
 		"FactoryName":   "factory_name is required",
-		"FactoryTypeID": "factory_type_id is required",
 	}); err != nil {
 		return err
 	}
 
 	result, err := h.service.UpgradeToFactory(userID, authservice.RegisterInput{
 		FactoryName:    req.FactoryName,
-		FactoryTypeID:  req.FactoryTypeID,
 		TaxID:          req.TaxID,
 		ProvinceID:     req.ProvinceID,
 		CategoryIDs:    req.CategoryIDs,

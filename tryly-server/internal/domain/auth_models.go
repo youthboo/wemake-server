@@ -37,7 +37,6 @@ type CustomerProfile struct {
 type FactoryProfile struct {
 	UserID          int64      `db:"user_id" json:"user_id"`
 	FactoryName     string     `db:"factory_name" json:"factory_name"`
-	FactoryTypeID   int64      `db:"factory_type_id" json:"factory_type_id"`
 	TaxID           string     `db:"tax_id" json:"tax_id,omitempty"`
 	ProvinceID      *int64     `db:"province_id" json:"province_id,omitempty"`
 	Rating          *float64   `db:"rating" json:"rating,omitempty"`

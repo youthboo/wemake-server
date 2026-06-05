@@ -73,7 +73,6 @@ type ProfileResponse struct {
 	FirstName      *string         `json:"first_name,omitempty"`
 	LastName       *string         `json:"last_name,omitempty"`
 	FactoryName    *string         `json:"factory_name,omitempty"`
-	FactoryTypeID  *int64          `json:"factory_type_id,omitempty"`
 	TaxID          *string         `json:"tax_id,omitempty"`
 	ProvinceID     *int64          `json:"province_id,omitempty"`
 	Specialization *string         `json:"specialization,omitempty"`

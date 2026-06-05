@@ -41,7 +41,6 @@ type RegisterInput struct {
 	FirstName      string
 	LastName       string
 	FactoryName    string
-	FactoryTypeID  int64
 	TaxID          string
 	ProvinceID     *int64
 	CategoryIDs    []int64
@@ -120,12 +119,11 @@ func (s *AuthService) Register(input RegisterInput) (*LoginResult, error) {
 			return nil, err
 		}
 	case domain.RoleFactory:
-		if strings.TrimSpace(input.FactoryName) == "" || input.FactoryTypeID <= 0 {
+		if strings.TrimSpace(input.FactoryName) == "" {
 			return nil, ErrMissingRoleData
 		}
 		factory := &domain.FactoryProfile{
 			FactoryName:   strings.TrimSpace(input.FactoryName),
-			FactoryTypeID: input.FactoryTypeID,
 			TaxID:         strings.TrimSpace(input.TaxID),
 			ProvinceID:    input.ProvinceID,
 		}
@@ -172,13 +170,12 @@ func (s *AuthService) UpgradeToFactory(userID int64, input RegisterInput) (*Logi
 		return nil, ErrFactoryAlreadySetup
 	}
 
-	if strings.TrimSpace(input.FactoryName) == "" || input.FactoryTypeID <= 0 {
+	if strings.TrimSpace(input.FactoryName) == "" {
 		return nil, ErrMissingRoleData
 	}
 
 	factory := &domain.FactoryProfile{
 		FactoryName:   strings.TrimSpace(input.FactoryName),
-		FactoryTypeID: input.FactoryTypeID,
 		TaxID:         strings.TrimSpace(input.TaxID),
 		ProvinceID:    input.ProvinceID,
 	}

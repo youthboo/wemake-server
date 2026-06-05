@@ -231,7 +231,7 @@ func (r *FrontendRepository) ListFactories(scope ...string) ([]FrontendFactoryRo
 			u.user_id AS id,
 			fp.factory_name AS name,
 			COALESCE(fp_p.name_th, p.name_th) AS location,
-			ft.type_name AS specialization,
+			fp.description AS specialization,
 			(fp.approval_status = 'AP') AS verified,
 			COALESCE(completed.completed_orders, fp.completed_orders, 0) AS completed_orders,
 			lead.average_lead_days,
@@ -244,7 +244,7 @@ func (r *FrontendRepository) ListFactories(scope ...string) ([]FrontendFactoryRo
 			COALESCE(cats.category_scopes, ARRAY[]::text[]) AS category_scopes
 		FROM users u
 		INNER JOIN factory_profiles fp ON fp.user_id = u.user_id
-		LEFT JOIN lbi_factory_types ft ON ft.factory_type_id = fp.factory_type_id
+		
 		LEFT JOIN lbi_provinces fp_p ON fp_p.row_id = fp.province_id
 		LEFT JOIN addresses a ON a.user_id = u.user_id AND a.is_default = TRUE
 		LEFT JOIN lbi_provinces p ON p.row_id = a.province_id
@@ -293,7 +293,7 @@ func (r *FrontendRepository) GetFactoryDetail(factoryID int64) (*FrontendFactory
 			u.user_id AS id,
 			fp.factory_name AS name,
 			COALESCE(fp_p.name_th, p.name_th) AS location,
-			ft.type_name AS specialization,
+			fp.description AS specialization,
 			(fp.approval_status = 'AP') AS verified,
 			COALESCE(completed.completed_orders, fp.completed_orders, 0) AS completed_orders,
 			lead.average_lead_days,
@@ -312,7 +312,7 @@ func (r *FrontendRepository) GetFactoryDetail(factoryID int64) (*FrontendFactory
 			u.phone
 		FROM users u
 		INNER JOIN factory_profiles fp ON fp.user_id = u.user_id
-		LEFT JOIN lbi_factory_types ft ON ft.factory_type_id = fp.factory_type_id
+		
 		LEFT JOIN lbi_provinces fp_p ON fp_p.row_id = fp.province_id
 		LEFT JOIN addresses a ON a.user_id = u.user_id AND a.is_default = TRUE
 		LEFT JOIN lbi_sub_districts sd ON sd.row_id = a.sub_district_id

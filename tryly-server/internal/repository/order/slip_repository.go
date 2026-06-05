@@ -36,10 +36,10 @@ func (r *SlipRepository) GetSlipInfo(orderID int64) (*SlipInfo, error) {
 		       t.verified_at::text AS verified_at,
 		       t.created_at::text AS uploaded_at
 		FROM orders o
-		LEFT JOIN transactions t ON t.order_id = o.order_id AND t.type = 'DE'
+		LEFT JOIN transactions t ON t.order_id = o.order_id AND t.type = 'BU'
 		    AND t.tx_id = (
 		        SELECT MAX(t2.tx_id) FROM transactions t2
-		        WHERE t2.order_id = o.order_id AND t2.type = 'DE'
+		        WHERE t2.order_id = o.order_id AND t2.type = 'BU'
 		    )
 		WHERE o.order_id = $1
 	`, orderID)
@@ -60,7 +60,7 @@ func (r *SlipRepository) AttachSlip(orderID, walletID int64, amount float64, sli
 	// Insert transaction record
 	_, err = tx.Exec(`
 		INSERT INTO transactions (wallet_id, order_id, type, status, amount, slip_url, slip_note)
-		VALUES ($1, $2, 'DE', 'ST', $3, $4, NULLIF($5, ''))
+		VALUES ($1, $2, 'BU', 'ST', $3, $4, NULLIF($5, ''))
 	`, walletID, orderID, amount, slipURL, slipNote)
 	if err != nil {
 		return err
@@ -95,7 +95,7 @@ func (r *SlipRepository) ApproveSlip(orderID, verifiedBy int64) error {
 		UPDATE transactions
 		SET status = 'PT', verified_by = $2, verified_at = NOW(), updated_at = NOW()
 		WHERE tx_id = (
-		    SELECT MAX(tx_id) FROM transactions WHERE order_id = $1 AND type = 'DE' AND status = 'ST'
+		    SELECT MAX(tx_id) FROM transactions WHERE order_id = $1 AND type = 'BU' AND status = 'ST'
 		)
 	`, orderID, verifiedBy)
 	if err != nil {
@@ -131,7 +131,7 @@ func (r *SlipRepository) RejectSlip(orderID int64, reason string) error {
 		UPDATE transactions
 		SET status = 'RJ', slip_note = COALESCE(slip_note || E'\n', '') || 'ปฏิเสธ: ' || $2, updated_at = NOW()
 		WHERE tx_id = (
-		    SELECT MAX(tx_id) FROM transactions WHERE order_id = $1 AND type = 'DE' AND status = 'ST'
+		    SELECT MAX(tx_id) FROM transactions WHERE order_id = $1 AND type = 'BU' AND status = 'ST'
 		)
 	`, orderID, reason)
 	if err != nil {

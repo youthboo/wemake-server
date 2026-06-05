@@ -183,6 +183,7 @@ func showcaseWriteRequestToInput(r dto.ShowcaseWriteRequest) (domain.ShowcaseWri
 		CategoryID:      r.CategoryID,
 		SubCategoryID:   r.SubCategoryID,
 		MOQ:             r.MOQ,
+		UnitID:          r.UnitID,
 		LeadTimeDays:    r.LeadTimeDays,
 		BasePrice:       r.BasePrice,
 		PromoPrice:      r.PromoPrice,

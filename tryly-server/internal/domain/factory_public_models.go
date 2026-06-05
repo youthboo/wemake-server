@@ -24,8 +24,6 @@ type FactoryAnalytics struct {
 type FactoryListItem struct {
 	FactoryID          int64       `json:"factory_id" db:"factory_id"`
 	FactoryName        string      `json:"factory_name" db:"factory_name"`
-	FactoryTypeID      int64       `json:"factory_type_id" db:"factory_type_id"`
-	FactoryTypeName    *string     `json:"factory_type_name,omitempty" db:"factory_type_name"`
 	Specialization     *string     `json:"specialization,omitempty" db:"specialization"`
 	Rating             *float64    `json:"rating,omitempty" db:"rating"`
 	ReviewCount        int64       `json:"review_count" db:"review_count"`
@@ -88,8 +86,6 @@ type FactoryProfileReview struct {
 type FactoryPublicDetail struct {
 	FactoryID          int64                       `json:"factory_id"`
 	FactoryName        string                      `json:"factory_name"`
-	FactoryTypeID      int64                       `json:"factory_type_id"`
-	FactoryTypeName    *string                     `json:"factory_type_name,omitempty"`
 	TaxID              *string                     `json:"tax_id,omitempty"`
 	Specialization     *string                     `json:"specialization,omitempty"`
 	LeadTimeDesc       *string                     `json:"lead_time_desc,omitempty"`

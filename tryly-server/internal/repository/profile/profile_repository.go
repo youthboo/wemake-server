@@ -61,16 +61,14 @@ func (r *ProfileRepository) GetProfile(userID int64) (*domain.ProfileResponse, e
 	case domain.RoleFactory:
 		var factory domain.FactoryProfile
 		if err := r.db.Get(&factory, `
-			SELECT fp.user_id, fp.factory_name, fp.factory_type_id, fp.tax_id, fp.province_id, ft.type_name AS specialization, fp.lead_time_desc,
+			SELECT fp.user_id, fp.factory_name, fp.tax_id, fp.province_id, fp.description AS specialization, fp.lead_time_desc,
 			       (fp.approval_status = 'AP') AS is_verified, fp.verified_at, fp.description, NULL::text AS price_range
 			FROM factory_profiles fp
-			LEFT JOIN lbi_factory_types ft ON ft.factory_type_id = fp.factory_type_id
 			WHERE fp.user_id = $1
 		`, userID); err != nil {
 			return nil, err
 		}
 		out.FactoryName = &factory.FactoryName
-		out.FactoryTypeID = &factory.FactoryTypeID
 		out.TaxID = stringPtrIfNotEmpty(factory.TaxID)
 		out.ProvinceID = factory.ProvinceID
 		out.Specialization = factory.Specialization

@@ -3,7 +3,6 @@ package dto
 // Factory Request DTOs
 type CreateFactoryRequest struct {
 	FactoryName    string  `json:"factory_name" validate:"notblank"`
-	FactoryTypeID  int64   `json:"factory_type_id" validate:"gt=0"`
 	TaxID          string  `json:"tax_id"`
 	ProvinceID     *int64  `json:"province_id"`
 	CategoryIDs    []int64 `json:"category_ids"`
@@ -19,7 +18,6 @@ type PatchFactoryProfileRequest struct {
 	FactoryName        *string `json:"factory_name"`
 	TaxID              *string `json:"tax_id"`
 	Description        *string `json:"description"`
-	FactoryTypeID      *int64  `json:"factory_type_id"`
 	ImageURL           *string `json:"image_url"`
 	BackgroundImageURL *string `json:"background_image_url"`
 	LeadTimeDesc       *string `json:"lead_time_desc"`
@@ -29,7 +27,6 @@ type SaveProfileRequest struct {
 	FactoryName        string  `json:"factory_name" validate:"notblank"`
 	TaxID              *string `json:"tax_id"`
 	Description        *string `json:"description"`
-	FactoryTypeID      *int64  `json:"factory_type_id"`
 	ImageURL           *string `json:"image_url"`
 	BackgroundImageURL *string `json:"background_image_url"`
 	LeadTimeDesc       *string `json:"lead_time_desc"`
