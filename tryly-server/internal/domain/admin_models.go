@@ -27,7 +27,6 @@ type AdminFactoryListItem struct {
 	Email           string     `db:"email" json:"email"`
 	Phone           *string    `db:"phone" json:"phone,omitempty"`
 	TaxID           *string    `db:"tax_id" json:"tax_id,omitempty"`
-	FactoryTypeName *string    `db:"factory_type_name" json:"factory_type_name,omitempty"`
 	ProvinceName    *string    `db:"province_name" json:"province_name,omitempty"`
 	ApprovalStatus  string     `db:"approval_status" json:"approval_status"`
 	IsVerified      bool       `db:"is_verified" json:"is_verified"`
@@ -46,7 +45,6 @@ type AdminFactoryStats struct {
 
 type AdminFactoryDetail struct {
 	AdminFactoryListItem
-	FactoryTypeID       int64                       `db:"factory_type_id" json:"factory_type_id"`
 	Specialization      *string                     `db:"specialization" json:"specialization,omitempty"`
 	ProvinceID          *int64                      `db:"province_id" json:"province_id,omitempty"`
 	ImageURL            *string                     `db:"image_url" json:"image_url,omitempty"`

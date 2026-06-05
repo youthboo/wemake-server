@@ -47,7 +47,7 @@ type LBISubDistrict struct {
 }
 
 type LBIFactoryType struct {
-	FactoryTypeID int64  `db:"factory_type_id" json:"factory_type_id"`
+	FactoryType string  `db:"factory_type" json:"factory_type"`
 	TypeName      string `db:"type_name" json:"type_name"`
 	Status        string `db:"status" json:"status"`
 }

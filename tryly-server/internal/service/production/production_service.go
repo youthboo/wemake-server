@@ -78,7 +78,7 @@ func NewProductionService(repo *productionrepo.ProductionRepository) *Production
 }
 
 func (s *ProductionService) ListSteps(factoryTypeID *int64) ([]domain.ProductionStepTemplate, error) {
-	return s.repo.ListActiveStepsByFactoryType(factoryTypeID)
+	return s.repo.ListActiveSteps()
 }
 
 func (s *ProductionService) ListByOrderID(orderID, userID int64) (*domain.ProductionUpdatesList, error) {
@@ -92,7 +92,7 @@ func (s *ProductionService) ListByOrderID(orderID, userID int64) (*domain.Produc
 		}
 		return nil, &ProductionRuleError{Err: ErrProductionNotOrderCustomer}
 	}
-	steps, err := s.repo.ListActiveStepsByFactoryType(order.FactoryTypeID)
+	steps, err := s.repo.ListActiveSteps()
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func (s *ProductionService) Upsert(orderID, userID int64, input ProductionWriteI
 			return &ProductionRuleError{Err: ErrProductionOrderLocked}
 		}
 
-		steps, err := s.repo.ListActiveStepsByFactoryTypeTx(tx, order.FactoryTypeID)
+		steps, err := s.repo.ListActiveStepsTx(tx)
 		if err != nil {
 			return err
 		}

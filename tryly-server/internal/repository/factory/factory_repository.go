@@ -48,8 +48,6 @@ var ErrDuplicateFactoryCategory = errors.New("factory already has this category"
 // ErrInvalidFactoryCategory is returned when category_id is not a valid FK.
 var ErrInvalidFactoryCategory = errors.New("invalid category_id")
 
-// ErrInvalidFactoryType is returned when factory_type_id is not a valid FK.
-var ErrInvalidFactoryType = errors.New("invalid factory_type_id")
 
 // ListPublicVerified returns active factories for the public explore listing.
 // Pass an optional scope ("PD" or "MT") to restrict to factories that have at
@@ -65,8 +63,6 @@ func (r *FactoryRepository) ListPublicVerified(scope ...string) ([]domain.Factor
 		SELECT
 			fp.user_id AS factory_id,
 			fp.factory_name,
-			fp.factory_type_id,
-			ft.type_name AS factory_type_name,
 			fp.description AS specialization,
 			COALESCE(rev.avg_rating, fp.rating, 0)::float8 AS rating,
 			COALESCE(rev.review_cnt, fp.review_count, 0)::bigint AS review_count,
@@ -91,7 +87,6 @@ func (r *FactoryRepository) ListPublicVerified(scope ...string) ([]domain.Factor
 			COALESCE(cats.category_scopes, '[]') AS category_scopes
 		FROM factory_profiles fp
 		INNER JOIN users u ON u.user_id = fp.user_id AND u.role = 'FT' AND u.is_active = TRUE
-		LEFT JOIN lbi_factory_types ft ON ft.factory_type_id = fp.factory_type_id
 		LEFT JOIN lbi_provinces p ON p.row_id = fp.province_id
 		LEFT JOIN (
 			SELECT factory_id::bigint AS factory_id,
@@ -127,8 +122,6 @@ func (r *FactoryRepository) ListPublicVerified(scope ...string) ([]domain.Factor
 type factoryDetailHeadRow struct {
 	FactoryID          int64           `db:"factory_id"`
 	FactoryName        string          `db:"factory_name"`
-	FactoryTypeID      int64           `db:"factory_type_id"`
-	FactoryTypeName    sql.NullString  `db:"factory_type_name"`
 	TaxID              sql.NullString  `db:"tax_id"`
 	Specialization     sql.NullString  `db:"specialization"`
 	LeadTimeDesc       sql.NullString  `db:"lead_time_desc"`
@@ -165,10 +158,8 @@ func (r *FactoryRepository) getFactoryDetailHead(factoryID int64) (factoryDetail
 		SELECT
 			fp.user_id AS factory_id,
 			fp.factory_name,
-			fp.factory_type_id,
-			ft.type_name AS factory_type_name,
 			fp.tax_id,
-			ft.type_name AS specialization,
+			fp.description AS specialization,
 			fp.lead_time_desc,
 			(fp.approval_status = 'AP') AS is_verified,
 			COALESCE(rev.avg_rating, fp.rating, 0)::float8 AS rating,
@@ -182,7 +173,6 @@ func (r *FactoryRepository) getFactoryDetailHead(factoryID int64) (factoryDetail
 			p.name_th AS province_name
 		FROM factory_profiles fp
 		INNER JOIN users u ON u.user_id = fp.user_id AND u.role = 'FT' AND u.is_active = TRUE
-		LEFT JOIN lbi_factory_types ft ON ft.factory_type_id = fp.factory_type_id
 		LEFT JOIN lbi_provinces p ON p.row_id = fp.province_id
 		LEFT JOIN (
 			SELECT factory_id::bigint AS factory_id,
@@ -203,7 +193,6 @@ func factoryDetailFromHead(head factoryDetailHeadRow) *domain.FactoryPublicDetai
 	out := &domain.FactoryPublicDetail{
 		FactoryID:       head.FactoryID,
 		FactoryName:     head.FactoryName,
-		FactoryTypeID:   head.FactoryTypeID,
 		IsVerified:      head.IsVerified,
 		ReviewCount:     head.ReviewCount,
 		CompletedOrders: head.CompletedOrders,
@@ -211,9 +200,6 @@ func factoryDetailFromHead(head factoryDetailHeadRow) *domain.FactoryPublicDetai
 		SubCategories:   []domain.FactoryProfileSubCategory{},
 		Certificates:    []domain.FactoryProfileCertificate{},
 		Reviews:         []domain.FactoryProfileReview{},
-	}
-	if head.FactoryTypeName.Valid {
-		out.FactoryTypeName = &head.FactoryTypeName.String
 	}
 	if head.TaxID.Valid {
 		out.TaxID = &head.TaxID.String
@@ -393,7 +379,7 @@ func (r *FactoryRepository) GetPublicDetail(factoryID int64) (*domain.FactoryPub
 	return out, nil
 }
 
-func (r *FactoryRepository) CreateProfile(userID int64, factoryName string, factoryTypeID int64, taxID string, provinceID *int64, categoryIDs []int64, subCategoryIDs []int64, certID int64, documentURL string, certNumber string, certExpireDate string) error {
+func (r *FactoryRepository) CreateProfile(userID int64, factoryName string, taxID string, provinceID *int64, categoryIDs []int64, subCategoryIDs []int64, certID int64, documentURL string, certNumber string, certExpireDate string) error {
 	var pid sql.NullInt64
 	if provinceID != nil && *provinceID > 0 {
 		pid = sql.NullInt64{Int64: *provinceID, Valid: true}
@@ -408,9 +394,9 @@ func (r *FactoryRepository) CreateProfile(userID int64, factoryName string, fact
 		}
 	}()
 	if _, err = tx.Exec(`
-		INSERT INTO factory_profiles (user_id, factory_name, factory_type_id, tax_id, province_id, review_count, completed_orders, approval_status, submitted_at)
-		VALUES ($1, $2, $3, $4, $5, 0, 0, 'PE', NOW())
-	`, userID, factoryName, factoryTypeID, taxID, pid); err != nil {
+		INSERT INTO factory_profiles (user_id, factory_name, tax_id, province_id, review_count, completed_orders, approval_status, submitted_at)
+		VALUES ($1, $2, $3, $4, 0, 0, 'PE', NOW())
+	`, userID, factoryName, taxID, pid); err != nil {
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
 			return ErrFactoryProfileExists
@@ -458,7 +444,6 @@ func (r *FactoryRepository) PatchProfile(factoryID int64, fields map[string]inte
 		"factory_name":         true,
 		"tax_id":               true,
 		"description":          true,
-		"factory_type_id":      true,
 		"lead_time_desc":       true,
 		"image_url":            true,
 		"background_image_url": true,
@@ -490,7 +475,6 @@ func (r *FactoryRepository) PatchProfile(factoryID int64, fields map[string]inte
 	if err != nil {
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) && pqErr.Code == "23503" {
-			return ErrInvalidFactoryType
 		}
 		return err
 	}

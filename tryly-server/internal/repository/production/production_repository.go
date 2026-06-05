@@ -20,7 +20,6 @@ type ProductionOrderContext struct {
 	OrderID       int64     `db:"order_id"`
 	UserID        int64     `db:"user_id"`
 	FactoryID     int64     `db:"factory_id"`
-	FactoryTypeID *int64    `db:"factory_type_id"`
 	OrderStatus   string    `db:"status"`
 	DepositAmount float64   `db:"deposit_amount"`
 	TotalAmount   float64   `db:"total_amount"`
@@ -52,10 +51,6 @@ func (r *ProductionRepository) GetUserRole(userID int64) (string, error) {
 }
 
 func (r *ProductionRepository) ListActiveSteps() ([]domain.ProductionStepTemplate, error) {
-	return r.ListActiveStepsByFactoryType(nil)
-}
-
-func (r *ProductionRepository) ListActiveStepsByFactoryType(_ *int64) ([]domain.ProductionStepTemplate, error) {
 	var items []domain.ProductionStepTemplate
 	baseQuery := `
 		SELECT
@@ -81,10 +76,6 @@ func (r *ProductionRepository) ListActiveStepsByFactoryType(_ *int64) ([]domain.
 }
 
 func (r *ProductionRepository) ListActiveStepsTx(tx *sqlx.Tx) ([]domain.ProductionStepTemplate, error) {
-	return r.ListActiveStepsByFactoryTypeTx(tx, nil)
-}
-
-func (r *ProductionRepository) ListActiveStepsByFactoryTypeTx(tx *sqlx.Tx, _ *int64) ([]domain.ProductionStepTemplate, error) {
 	var items []domain.ProductionStepTemplate
 	baseQuery := `
 		SELECT
@@ -112,7 +103,7 @@ func (r *ProductionRepository) ListActiveStepsByFactoryTypeTx(tx *sqlx.Tx, _ *in
 func (r *ProductionRepository) GetOrderByID(orderID int64) (*ProductionOrderContext, error) {
 	var item ProductionOrderContext
 	err := r.db.Get(&item, `
-		SELECT o.order_id, o.customer_id AS user_id, o.factory_id, fp.factory_type_id, o.status,
+		SELECT o.order_id, o.customer_id AS user_id, o.factory_id, o.status,
 		       o.deposit_amount, o.total_amount, o.created_at,
 		       (SELECT ps.due_date FROM payment_schedules ps
 		        WHERE ps.order_id = o.order_id AND ps.installment_no = 1
@@ -130,7 +121,7 @@ func (r *ProductionRepository) GetOrderByID(orderID int64) (*ProductionOrderCont
 func (r *ProductionRepository) GetOrderForUpdateTx(tx *sqlx.Tx, orderID int64) (*ProductionOrderContext, error) {
 	var item ProductionOrderContext
 	err := tx.Get(&item, `
-		SELECT o.order_id, o.customer_id AS user_id, o.factory_id, fp.factory_type_id, o.status,
+		SELECT o.order_id, o.customer_id AS user_id, o.factory_id, o.status,
 		       o.deposit_amount, o.total_amount, o.created_at,
 		       (SELECT ps.due_date FROM payment_schedules ps
 		        WHERE ps.order_id = o.order_id AND ps.installment_no = 1

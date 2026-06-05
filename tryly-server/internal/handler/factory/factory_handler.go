@@ -70,11 +70,10 @@ func (h *FactoryHandler) Create(c *fiber.Ctx) error {
 	var req dto.CreateFactoryRequest
 	if err := helper.ParseAndValidateBody(c, &req, map[string]string{
 		"FactoryName":   "factory_name is required",
-		"FactoryTypeID": "factory_type_id must be > 0",
 	}); err != nil {
 		return err
 	}
-	if err := h.service.CreateProfile(userID, req.FactoryName, req.FactoryTypeID, req.TaxID, req.ProvinceID, req.CategoryIDs, req.SubCategoryIDs, req.CertID, req.DocumentURL, req.CertNumber, req.CertExpireDate); err != nil {
+	if err := h.service.CreateProfile(userID, req.FactoryName, req.TaxID, req.ProvinceID, req.CategoryIDs, req.SubCategoryIDs, req.CertID, req.DocumentURL, req.CertNumber, req.CertExpireDate); err != nil {
 		if err == factoryservice.ErrFactoryProfileExists {
 			return helper.WriteAPIError(c, helper.ConflictAPIError("FACTORY_EXISTS", "factory profile already exists for this user"))
 		}
@@ -160,14 +159,6 @@ func (h *FactoryHandler) PatchProfile(c *fiber.Ctx) error {
 		} else {
 			fields["background_image_url"] = backgroundImageURL
 		}
-	}
-	if req.FactoryTypeID != nil {
-		v := domain.NewValidationCollector()
-		v.AddIf(*req.FactoryTypeID <= 0, "factory_type_id", "must be positive")
-		if v.HasErrors() {
-			return helper.WriteAPIError(c, helper.BadRequestAPIError("INVALID_FACTORY_TYPE_ID", "factory_type_id must be positive"))
-		}
-		fields["factory_type_id"] = *req.FactoryTypeID
 	}
 	if req.LeadTimeDesc != nil {
 		fields["lead_time_desc"] = helper.DereferenceString(req.LeadTimeDesc, "")
@@ -487,9 +478,6 @@ func (h *FactoryHandler) SaveProfile(c *fiber.Ctx) error {
 	}
 	if req.Description != nil {
 		fields["description"] = helper.DereferenceString(req.Description, "")
-	}
-	if req.FactoryTypeID != nil && *req.FactoryTypeID > 0 {
-		fields["factory_type_id"] = *req.FactoryTypeID
 	}
 	if req.ImageURL != nil {
 		v := helper.DereferenceString(req.ImageURL, "")

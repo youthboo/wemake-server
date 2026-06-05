@@ -31,7 +31,7 @@ const showcaseExploreBaseSQL = `
 		NULLIF(fs.linked_showcases->>0, '') AS image_url,
 		fs.category_id,
 		fs.sub_category_id,
-		fs.moq, fs.lead_time_days,
+		fs.moq, fs.unit_id, fs.lead_time_days,
 		fs.base_price,
 		fs.promo_price,
 		fs.start_date,
@@ -183,7 +183,7 @@ func (r *ShowcaseRepository) GetShowcasesByFactory(factoryID int64, contentType 
 			fs.showcase_id, ` + contentTypeExpr + `, fs.title,
 			NULL::text AS excerpt, NULLIF(fs.linked_showcases->>0, '') AS image_url,
 			fs.category_id, fs.sub_category_id,
-			fs.moq, ` + basePriceExpr + `, ` + leadTimeExpr + `,
+			fs.moq, fs.unit_id, ` + basePriceExpr + `, ` + leadTimeExpr + `,
 			fs.likes_count, fs.status, fs.created_at,
 			c.name  AS category_name,
 			` + subCategoryNameExpr + `
@@ -272,23 +272,22 @@ func (r *ShowcaseRepository) GetDetail(showcaseID int64) (*domain.ShowcaseDetail
 			fs.showcase_id, fs.factory_id, fs.content_type,
 			fs.title, NULL::text AS excerpt, NULLIF(fs.linked_showcases->>0, '') AS image_url,
 			fs.category_id, fs.sub_category_id,
-			fs.moq, fs.lead_time_days,
+			fs.moq, fs.unit_id, fs.lead_time_days,
 			fs.base_price, fs.promo_price, fs.start_date, fs.end_date,
 			fs.content, fs.linked_showcases, '[]'::jsonb AS tags,
 			fs.likes_count, 0::bigint AS view_count, fs.status, fs.created_at,
 			fs.updated_at, fs.published_at,
 			fp.factory_name,
+			fp.description       AS factory_specialization,
 			fp.image_url         AS factory_image_url,
 			fp.rating::float8    AS factory_rating,
 			(fp.approval_status = 'AP') AS factory_verified,
-			ft.type_name    AS factory_specialization,
 			fp.review_count      AS factory_review_count,
 			p.name_th            AS province_name,
 			c.name               AS category_name,
 			sc.name              AS sub_category_name
 		FROM factory_showcases fs
 		INNER JOIN factory_profiles fp       ON fs.factory_id      = fp.user_id
-		LEFT JOIN  lbi_factory_types ft      ON ft.factory_type_id = fp.factory_type_id
 		LEFT JOIN lbi_categories c              ON fs.category_id     = c.category_id
 		LEFT JOIN  lbi_sub_categories sc     ON fs.sub_category_id = sc.sub_category_id
 		LEFT JOIN  lbi_provinces p           ON fp.province_id     = p.row_id
@@ -328,6 +327,7 @@ func (r *ShowcaseRepository) GetByID(showcaseID, factoryID int64) (*domain.Facto
 			category_id,
 			sub_category_id,
 			moq,
+			unit_id,
 			lead_time_days,
 			base_price,
 			promo_price,
@@ -381,7 +381,7 @@ const showcasePaginatedBaseSQL = `
 		NULL::text AS image_url,
 		fs.category_id,
 		fs.sub_category_id,
-		fs.moq,
+		fs.moq, fs.unit_id,
 		fs.base_price,
 		fs.promo_price,
 		fs.lead_time_days,
@@ -483,7 +483,7 @@ func (r *ShowcaseRepository) GetHomeShowcases(types []string, limitPerType int) 
 			fs.showcase_id, fs.factory_id, fs.content_type, fs.title,
 			NULL::text AS excerpt,
 			NULLIF(fs.linked_showcases->>0, '') AS image_url,
-			fs.category_id, fs.sub_category_id, fs.moq, fs.lead_time_days,
+			fs.category_id, fs.sub_category_id, fs.moq, fs.unit_id, fs.lead_time_days,
 			fs.base_price, fs.promo_price,
 			fs.start_date, fs.end_date,
 			COALESCE(fs.linked_showcases, '[]'::jsonb) AS linked_showcases,

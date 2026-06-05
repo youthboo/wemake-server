@@ -64,7 +64,6 @@ func (r *AdminFactoryRepository) ListAdmin(filter domain.AdminFactoryFilter) ([]
 		"u.email",
 		"NULLIF(u.phone, '') AS phone",
 		"NULLIF(fp.tax_id, '') AS tax_id",
-		"ft.type_name AS factory_type_name",
 		"p.name_th AS province_name",
 		"COALESCE(fp.approval_status, 'PE') AS approval_status",
 		"( fp.approval_status = 'AP') AS is_verified",
@@ -76,7 +75,6 @@ func (r *AdminFactoryRepository) ListAdmin(filter domain.AdminFactoryFilter) ([]
 	).
 		From("factory_profiles fp").
 		InnerJoin("users u ON u.user_id = fp.user_id").
-		LeftJoin("lbi_factory_types ft ON ft.factory_type_id = fp.factory_type_id").
 		LeftJoin("lbi_provinces p ON p.row_id = fp.province_id").
 		Where(conditions).
 		OrderBy("fp.submitted_at DESC NULLS LAST", "u.created_at DESC", "fp.user_id DESC").
@@ -105,9 +103,6 @@ func (r *AdminFactoryRepository) GetAdminDetail(factoryID int64) (*domain.AdminF
 			u.email,
 			NULLIF(u.phone, '') AS phone,
 			NULLIF(fp.tax_id, '') AS tax_id,
-			fp.factory_type_id,
-			ft.type_name AS factory_type_name,
-			ft.type_name AS specialization,
 			fp.province_id,
 			p.name_th AS province_name,
 			fp.image_url,
@@ -121,7 +116,6 @@ func (r *AdminFactoryRepository) GetAdminDetail(factoryID int64) (*domain.AdminF
 			u.created_at
 		FROM factory_profiles fp
 		INNER JOIN users u ON u.user_id = fp.user_id AND u.role = 'FT'
-		LEFT JOIN lbi_factory_types ft ON ft.factory_type_id = fp.factory_type_id
 		LEFT JOIN lbi_provinces p ON p.row_id = fp.province_id
 		WHERE fp.user_id = $1
 	`, factoryID); err != nil {

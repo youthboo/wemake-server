@@ -65,9 +65,7 @@ func ConfirmReceiptErrorMap() map[error]helper.ErrorResponse {
 }
 
 func PatchProfileErrorMap() map[error]helper.ErrorResponse {
-	return map[error]helper.ErrorResponse{
-		factoryrepo.ErrInvalidFactoryType: helper.ErrorMessage(fiber.StatusBadRequest, "invalid factory_type_id"),
-	}
+	return map[error]helper.ErrorResponse{}
 }
 
 func AddCategoryErrorMap() map[error]helper.ErrorResponse {

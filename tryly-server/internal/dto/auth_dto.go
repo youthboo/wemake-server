@@ -9,7 +9,6 @@ type RegisterRequest struct {
 	FirstName      string  `json:"first_name"`
 	LastName       string  `json:"last_name"`
 	FactoryName    string  `json:"factory_name"`
-	FactoryTypeID  int64   `json:"factory_type_id"`
 	TaxID          string  `json:"tax_id"`
 	ProvinceID     *int64  `json:"province_id"`
 	CategoryIDs    []int64 `json:"category_ids"`
@@ -44,7 +43,6 @@ type ResetPasswordRequest struct {
 // profile. No role/email/password fields — those come from the JWT session.
 type UpgradeToFactoryRequest struct {
 	FactoryName    string  `json:"factory_name" validate:"notblank"`
-	FactoryTypeID  int64   `json:"factory_type_id" validate:"required"`
 	TaxID          string  `json:"tax_id"`
 	ProvinceID     *int64  `json:"province_id"`
 	CategoryIDs    []int64 `json:"category_ids"`

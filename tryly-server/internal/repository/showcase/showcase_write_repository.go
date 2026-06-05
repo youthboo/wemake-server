@@ -10,13 +10,13 @@ func (r *ShowcaseRepository) Create(showcase *domain.FactoryShowcase) error {
 	query := `
 		INSERT INTO factory_showcases
 			(factory_id, content_type, title,
-			 category_id, sub_category_id, moq, lead_time_days,
+			 category_id, sub_category_id, moq, unit_id, lead_time_days,
 			 base_price, promo_price, start_date, end_date,
 			 content, linked_showcases, status,
 			 published_at, updated_at)
 		VALUES
 			(:factory_id, :content_type, :title,
-			 :category_id, :sub_category_id, :moq, :lead_time_days,
+			 :category_id, :sub_category_id, :moq, :unit_id, :lead_time_days,
 			 :base_price, :promo_price, :start_date, :end_date,
 			 :content, :linked_showcases,
 			 COALESCE(NULLIF(:status, ''), 'DR'),
@@ -43,6 +43,7 @@ func (r *ShowcaseRepository) Update(s *domain.FactoryShowcase) error {
 		    category_id     = :category_id,
 		    sub_category_id = :sub_category_id,
 		    moq             = :moq,
+		    unit_id         = :unit_id,
 		    lead_time_days  = :lead_time_days,
 		    base_price      = :base_price,
 		    promo_price     = :promo_price,
