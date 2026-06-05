@@ -118,14 +118,16 @@ func (m *Mailer) Send(templateCode string, to string, data map[string]string, re
 		return err
 	}
 
-	// Build plain-text email with UTF-8 + base64-encoded subject for Thai chars
+	// Build HTML email with UTF-8 + base64-encoded subject and body for Thai chars
+	encodedBody := base64.StdEncoding.EncodeToString([]byte(body))
 	msg := "From: " + cfg.From + "\r\n" +
 		"To: " + to + "\r\n" +
 		"Subject: =?UTF-8?B?" + base64.StdEncoding.EncodeToString([]byte(subject)) + "?=\r\n" +
 		"MIME-Version: 1.0\r\n" +
-		"Content-Type: text/plain; charset=UTF-8\r\n" +
+		"Content-Type: text/html; charset=UTF-8\r\n" +
+		"Content-Transfer-Encoding: base64\r\n" +
 		"\r\n" +
-		body
+		encodedBody
 
 	auth := smtp.PlainAuth("", cfg.User, cfg.Password, cfg.Host)
 	addr := cfg.Host + ":" + cfg.Port
