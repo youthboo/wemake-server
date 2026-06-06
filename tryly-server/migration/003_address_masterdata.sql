@@ -1,6 +1,5 @@
 -- ============================================================
--- MASTER 003: Address Master Data — Single Source of Truth
--- รันหลัง 001 และ 002 (migration สุดท้ายสำหรับ prod โล่ง)
+-- MIGRATION 003: Address Master Data — Single Source of Truth
 -- Source: github.com/kongvut/thai-province-data
 -- Provinces:     77    (official ID 1–77)
 -- Districts:    930    (official ID 4-digit, e.g. 1001)

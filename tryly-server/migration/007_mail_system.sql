@@ -1,4 +1,4 @@
--- 013_mail_system.sql
+-- 007_mail_system.sql
 -- Email notification system: templates and send logs
 
 -- ─── 1. Mail-related app config in tconfig ───────────────────────────────────

@@ -24,15 +24,14 @@ const getDetailSQL = `
 			fp.image_url         AS factory_image_url,
 			fp.rating::float8    AS factory_rating,
 			(fp.approval_status = 'AP') AS factory_verified,
-			ft.type_name    AS factory_specialization,
+				fp.description       AS factory_specialization,
 			fp.review_count      AS factory_review_count,
 			p.name_th            AS province_name,
 			c.name               AS category_name,
 			sc.name              AS sub_category_name
 		FROM factory_showcases fs
 		INNER JOIN factory_profiles fp       ON fs.factory_id      = fp.user_id
-		LEFT JOIN  lbi_factory_types ft      ON ft.factory_type_id = fp.factory_type_id
-		LEFT JOIN lbi_categories c              ON fs.category_id     = c.category_id
+			LEFT JOIN lbi_categories c              ON fs.category_id     = c.category_id
 		LEFT JOIN  lbi_sub_categories sc     ON fs.sub_category_id = sc.sub_category_id
 		LEFT JOIN  lbi_provinces p           ON fp.province_id     = p.row_id
 		WHERE fs.showcase_id = $1

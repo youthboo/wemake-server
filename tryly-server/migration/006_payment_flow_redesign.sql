@@ -1,4 +1,4 @@
--- 011_payment_flow_redesign.sql
+-- 006_payment_flow_redesign.sql
 -- Switch from wallet-based to direct bank transfer payment flow
 
 -- 1. Factory bank accounts

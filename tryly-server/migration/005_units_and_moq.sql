@@ -1,4 +1,4 @@
--- 008_units_and_moq.sql
+-- 005_units_and_moq.sql
 -- Feature 1: Units of Measurement master data + unit_id in rfqs/quotations
 -- Feature 2: MOQ per factory category/sub-category for RFQ matching
 

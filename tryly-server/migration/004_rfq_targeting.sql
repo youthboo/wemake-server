@@ -1,5 +1,5 @@
 -- ============================================================
--- Migration 007: RFQ Factory Targeting
+-- Migration 004: RFQ Factory Targeting
 -- ============================================================
 
 -- 1. targeting column บน rfqs

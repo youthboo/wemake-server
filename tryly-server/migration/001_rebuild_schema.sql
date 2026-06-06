@@ -6,7 +6,7 @@
 --   001 — schema + reference seed (factory types, certs, production steps, category stubs for 002)
 --   002 — category master data (lbi_categories / lbi_sub_categories / lbi_factory_types names)
 --   003 — address master data (lbi_provinces / lbi_districts / lbi_sub_districts)
---   demo seed ปิดไว้: 004_seed_demo.sql.disabled
+--   004+ — feature schema/data that is not already represented in 001
 
 BEGIN;
 
@@ -173,12 +173,10 @@ CREATE TABLE IF NOT EXISTS factory_rfq_dismissals (
 CREATE TABLE IF NOT EXISTS factory_profiles (
     user_id BIGINT NOT NULL,
     approval_status CHAR(2) NOT NULL,
-    factory_type_id BIGINT NOT NULL,
     config_id BIGINT,
     factory_name VARCHAR(150) NOT NULL,
     description TEXT,
     tax_id VARCHAR(20),
-    min_order INTEGER,
     lead_time_desc VARCHAR(50),
     province_id BIGINT,
     image_url TEXT,
@@ -220,6 +218,7 @@ CREATE TABLE IF NOT EXISTS factory_showcases (
     content TEXT,
     linked_showcases JSONB DEFAULT '[]'::jsonb NOT NULL,
     moq INTEGER,
+    unit_id INTEGER,
     lead_time_days INTEGER,
     base_price NUMERIC(12,2),
     promo_price NUMERIC(12,2),
@@ -591,10 +590,6 @@ ALTER TABLE factory_profiles
     FOREIGN KEY (user_id) REFERENCES users(user_id);
 
 ALTER TABLE factory_profiles
-    ADD CONSTRAINT fk_factory_profiles_factory_type_id_lbi_factory_types_factory_type_id
-    FOREIGN KEY (factory_type_id) REFERENCES lbi_factory_types(factory_type_id);
-
-ALTER TABLE factory_profiles
     ADD CONSTRAINT fk_factory_profiles_config_id_platform_config_config_id
     FOREIGN KEY (config_id) REFERENCES platform_config(config_id);
 
@@ -751,7 +746,6 @@ CREATE INDEX IF NOT EXISTS idx_factory_commission_exemptions_factory_id ON facto
 CREATE INDEX IF NOT EXISTS idx_factory_commission_exemptions_created_by ON factory_commission_exemptions(created_by);
 CREATE INDEX IF NOT EXISTS idx_factory_commission_exemptions_revoked_by ON factory_commission_exemptions(revoked_by);
 CREATE INDEX IF NOT EXISTS idx_factory_profiles_user_id ON factory_profiles(user_id);
-CREATE INDEX IF NOT EXISTS idx_factory_profiles_factory_type_id ON factory_profiles(factory_type_id);
 CREATE INDEX IF NOT EXISTS idx_factory_profiles_config_id ON factory_profiles(config_id);
 CREATE INDEX IF NOT EXISTS idx_factory_profiles_province_id ON factory_profiles(province_id);
 CREATE INDEX IF NOT EXISTS idx_factory_profiles_verified_by ON factory_profiles(verified_by);
