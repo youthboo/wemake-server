@@ -3,20 +3,21 @@ package domain
 import "time"
 
 type Transaction struct {
-	TxID        string    `db:"tx_id" json:"tx_id"`
-	WalletID    int64     `db:"wallet_id" json:"wallet_id"`
-	OrderID     *int64    `db:"order_id" json:"order_id,omitempty"`
-	Type        string    `db:"type" json:"type"`
-	Amount      float64   `db:"amount" json:"amount"`
-	Status      string    `db:"status" json:"status"`
-	CreatedAt   time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt   time.Time `db:"updated_at" json:"updated_at"`
-	UploadedAt  time.Time `db:"uploaded_at" json:"uploaded_at"`
+	TxID       string    `db:"tx_id" json:"tx_id"`
+	WalletID   int64     `db:"wallet_id" json:"wallet_id"`
+	OrderID    *int64    `db:"order_id" json:"order_id,omitempty"`
+	Type       string    `db:"type" json:"type"`
+	Amount     float64   `db:"amount" json:"amount"`
+	Status     string    `db:"status" json:"status"`
+	CreatedAt  time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt  time.Time `db:"updated_at" json:"updated_at"`
+	UploadedAt time.Time `db:"uploaded_at" json:"uploaded_at"`
 }
 
 // LBIProvince — row_id is the official DOPA province code (1–77).
 // GeographyID: 1=ภาคเหนือ 2=ภาคกลาง 3=ภาคตะวันออกเฉียงเหนือ
-//              4=ภาคตะวันออก 5=ภาคตะวันตก 6=ภาคใต้
+//
+//	4=ภาคตะวันออก 5=ภาคตะวันตก 6=ภาคใต้
 type LBIProvince struct {
 	RowID       int32  `db:"row_id"       json:"row_id"`
 	NameTH      string `db:"name_th"      json:"name_th"`
@@ -47,7 +48,7 @@ type LBISubDistrict struct {
 }
 
 type LBIFactoryType struct {
-	FactoryType string  `db:"factory_type" json:"factory_type"`
+	FactoryTypeID int64  `db:"factory_type_id" json:"factory_type_id"`
 	TypeName      string `db:"type_name" json:"type_name"`
 	Status        string `db:"status" json:"status"`
 }
