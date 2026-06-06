@@ -74,6 +74,7 @@ DROP TABLE IF EXISTS
     showcase_section_items,
     showcase_sections,
     showcase_specs,
+    tmail_templates,
     tconfig,
     topup_intents,
     transactions,
