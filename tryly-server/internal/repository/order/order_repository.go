@@ -24,12 +24,32 @@ type QuotationOrderSource struct {
 	UserID        int64      `db:"user_id"`
 	FactoryID     int64      `db:"factory_id"`
 	PricePerPiece float64    `db:"price_per_piece"`
-	Quantity      int64      `db:"quantity"`
+	Quantity      int64      `db:"quantity"`    // RFQ qty
+	RFQUnitID     *int64     `db:"rfq_unit_id"` // RFQ unit
+	FactoryQty    *int       `db:"factory_qty"`
+	FactoryUnitID *int64     `db:"factory_unit_id"`
 	MoldCost      float64    `db:"mold_cost"`
 	LeadTimeDays  int64      `db:"lead_time_days"`
 	DeliveryDate  *time.Time `db:"delivery_date"`
 	Status        string     `db:"status"`
 	GrandTotal    float64    `db:"grand_total"`
+}
+
+// EffectiveQty returns factory_qty if set, else RFQ quantity.
+func (q *QuotationOrderSource) EffectiveQty() *int {
+	if q.FactoryQty != nil && *q.FactoryQty > 0 {
+		return q.FactoryQty
+	}
+	v := int(q.Quantity)
+	return &v
+}
+
+// EffectiveUnitID returns factory_unit_id if set, else RFQ unit_id.
+func (q *QuotationOrderSource) EffectiveUnitID() *int64 {
+	if q.FactoryUnitID != nil {
+		return q.FactoryUnitID
+	}
+	return q.RFQUnitID
 }
 
 func (q *QuotationOrderSource) ToOrderDomain() *domain.Order {
@@ -38,6 +58,8 @@ func (q *QuotationOrderSource) ToOrderDomain() *domain.Order {
 		UserID:      q.UserID,
 		FactoryID:   q.FactoryID,
 		TotalAmount: helper.MoneyDecimal(q.GrandTotal),
+		Quantity:    q.EffectiveQty(),
+		UnitID:      q.EffectiveUnitID(),
 	}
 }
 
@@ -112,7 +134,9 @@ func NewOrderRepository(db *sqlx.DB) *OrderRepository {
 func (r *OrderRepository) GetOrderSourceByQuotationID(quotationID, userID int64) (*QuotationOrderSource, error) {
 	var src QuotationOrderSource
 	query := `
-		SELECT q.quote_id, q.rfq_id, rfq.user_id, q.factory_id, q.price_per_piece, rfq.quantity,
+		SELECT q.quote_id, q.rfq_id, rfq.user_id, q.factory_id, q.price_per_piece,
+		       rfq.quantity, rfq.unit_id AS rfq_unit_id,
+		       q.factory_qty, q.factory_unit_id,
 		       q.mold_cost, q.lead_time_days, NULL::date AS delivery_date, q.status, COALESCE(q.grand_total, 0) AS grand_total
 		FROM quotations q
 		INNER JOIN rfqs rfq ON rfq.rfq_id = q.rfq_id
@@ -126,8 +150,8 @@ func (r *OrderRepository) GetOrderSourceByQuotationID(quotationID, userID int64)
 
 func (r *OrderRepository) Create(order *domain.Order) error {
 	query := `
-		INSERT INTO orders (quote_id, customer_id, factory_id, total_amount, deposit_amount, status, estimated_delivery, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO orders (quote_id, customer_id, factory_id, total_amount, deposit_amount, status, estimated_delivery, quantity, unit_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING order_id
 	`
 	return r.db.QueryRow(
@@ -139,6 +163,8 @@ func (r *OrderRepository) Create(order *domain.Order) error {
 		order.DepositAmount,
 		order.Status,
 		domainutil.Nullable(order.EstimatedDelivery),
+		order.Quantity,
+		order.UnitID,
 		order.CreatedAt,
 		order.UpdatedAt,
 	).Scan(&order.OrderID)
@@ -179,7 +205,9 @@ func (r *OrderRepository) OrderExistsForQuoteTx(tx *sqlx.Tx, quoteID int64) (boo
 func (r *OrderRepository) GetOrderSourceByQuotationIDTx(tx *sqlx.Tx, quotationID, userID int64) (*QuotationOrderSource, error) {
 	var src QuotationOrderSource
 	query := `
-		SELECT q.quote_id, q.rfq_id, rfq.user_id, q.factory_id, q.price_per_piece, rfq.quantity,
+		SELECT q.quote_id, q.rfq_id, rfq.user_id, q.factory_id, q.price_per_piece,
+		       rfq.quantity, rfq.unit_id AS rfq_unit_id,
+		       q.factory_qty, q.factory_unit_id,
 		       q.mold_cost, q.lead_time_days, NULL::date AS delivery_date, q.status, COALESCE(q.grand_total, 0) AS grand_total
 		FROM quotations q
 		INNER JOIN rfqs rfq ON rfq.rfq_id = q.rfq_id

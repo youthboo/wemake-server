@@ -28,7 +28,7 @@ UPDATE lbi_categories SET name='สารเติมแต่งอาหาร
 UPDATE lbi_categories SET name='วัตถุดิบบรรจุภัณฑ์',                scope='MT' WHERE category_id=13;
 UPDATE lbi_categories SET name='น้ำมันและไขมัน',                    scope='MT' WHERE category_id=14;
 -- category_id 15 → DELETE (สารสกัด/พรีมิกซ์ — รวมใน sub-cat 9 แล้ว)
-UPDATE lbi_categories SET name='วัตถุดิบอื่นๆ',                     scope='MT' WHERE category_id=16;
+UPDATE lbi_categories SET name='วัตถุดิบทั้งหมด',                     scope='MT' WHERE category_id=16;
 
 -- ─── ล้าง FK ก่อน DELETE lbi_categories 8,11,15 ─────────────
 UPDATE rfqs            SET category_id = NULL WHERE category_id IN (8,11,15);
@@ -56,7 +56,7 @@ INSERT INTO lbi_sub_categories (category_id, name, status, sort_order) VALUES
 (1,'อาหารฟรีซดราย (Freeze-Dried)',     '1',7),
 (1,'ท้อปเปอร์ / โรยหน้า',             '1',8),
 (1,'สูตรพิเศษ (Prescription Diet)',    '1',9),
-(1,'อื่นๆ',                            '1',99),
+(1,'ทั้งหมด',                            '1',99),
 
 -- ── cat 2: ขนมและของว่างสัตว์เลี้ยง ─────────────────────────
 (2,'ขนมขบเคี้ยวต่างๆ',                '1',1),
@@ -66,7 +66,7 @@ INSERT INTO lbi_sub_categories (category_id, name, status, sort_order) VALUES
 (2,'ขนมเลีย (Lickable Treat)',         '1',5),
 (2,'Jerky / เนื้อแผ่น',               '1',6),
 (2,'Biscuit / คุกกี้สัตว์เลี้ยง',     '1',7),
-(2,'อื่นๆ',                            '1',99),
+(2,'ทั้งหมด',                            '1',99),
 
 -- ── cat 3: ยาและผลิตภัณฑ์รักษาโรค ───────────────────────────
 (3,'ชนิดเม็ด',                         '1',1),
@@ -75,7 +75,7 @@ INSERT INTO lbi_sub_categories (category_id, name, status, sort_order) VALUES
 (3,'ชนิดหยด (Spot-on)',                '1',4),
 (3,'ชนิดฉีด',                          '1',5),
 (3,'ยาสมุนไพรสัตว์',                   '1',6),
-(3,'อื่นๆ',                            '1',99),
+(3,'ทั้งหมด',                            '1',99),
 
 -- ── cat 4: อุปกรณ์และของใช้สัตว์เลี้ยง ──────────────────────
 (4,'ผลิตภัณฑ์ทำความสะอาดสัตว์เลี้ยง', '1',1),
@@ -90,7 +90,7 @@ INSERT INTO lbi_sub_categories (category_id, name, status, sort_order) VALUES
 (4,'เสื้อผ้าและเครื่องแต่งกายสัตว์',  '1',10),
 (4,'รองเท้าสัตว์เลี้ยง',              '1',11),
 (4,'ที่ข่วนเล็บ / บ้านแมว',           '1',12),
-(4,'อื่นๆ',                            '1',99),
+(4,'ทั้งหมด',                            '1',99),
 
 -- ── cat 5: ผลิตภัณฑ์ดูแลสุขภาพ ──────────────────────────────
 (5,'ผลิตภัณฑ์ดูแล-ช่องหู',            '1',1),
@@ -104,7 +104,7 @@ INSERT INTO lbi_sub_categories (category_id, name, status, sort_order) VALUES
 (5,'Omega-3 / น้ำมันปลา (สำเร็จรูป)','1',9),
 (5,'Collagen / Joint Support',        '1',10),
 (5,'อาหารเสริมบำรุงขน',              '1',11),
-(5,'อื่นๆ',                           '1',99),
+(5,'ทั้งหมด',                           '1',99),
 
 -- ── cat 6: ผลิตภัณฑ์กำจัดปรสิตและถ่ายพยาธิ ─────────────────
 (6,'ชนิดเม็ด',                         '1',1),
@@ -112,7 +112,7 @@ INSERT INTO lbi_sub_categories (category_id, name, status, sort_order) VALUES
 (6,'ชนิดหยด (Spot-on)',                '1',3),
 (6,'ชนิดสเปรย์',                       '1',4),
 (6,'ชนิดปลอกคอ',                       '1',5),
-(6,'อื่นๆ',                            '1',99),
+(6,'ทั้งหมด',                            '1',99),
 
 -- ── cat 7: บรรจุภัณฑ์สำเร็จรูป ──────────────────────────────
 (7,'ถุง Stand-up Pouch',              '1',1),
@@ -122,7 +122,7 @@ INSERT INTO lbi_sub_categories (category_id, name, status, sort_order) VALUES
 (7,'ขวดพลาสติก / PET',                '1',5),
 (7,'ถุง Kraft Paper',                  '1',6),
 (7,'กล่องกระดาษลูกฟูก (Carton)',      '1',7),
-(7,'อื่นๆ',                            '1',99),
+(7,'ทั้งหมด',                            '1',99),
 
 -- ── cat 9: วัตถุดิบโปรตีน (MT) ──────────────────────────────
 (9,'Chicken Meal / เนื้อไก่',         '1',1),
@@ -136,7 +136,7 @@ INSERT INTO lbi_sub_categories (category_id, name, status, sort_order) VALUES
 (9,'Whey Protein',                     '1',9),
 (9,'สารสกัดโปรตีนพืช (Pea/Soy)',     '1',10),
 (9,'Premix วิตามิน-แร่ธาตุ',          '1',11),
-(9,'อื่นๆ',                           '1',99),
+(9,'ทั้งหมด',                           '1',99),
 
 -- ── cat 10: วัตถุดิบธัญพืชและเส้นใย (MT) ────────────────────
 (10,'ข้าว / Rice Bran',               '1',1),
@@ -147,7 +147,7 @@ INSERT INTO lbi_sub_categories (category_id, name, status, sort_order) VALUES
 (10,'Beet Pulp (เส้นใยบีทรูท)',       '1',6),
 (10,'ถั่วลันเตา (Pea)',                '1',7),
 (10,'ผักและผลไม้อบแห้ง',              '1',8),
-(10,'อื่นๆ',                          '1',99),
+(10,'ทั้งหมด',                          '1',99),
 
 -- ── cat 12: สารเติมแต่งอาหาร (MT) ───────────────────────────
 (12,'สารกันเสีย (Preservatives)',      '1',1),
@@ -157,7 +157,7 @@ INSERT INTO lbi_sub_categories (category_id, name, status, sort_order) VALUES
 (12,'สารต้านอนุมูลอิสระ',             '1',5),
 (12,'Enzyme (เอนไซม์)',               '1',6),
 (12,'สารเพิ่มความชุ่มชื้น',           '1',7),
-(12,'อื่นๆ',                          '1',99),
+(12,'ทั้งหมด',                          '1',99),
 
 -- ── cat 13: วัตถุดิบบรรจุภัณฑ์ (MT) ─────────────────────────
 (13,'ฟิล์มพลาสติก (Film)',            '1',1),
@@ -166,7 +166,7 @@ INSERT INTO lbi_sub_categories (category_id, name, status, sort_order) VALUES
 (13,'ฉลากและสติกเกอร์',               '1',4),
 (13,'ซิปล็อค / Zip Lock',             '1',5),
 (13,'กระป๋อง / Can',                  '1',6),
-(13,'อื่นๆ',                          '1',99),
+(13,'ทั้งหมด',                          '1',99),
 
 -- ── cat 14: น้ำมันและไขมัน (MT) ─────────────────────────────
 (14,'น้ำมันปลา (Fish Oil)',            '1',1),
@@ -174,10 +174,9 @@ INSERT INTO lbi_sub_categories (category_id, name, status, sort_order) VALUES
 (14,'น้ำมันพืช (Vegetable Oil)',       '1',3),
 (14,'น้ำมันมะพร้าว (Coconut Oil)',     '1',4),
 (14,'น้ำมันตับปลา (Cod Liver Oil)',    '1',5),
-(14,'อื่นๆ',                           '1',99),
+(14,'ทั้งหมด',                           '1',99),
 
--- ── cat 16: วัตถุดิบอื่นๆ (MT) ──────────────────────────────
-(16,'วัตถุดิบอื่นๆ',                  '1',1);
+
 
 SELECT setval(pg_get_serial_sequence('lbi_sub_categories','sub_category_id'),
   GREATEST((SELECT MAX(sub_category_id) FROM lbi_sub_categories), 1));
@@ -193,7 +192,7 @@ UPDATE lbi_factory_types SET type_name='โรงงานวัตถุดิ�
 UPDATE lbi_factory_types SET type_name='โรงงานวัตถุดิบธัญพืช เส้นใย และน้ำมัน'  WHERE factory_type_id=6;  -- cat 10,14
 UPDATE lbi_factory_types SET type_name='โรงงานสารเติมแต่งและวัตถุเจือปนอาหาร'   WHERE factory_type_id=7;  -- cat 12
 UPDATE lbi_factory_types SET type_name='โรงงานผลิตวัตถุดิบบรรจุภัณฑ์'           WHERE factory_type_id=8;  -- cat 13
-UPDATE lbi_factory_types SET type_name='โรงงานแปรรูปและผลิตวัตถุดิบอื่นๆ'       WHERE factory_type_id=9;  -- cat 16
+UPDATE lbi_factory_types SET type_name='โรงงานแปรรูปและผลิตวัตถุดิบทั้งหมด'       WHERE factory_type_id=9;  -- cat 16
 
 
 COMMIT;

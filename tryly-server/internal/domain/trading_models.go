@@ -65,6 +65,10 @@ type Quotation struct {
 	RFQStatus         string          `db:"rfq_status" json:"rfq_status,omitempty"`
 	RequestKind       string          `db:"request_kind" json:"request_kind,omitempty"`
 	SampleQty         *int            `db:"sample_qty" json:"sample_qty,omitempty"`
+	// Factory counter-proposal (nil = accept RFQ qty)
+	FactoryQty        *int            `db:"factory_qty" json:"factory_qty,omitempty"`
+	FactoryUnitID     *int64          `db:"factory_unit_id" json:"factory_unit_id,omitempty"`
+	FactoryUnitName   *string         `db:"factory_unit_name" json:"factory_unit_name,omitempty"`
 }
 
 type FactoryBrief struct {
@@ -112,6 +116,9 @@ type Order struct {
 	ShippedAt         *time.Time `db:"shipped_at" json:"shipped_at,omitempty"`
 	CreatedAt         time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt         time.Time  `db:"updated_at" json:"updated_at"`
+	// Effective qty/unit agreed upon (factory_qty if set, else rfq.quantity)
+	Quantity *int   `db:"quantity" json:"quantity,omitempty"`
+	UnitID   *int64 `db:"unit_id" json:"unit_id,omitempty"`
 }
 
 type OrderListRFQSummary struct {

@@ -70,6 +70,8 @@ func (h *QuotationHandler) CreateQuotation(c *fiber.Ctx) error {
 		PaymentTerms:     req.PaymentTerms,
 		ImageURLs:        req.ImageURLs,
 		FactoryHighlight: req.FactoryHighlight,
+		FactoryQty:       req.FactoryQty,
+		FactoryUnitID:    req.FactoryUnitID,
 	}
 	if err := h.service.Create(item); err != nil {
 		return helper.MapServiceError(c, err, helper.ErrorMessage(fiber.StatusInternalServerError, "failed to create quotation"), handlerregistry.CreateQuotationErrorMap())
@@ -208,6 +210,8 @@ func (h *QuotationHandler) CreateDetailed(c *fiber.Ctx) error {
 		WarrantyPeriodMonths: req.WarrantyPeriodMonths,
 		FactoryHighlight:     req.FactoryHighlight,
 		FactoryNote:          req.FactoryNote,
+		FactoryQty:           req.FactoryQty,
+		FactoryUnitID:        req.FactoryUnitID,
 	}
 	helper.AssignIfNotNil(&item.LeadTimeDays, req.LeadTimeDays)
 	if req.ShippingMethodID != nil && *req.ShippingMethodID > 0 {
@@ -331,6 +335,7 @@ func (h *QuotationHandler) PatchQuotation(c *fiber.Ctx) error {
 		req.Reason,
 		req.ValidityDays,
 		req.FactoryNote,
+		req.FactoryQty, req.FactoryUnitID,
 	)
 	if err != nil {
 		return helper.MapServiceError(c, err, helper.ErrorMessage(fiber.StatusInternalServerError, "failed to update quotation"), handlerregistry.PatchQuotationErrorMap())

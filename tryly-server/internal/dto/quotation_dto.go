@@ -17,6 +17,9 @@ type CreateQuotationRequest struct {
 	ImageURLs        domain.StringArray `json:"image_urls"`
 	FactoryHighlight *string            `json:"factory_highlight"`
 	FactoryNote      *string            `json:"factory_note"`
+	// Factory counter-proposal qty/unit (optional — nil = accept RFQ qty)
+	FactoryQty    *int   `json:"factory_qty"`
+	FactoryUnitID *int64 `json:"factory_unit_id"`
 }
 
 type PreviewQuotationRequest struct {
@@ -45,6 +48,8 @@ type CreateDetailedQuotationRequest struct {
 	WarrantyPeriodMonths *int                   `json:"warranty_period_months"`
 	FactoryHighlight     *string                `json:"factory_highlight"`
 	FactoryNote          *string                `json:"factory_note"`
+	FactoryQty           *int                   `json:"factory_qty"`
+	FactoryUnitID        *int64                 `json:"factory_unit_id"`
 }
 
 type CreateRevisionQuotationRequest struct {
@@ -86,4 +91,6 @@ type PatchQuotationBodyRequest struct {
 	FactoryNote      *string            `json:"factory_note"`
 	Reason           string             `json:"reason"`
 	ImageURLs        domain.StringArray `json:"image_urls"`
+	FactoryQty       *int               `json:"factory_qty"`
+	FactoryUnitID    *int64             `json:"factory_unit_id"`
 }

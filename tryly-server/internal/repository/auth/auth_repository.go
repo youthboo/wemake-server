@@ -106,7 +106,7 @@ func (r *AuthRepository) CreateFactoryUser(user *domain.User, factory *domain.Fa
 			INSERT INTO factory_profiles
 				(user_id, factory_name, tax_id, province_id, review_count, completed_orders, approval_status, submitted_at,
 				 config_id)
-			VALUES ($1, $2, $3, $4, $5, 0, 0, 'PE', NOW(),
+			VALUES ($1, $2, $3, $4, 0, 0, 'PE', NOW(),
 				(SELECT config_id FROM platform_config WHERE label = 'default_comm' ORDER BY config_id ASC LIMIT 1))
 			RETURNING user_id
 		`, user.UserID, factory.FactoryName, factory.TaxID, provinceID).Scan(&factoryID); err != nil {
@@ -263,7 +263,7 @@ func (r *AuthRepository) UpgradeToFactory(userID int64, factory *domain.FactoryP
 			INSERT INTO factory_profiles
 				(user_id, factory_name, tax_id, province_id, review_count, completed_orders, approval_status, submitted_at,
 				 config_id)
-			VALUES ($1, $2, $3, $4, $5, 0, 0, 'PE', NOW(),
+			VALUES ($1, $2, $3, $4, 0, 0, 'PE', NOW(),
 				(SELECT config_id FROM platform_config WHERE label = 'default_comm' ORDER BY config_id ASC LIMIT 1))
 			RETURNING user_id
 		`, userID, factory.FactoryName, factory.TaxID, provinceID).Scan(&factoryID); err != nil {

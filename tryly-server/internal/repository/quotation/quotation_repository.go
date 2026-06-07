@@ -49,8 +49,11 @@ func quotationSelectBase() string {
 		NULL::text AS material_detail,
 		NULL::text AS payment_condition,
 		0::double precision AS sample_cost,
-		'[]'::jsonb AS certifications
+		'[]'::jsonb AS certifications,
+		q.factory_qty, q.factory_unit_id,
+		u.name_th AS factory_unit_name
 		FROM quotations q
+		LEFT JOIN lbi_units u ON u.unit_id = q.factory_unit_id
 		LEFT JOIN rfqs r ON r.rfq_id = q.rfq_id
 		LEFT JOIN factory_profiles fp ON fp.user_id = q.factory_id
 		LEFT JOIN users fu ON fu.user_id = q.factory_id
@@ -77,13 +80,15 @@ func (r *QuotationRepository) createWithExecutor(exec dbutil.QueryRower, item *d
 			subtotal, discount_amount, shipping_cost, packaging_cost,
 			vat_rate, vat_amount, platform_commission_rate, platform_commission_amount, platform_config_id,
 			grand_total, factory_net_receivable, payment_terms,
-			validity_days, valid_until, image_urls
+			validity_days, valid_until, image_urls,
+			factory_qty, factory_unit_id
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
 		        $12,$13,$14,$15,
 		        $16,$17,$18,$19,$20,
 		        $21,$22,$23,
-		        $24,$25,$26)
+		        $24,$25,$26,
+		        $27,$28)
 		RETURNING quote_id
 	`
 	if err := exec.QueryRow(
@@ -114,6 +119,8 @@ func (r *QuotationRepository) createWithExecutor(exec dbutil.QueryRower, item *d
 		item.ValidityDays,
 		domainutil.Nullable(item.ValidUntil),
 		imageURLs,
+		item.FactoryQty,
+		item.FactoryUnitID,
 	).Scan(&item.QuotationID); err != nil {
 		return err
 	}
@@ -311,6 +318,7 @@ func (r *QuotationRepository) UpdateBody(
 	validityDays *int,
 	validUntil *time.Time,
 	factoryNote *string,
+	factoryQty *int, factoryUnitID *int64,
 ) error {
 	query := `
 		UPDATE quotations
@@ -325,6 +333,8 @@ func (r *QuotationRepository) UpdateBody(
 		    validity_days = CASE WHEN $11::int IS NOT NULL THEN $11 ELSE validity_days END,
 		    valid_until   = CASE WHEN $12::timestamp IS NOT NULL THEN $12 ELSE valid_until END,
 		    factory_note  = CASE WHEN $13::text IS NOT NULL THEN $13 ELSE factory_note END,
+		    factory_qty     = $14,
+		    factory_unit_id = $15,
 		    version = $8,
 		    log_timestamp = NOW()
 		WHERE quote_id = $9 AND COALESCE(is_locked, false) = false AND status = 'PD'
@@ -337,6 +347,7 @@ func (r *QuotationRepository) UpdateBody(
 		domainutil.Nullable(factoryHighlight),
 		validityDays, validUntil,
 		domainutil.Nullable(factoryNote),
+		factoryQty, factoryUnitID,
 	)
 	if err != nil {
 		return err
