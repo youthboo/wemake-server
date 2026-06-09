@@ -30,6 +30,14 @@ services:
         sync: false
       - key: SMTP_FROM
         sync: false
+      # Optional dev-only email relay. Use MAIL_PROVIDER=relay and point
+      # MAIL_RELAY_URL at an ngrok-exposed local backend /internal/mail/send.
+      - key: MAIL_PROVIDER
+        sync: false
+      - key: MAIL_RELAY_URL
+        sync: false
+      - key: MAIL_RELAY_TOKEN
+        sync: false
       - key: PUBLIC_WEB_URL
         sync: false
       # Set in dashboard to https://<your-service>.onrender.com (no trailing slash).

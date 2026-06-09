@@ -7,29 +7,28 @@ import (
 	adminhandler "github.com/yourusername/wemake/internal/handler/admin"
 	authhandler "github.com/yourusername/wemake/internal/handler/auth"
 	boqhandler "github.com/yourusername/wemake/internal/handler/boq"
-	mehandler "github.com/yourusername/wemake/internal/handler/me"
 	cataloghandler "github.com/yourusername/wemake/internal/handler/catalog"
 	conversationhandler "github.com/yourusername/wemake/internal/handler/conversation"
 	factoryhandler "github.com/yourusername/wemake/internal/handler/factory"
 	frontendhandler "github.com/yourusername/wemake/internal/handler/frontend"
 	masterhandler "github.com/yourusername/wemake/internal/handler/master"
+	mehandler "github.com/yourusername/wemake/internal/handler/me"
 	messagehandler "github.com/yourusername/wemake/internal/handler/message"
 	notificationhandler "github.com/yourusername/wemake/internal/handler/notification"
 	orderhandler "github.com/yourusername/wemake/internal/handler/order"
 	paymenthandler "github.com/yourusername/wemake/internal/handler/payment"
 	platformconfighandler "github.com/yourusername/wemake/internal/handler/platform_config"
-	tconfighandler "github.com/yourusername/wemake/internal/handler/tconfig"
 	productionhandler "github.com/yourusername/wemake/internal/handler/production"
 	profilehandler "github.com/yourusername/wemake/internal/handler/profile"
 	quotationhandler "github.com/yourusername/wemake/internal/handler/quotation"
 	rfqhandler "github.com/yourusername/wemake/internal/handler/rfq"
 	showcasehandler "github.com/yourusername/wemake/internal/handler/showcase"
+	tconfighandler "github.com/yourusername/wemake/internal/handler/tconfig"
 	userhandler "github.com/yourusername/wemake/internal/handler/user"
 	wallethandler "github.com/yourusername/wemake/internal/handler/wallet"
 	"github.com/yourusername/wemake/internal/logger"
 	"github.com/yourusername/wemake/internal/mailer"
 	"github.com/yourusername/wemake/internal/media"
-	"github.com/yourusername/wemake/internal/sse"
 	adminrepo "github.com/yourusername/wemake/internal/repository/admin"
 	authrepo "github.com/yourusername/wemake/internal/repository/auth"
 	catalogrepo "github.com/yourusername/wemake/internal/repository/catalog"
@@ -43,12 +42,12 @@ import (
 	orderrepo "github.com/yourusername/wemake/internal/repository/order"
 	paymentrepo "github.com/yourusername/wemake/internal/repository/payment"
 	platformrepo "github.com/yourusername/wemake/internal/repository/platform_config"
-	tconfigrepo "github.com/yourusername/wemake/internal/repository/tconfig"
 	productionrepo "github.com/yourusername/wemake/internal/repository/production"
 	profilerepo "github.com/yourusername/wemake/internal/repository/profile"
 	quotationrepo "github.com/yourusername/wemake/internal/repository/quotation"
 	rfqrepo "github.com/yourusername/wemake/internal/repository/rfq"
 	showcaserepo "github.com/yourusername/wemake/internal/repository/showcase"
+	tconfigrepo "github.com/yourusername/wemake/internal/repository/tconfig"
 	userrepo "github.com/yourusername/wemake/internal/repository/user"
 	walletrepo "github.com/yourusername/wemake/internal/repository/wallet"
 	adminservice "github.com/yourusername/wemake/internal/service/admin"
@@ -58,8 +57,8 @@ import (
 	conversationservice "github.com/yourusername/wemake/internal/service/conversation"
 	factoryservice "github.com/yourusername/wemake/internal/service/factory"
 	frontendservice "github.com/yourusername/wemake/internal/service/frontend"
-	meservice "github.com/yourusername/wemake/internal/service/me"
 	masterservice "github.com/yourusername/wemake/internal/service/master"
+	meservice "github.com/yourusername/wemake/internal/service/me"
 	messageservice "github.com/yourusername/wemake/internal/service/message"
 	notificationservice "github.com/yourusername/wemake/internal/service/notification"
 	orderservice "github.com/yourusername/wemake/internal/service/order"
@@ -72,6 +71,7 @@ import (
 	showcaseservice "github.com/yourusername/wemake/internal/service/showcase"
 	userservice "github.com/yourusername/wemake/internal/service/user"
 	walletservice "github.com/yourusername/wemake/internal/service/wallet"
+	"github.com/yourusername/wemake/internal/sse"
 )
 
 type routeHandlers struct {
@@ -124,6 +124,7 @@ type routeHandlers struct {
 	slip              *paymenthandler.SlipHandler
 	adminCommission   *adminhandler.AdminCommissionHandler
 	factoryInvoice    *factoryhandler.InvoiceHandler
+	mailRelay         *handler.MailRelayHandler
 }
 
 func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
@@ -267,5 +268,6 @@ func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
 		slip:              paymenthandler.NewSlipHandler(slipRepo, walletRepo, mailSvc),
 		adminCommission:   adminhandler.NewAdminCommissionHandler(commissionInvoiceRepo, mailSvc),
 		factoryInvoice:    factoryhandler.NewInvoiceHandler(commissionInvoiceRepo, mailSvc),
+		mailRelay:         handler.NewMailRelayHandler(mailSvc),
 	}
 }

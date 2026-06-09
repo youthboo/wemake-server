@@ -40,6 +40,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
+	app.Post("/internal/mail/send", h.mailRelay.Send)
 
 	// Factory routes
 	api := app.Group("/api/v1")
@@ -301,12 +302,12 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	conversations.Post("/:conv_id/messages", h.message.CreateMessageByConvPath)
 
 	notifications := api.Group("/notifications")
-	notifications.Get("/stream", h.notification.Stream)          // SSE — must be before /:noti_id
+	notifications.Get("/stream", h.notification.Stream) // SSE — must be before /:noti_id
 	notifications.Get("/", h.notification.List)
 	notifications.Get("/unread-count", h.notification.GetUnreadCount)
-	notifications.Post("/read-all", h.notification.MarkAllRead)  // spec
-	notifications.Put("/read-all", h.notification.MarkAllRead)   // compat
-	notifications.Post("/:noti_id/read", h.notification.MarkAsRead) // spec
+	notifications.Post("/read-all", h.notification.MarkAllRead)      // spec
+	notifications.Put("/read-all", h.notification.MarkAllRead)       // compat
+	notifications.Post("/:noti_id/read", h.notification.MarkAsRead)  // spec
 	notifications.Patch("/:noti_id/read", h.notification.MarkAsRead) // compat
 	notifications.Delete("/:noti_id", h.notification.SoftDelete)
 
@@ -397,4 +398,3 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 
 	return app
 }
-

@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	htmltemplate "html/template"
+	"io"
 	"log"
 	"net"
+	"net/http"
 	"net/smtp"
 	"os"
 	"strings"
@@ -17,9 +20,9 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-const smtpTimeout = 30 * time.Second
+const mailTimeout = 30 * time.Second
 
-// Mailer sends transactional emails via SMTP and logs every attempt.
+// Mailer sends transactional emails and logs every attempt.
 type Mailer struct {
 	db *sqlx.DB
 }
@@ -38,6 +41,20 @@ type smtpConfig struct {
 	From     string
 }
 
+type relayConfig struct {
+	URL   string
+	Token string
+}
+
+type relayPayload struct {
+	To       string `json:"to"`
+	Subject  string `json:"subject"`
+	HTML     string `json:"html"`
+	RefType  string `json:"ref_type,omitempty"`
+	RefID    int64  `json:"ref_id,omitempty"`
+	Template string `json:"template,omitempty"`
+}
+
 func (m *Mailer) loadConfig() (*smtpConfig, error) {
 	cfg := &smtpConfig{
 		Host:     getEnv("SMTP_HOST", "smtp.gmail.com"),
@@ -54,6 +71,17 @@ func (m *Mailer) loadConfig() (*smtpConfig, error) {
 	}
 	if cfg.Host == "" || cfg.User == "" || cfg.Password == "" {
 		return nil, fmt.Errorf("SMTP config incomplete: host=%q user=%q", cfg.Host, cfg.User)
+	}
+	return cfg, nil
+}
+
+func loadRelayConfig() (*relayConfig, error) {
+	cfg := &relayConfig{
+		URL:   strings.TrimSpace(os.Getenv("MAIL_RELAY_URL")),
+		Token: strings.TrimSpace(os.Getenv("MAIL_RELAY_TOKEN")),
+	}
+	if cfg.URL == "" || cfg.Token == "" {
+		return nil, fmt.Errorf("mail relay config incomplete: url_set=%t token_set=%t", cfg.URL != "", cfg.Token != "")
 	}
 	return cfg, nil
 }
@@ -133,10 +161,46 @@ func (m *Mailer) Send(templateCode string, to string, data map[string]string, re
 		return err
 	}
 
+	if strings.EqualFold(getEnv("MAIL_PROVIDER", "smtp"), "relay") {
+		cfg, err := loadRelayConfig()
+		if err != nil {
+			log.Printf("[MAILER] relay config error: %v (template=%s to=%s)", err, templateCode, to)
+			m.sendLog(templateCode, to, subject, body, "FAIL", err.Error(), refType, refID)
+			return err
+		}
+		if err := sendRelay(cfg, relayPayload{
+			To:       to,
+			Subject:  subject,
+			HTML:     body,
+			RefType:  refType,
+			RefID:    refID,
+			Template: templateCode,
+		}); err != nil {
+			log.Printf("[MAILER] relay send failed: %v (to=%s template=%s)", err, to, templateCode)
+			m.sendLog(templateCode, to, subject, body, "FAIL", err.Error(), refType, refID)
+			return err
+		}
+
+		log.Printf("[MAILER] relayed OK (to=%s template=%s ref=%s/%d)", to, templateCode, refType, refID)
+		m.sendLog(templateCode, to, subject, body, "OK", "", refType, refID)
+		return nil
+	}
+
+	if err := m.SendRawSMTP(to, subject, body); err != nil {
+		log.Printf("[MAILER] send failed: %v (to=%s template=%s)", err, to, templateCode)
+		m.sendLog(templateCode, to, subject, body, "FAIL", err.Error(), refType, refID)
+		return err
+	}
+
+	log.Printf("[MAILER] sent OK (to=%s template=%s ref=%s/%d)", to, templateCode, refType, refID)
+	m.sendLog(templateCode, to, subject, body, "OK", "", refType, refID)
+	return nil
+}
+
+// SendRawSMTP sends a rendered HTML email through SMTP without template rendering.
+func (m *Mailer) SendRawSMTP(to string, subject string, body string) error {
 	cfg, err := m.loadConfig()
 	if err != nil {
-		log.Printf("[MAILER] SMTP config error: %v (template=%s to=%s)", err, templateCode, to)
-		m.sendLog(templateCode, to, subject, body, "FAIL", err.Error(), refType, refID)
 		return err
 	}
 
@@ -151,22 +215,13 @@ func (m *Mailer) Send(templateCode string, to string, data map[string]string, re
 		"\r\n" +
 		encodedBody
 
-	err = sendSMTP(cfg, to, []byte(msg))
-	if err != nil {
-		log.Printf("[MAILER] send failed: %v (to=%s template=%s)", err, to, templateCode)
-		m.sendLog(templateCode, to, subject, body, "FAIL", err.Error(), refType, refID)
-		return err
-	}
-
-	log.Printf("[MAILER] sent OK (to=%s template=%s ref=%s/%d)", to, templateCode, refType, refID)
-	m.sendLog(templateCode, to, subject, body, "OK", "", refType, refID)
-	return nil
+	return sendSMTP(cfg, to, []byte(msg))
 }
 
 func sendSMTP(cfg *smtpConfig, to string, msg []byte) error {
 	addr := net.JoinHostPort(cfg.Host, cfg.Port)
 	auth := smtp.PlainAuth("", cfg.User, cfg.Password, cfg.Host)
-	dialer := &net.Dialer{Timeout: smtpTimeout}
+	dialer := &net.Dialer{Timeout: mailTimeout}
 
 	var conn net.Conn
 	var err error
@@ -182,7 +237,7 @@ func sendSMTP(cfg *smtpConfig, to string, msg []byte) error {
 		return err
 	}
 	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(smtpTimeout))
+	_ = conn.SetDeadline(time.Now().Add(mailTimeout))
 
 	client, err := smtp.NewClient(conn, cfg.Host)
 	if err != nil {
@@ -223,6 +278,32 @@ func sendSMTP(cfg *smtpConfig, to string, msg []byte) error {
 		return err
 	}
 	return client.Quit()
+}
+
+func sendRelay(cfg *relayConfig, payload relayPayload) error {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPost, cfg.URL, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+cfg.Token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: mailTimeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("mail relay returned %s: %s", resp.Status, strings.TrimSpace(string(respBody)))
+	}
+	return nil
 }
 
 // SendAsync sends email in a goroutine — fire and forget, errors logged.
