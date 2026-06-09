@@ -14,11 +14,16 @@ import (
 	"os"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/yourusername/wemake/internal/mailer"
 )
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Printf("env file not loaded: %v", err)
+	}
+
 	to := flag.String("to", "", "recipient email (required)")
 	templateCode := flag.String("template", "SLIP_APPROVED", "template code: SLIP_ATTACHED | SLIP_APPROVED | COMMISSION_INVOICE | COMM_SLIP_ATTACHED")
 	flag.Parse()
