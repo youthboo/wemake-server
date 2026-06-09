@@ -393,5 +393,4 @@ func notifyMatchingFactories(db *sqlx.DB, rfqID, categoryID int64, subCategoryID
 			logger.Error("matching notification insert failed", "factory_id", f.UserID, "rfq_id", rfqID, "err", err)
 		}
 	}
-	logger.Info("matching notifications sent", "rfq_id", rfqID, "factory_count", len(factories))
 }
