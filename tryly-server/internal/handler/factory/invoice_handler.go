@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cloudinary/cloudinary-go/v2"
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/yourusername/wemake/internal/helper"
 	"github.com/yourusername/wemake/internal/mailer"
 	mediapkg "github.com/yourusername/wemake/internal/media"
@@ -16,10 +18,11 @@ import (
 type InvoiceHandler struct {
 	invoices *adminrepo.CommissionInvoiceRepository
 	mail     *mailer.Mailer
+	cld      *cloudinary.Cloudinary
 }
 
-func NewInvoiceHandler(invoices *adminrepo.CommissionInvoiceRepository, mail *mailer.Mailer) *InvoiceHandler {
-	return &InvoiceHandler{invoices: invoices, mail: mail}
+func NewInvoiceHandler(invoices *adminrepo.CommissionInvoiceRepository, mail *mailer.Mailer, cld *cloudinary.Cloudinary) *InvoiceHandler {
+	return &InvoiceHandler{invoices: invoices, mail: mail, cld: cld}
 }
 
 // ListMyInvoices GET /api/factories/me/invoices
@@ -96,8 +99,14 @@ func (h *InvoiceHandler) AttachCommSlip(c *fiber.Ctx) error {
 
 	// Upload file
 	result, err := mediapkg.SaveUploadedFile(c, mediapkg.UploadOptions{
-		FieldName: "file",
-		MaxSize:   5 * 1024 * 1024,
+		FieldName:             "file",
+		FileNamePrefix:        uuid.NewString(),
+		Folder:                "wemake/commission-slips",
+		MaxSize:               5 * 1024 * 1024,
+		CloudUploadMessage:    "failed to upload slip",
+		CloudUploadLogMessage: "cloudinary commission slip upload failed",
+		Cloudinary:            h.cld,
+		CloudinaryLogFields:   []interface{}{"invoice_id", invoiceID, "factory_id", factoryID},
 	})
 	if err != nil {
 		if uploadErr, ok := err.(*mediapkg.UploadError); ok {

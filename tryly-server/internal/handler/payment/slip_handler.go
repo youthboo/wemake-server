@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cloudinary/cloudinary-go/v2"
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/yourusername/wemake/internal/helper"
 	"github.com/yourusername/wemake/internal/mailer"
 	mediapkg "github.com/yourusername/wemake/internal/media"
@@ -18,10 +20,11 @@ type SlipHandler struct {
 	slips   *orderrepo.SlipRepository
 	wallets *walletrepo.WalletRepository
 	mail    *mailer.Mailer
+	cld     *cloudinary.Cloudinary
 }
 
-func NewSlipHandler(slips *orderrepo.SlipRepository, wallets *walletrepo.WalletRepository, mail *mailer.Mailer) *SlipHandler {
-	return &SlipHandler{slips: slips, wallets: wallets, mail: mail}
+func NewSlipHandler(slips *orderrepo.SlipRepository, wallets *walletrepo.WalletRepository, mail *mailer.Mailer, cld *cloudinary.Cloudinary) *SlipHandler {
+	return &SlipHandler{slips: slips, wallets: wallets, mail: mail, cld: cld}
 }
 
 // AttachSlip POST /api/orders/:order_id/slip — customer uploads payment slip
@@ -52,8 +55,14 @@ func (h *SlipHandler) AttachSlip(c *fiber.Ctx) error {
 
 	// Upload file
 	result, err := mediapkg.SaveUploadedFile(c, mediapkg.UploadOptions{
-		FieldName: "file",
-		MaxSize:   5 * 1024 * 1024,
+		FieldName:             "file",
+		FileNamePrefix:        uuid.NewString(),
+		Folder:                "wemake/payment-slips",
+		MaxSize:               5 * 1024 * 1024,
+		CloudUploadMessage:    "failed to upload slip",
+		CloudUploadLogMessage: "cloudinary payment slip upload failed",
+		Cloudinary:            h.cld,
+		CloudinaryLogFields:   []interface{}{"order_id", orderID, "user_id", userID},
 	})
 	if err != nil {
 		if uploadErr, ok := err.(*mediapkg.UploadError); ok {

@@ -265,9 +265,9 @@ func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
 		meRFQOrders:       mehandler.NewMeRFQOrdersHandler(meRFQOrdersService),
 		factoryRFQBoard:   rfqhandler.NewFactoryRFQBoardHandler(rfqService, quotationService, authService, platformConfigRepo),
 		bankAccount:       factoryhandler.NewBankAccountHandler(bankAccountRepo),
-		slip:              paymenthandler.NewSlipHandler(slipRepo, walletRepo, mailSvc),
+		slip:              paymenthandler.NewSlipHandler(slipRepo, walletRepo, mailSvc, cld),
 		adminCommission:   adminhandler.NewAdminCommissionHandler(commissionInvoiceRepo, mailSvc),
-		factoryInvoice:    factoryhandler.NewInvoiceHandler(commissionInvoiceRepo, mailSvc),
+		factoryInvoice:    factoryhandler.NewInvoiceHandler(commissionInvoiceRepo, mailSvc, cld),
 		mailRelay:         handler.NewMailRelayHandler(mailSvc),
 	}
 }
