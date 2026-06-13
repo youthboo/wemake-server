@@ -308,7 +308,7 @@ type factoryReviewScanRow struct {
 func (r *FactoryRepository) selectFactoryReviews(factoryID int64, limit int) ([]domain.FactoryProfileReview, error) {
 	var revRows []factoryReviewScanRow
 	q := `
-		SELECT fr.review_id, fr.user_id, fr.rating, fr.comment, fr.image_urls, fr.created_at,
+		SELECT fr.review_id, fr.user_id, ROUND(fr.rating)::int AS rating, fr.comment, fr.image_urls, fr.created_at,
 		       c.first_name, c.last_name
 		FROM factory_reviews fr
 		LEFT JOIN customers c ON c.user_id = fr.user_id
