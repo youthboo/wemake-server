@@ -57,10 +57,10 @@ func (r *SlipRepository) AttachSlip(orderID, walletID int64, amount float64, sli
 	}
 	defer tx.Rollback()
 
-	// Insert transaction record
+	// Insert transaction record — status PT (Pending Transfer) until factory approves
 	_, err = tx.Exec(`
 		INSERT INTO transactions (wallet_id, order_id, type, status, amount, slip_url, slip_note)
-		VALUES ($1, $2, 'BU', 'ST', $3, $4, NULLIF($5, ''))
+		VALUES ($1, $2, 'BU', 'PT', $3, $4, NULLIF($5, ''))
 	`, walletID, orderID, amount, slipURL, slipNote)
 	if err != nil {
 		return err
@@ -90,12 +90,12 @@ func (r *SlipRepository) ApproveSlip(orderID, verifiedBy int64) error {
 	}
 	defer tx.Rollback()
 
-	// Update latest deposit transaction
+	// Update latest deposit transaction — ST (Settled) when factory approves
 	_, err = tx.Exec(`
 		UPDATE transactions
-		SET status = 'PT', verified_by = $2, verified_at = NOW(), updated_at = NOW()
+		SET status = 'ST', verified_by = $2, verified_at = NOW(), updated_at = NOW()
 		WHERE tx_id = (
-		    SELECT MAX(tx_id) FROM transactions WHERE order_id = $1 AND type = 'BU' AND status = 'ST'
+		    SELECT MAX(tx_id) FROM transactions WHERE order_id = $1 AND type = 'BU' AND status = 'PT'
 		)
 	`, orderID, verifiedBy)
 	if err != nil {
@@ -126,12 +126,12 @@ func (r *SlipRepository) RejectSlip(orderID int64, reason string) error {
 	}
 	defer tx.Rollback()
 
-	// Reject latest deposit transaction
+	// Reject latest deposit transaction — look for PT (Pending Transfer) status
 	_, err = tx.Exec(`
 		UPDATE transactions
 		SET status = 'RJ', slip_note = COALESCE(slip_note || E'\n', '') || 'ปฏิเสธ: ' || $2, updated_at = NOW()
 		WHERE tx_id = (
-		    SELECT MAX(tx_id) FROM transactions WHERE order_id = $1 AND type = 'BU' AND status = 'ST'
+		    SELECT MAX(tx_id) FROM transactions WHERE order_id = $1 AND type = 'BU' AND status = 'PT'
 		)
 	`, orderID, reason)
 	if err != nil {
