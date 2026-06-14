@@ -79,8 +79,7 @@ func (h *SlipHandler) AttachSlip(c *fiber.Ctx) error {
 		return helper.JSONInternal(c, "failed to ensure wallet")
 	}
 
-	// Transaction is a ledger entry linking the slip to the order; amount = 0 (informational)
-	if err := h.slips.AttachSlip(orderID, walletID, 0, result.URL, note); err != nil {
+	if err := h.slips.AttachSlip(orderID, walletID, own.TotalAmount, result.URL, note); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return helper.JSONError(c, fiber.StatusBadRequest, "ไม่สามารถแนบสลีปได้ในสถานะปัจจุบัน")
 		}
