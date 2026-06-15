@@ -297,7 +297,7 @@ func (r *FactoryRepository) selectFactoryCertificates(factoryID int64) ([]domain
 type factoryReviewScanRow struct {
 	ReviewID  int64              `db:"review_id"`
 	UserID    int64              `db:"user_id"`
-	Rating    int                `db:"rating"`
+	Rating    float64            `db:"rating"`
 	Comment   sql.NullString     `db:"comment"`
 	ImageURLs domain.StringArray `db:"image_urls"`
 	CreatedAt time.Time          `db:"created_at"`

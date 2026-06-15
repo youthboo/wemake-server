@@ -74,7 +74,7 @@ type FactoryProfileCertificate struct {
 type FactoryProfileReview struct {
 	ReviewID  int64     `json:"review_id"`
 	UserID    int64     `json:"user_id"`
-	Rating    int       `json:"rating"`
+	Rating    float64   `json:"rating"`
 	Comment   *string   `json:"comment,omitempty"`
 	ImageURLs StringArray `json:"image_urls"`
 	CreatedAt time.Time `json:"created_at"`
