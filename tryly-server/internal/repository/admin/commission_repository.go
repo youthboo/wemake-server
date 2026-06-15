@@ -167,6 +167,73 @@ func (r *CommissionInvoiceRepository) ListByFactory(factoryID int64) ([]Commissi
 	return items, nil
 }
 
+// CurrentPeriodOrder is one approved order within the current billing period.
+type CurrentPeriodOrder struct {
+	OrderID          int64   `db:"order_id"           json:"order_id"`
+	RFQTitle         string  `db:"rfq_title"          json:"rfq_title"`
+	OrderAmount      float64 `db:"order_amount"       json:"order_amount"`
+	CommissionRate   float64 `db:"commission_rate"    json:"commission_rate"`
+	CommissionAmount float64 `db:"commission_amount"  json:"commission_amount"`
+	CommissionVat    float64 `db:"commission_vat"     json:"commission_vat"`
+	LineTotal        float64 `db:"line_total"         json:"line_total"`
+	ApprovedAt       string  `db:"approved_at"        json:"approved_at"`
+}
+
+// CurrentPeriodSummary aggregates the unbilled month's commission for one factory.
+type CurrentPeriodSummary struct {
+	Month            int                  `json:"month"`
+	Year             int                  `json:"year"`
+	TotalOrders      int                  `json:"total_orders"`
+	TotalAmount      float64              `json:"total_amount"`
+	CommissionAmount float64              `json:"commission_amount"`
+	VatAmount        float64              `json:"vat_amount"`
+	GrandTotal       float64              `json:"grand_total"`
+	Orders           []CurrentPeriodOrder `json:"orders"`
+}
+
+// GetCurrentPeriod returns unbilled orders for a factory in the given month/year.
+func (r *CommissionInvoiceRepository) GetCurrentPeriod(factoryID int64, month, year int) (*CurrentPeriodSummary, error) {
+	var orders []CurrentPeriodOrder
+	err := r.db.Select(&orders, `
+		SELECT
+			o.order_id,
+			COALESCE(r.title, '')                                    AS rfq_title,
+			q.grand_total                                            AS order_amount,
+			q.platform_commission_rate                               AS commission_rate,
+			q.platform_commission_amount                             AS commission_amount,
+			ROUND((q.platform_commission_amount * 0.07)::numeric, 2) AS commission_vat,
+			ROUND((q.platform_commission_amount * 1.07)::numeric, 2) AS line_total,
+			o.updated_at::text                                       AS approved_at
+		FROM orders o
+		INNER JOIN quotations q ON q.quote_id = o.quote_id
+		LEFT JOIN rfqs r ON r.rfq_id = q.rfq_id
+		WHERE o.factory_id = $1
+		  AND TRIM(o.slip_status) = 'AP'
+		  AND EXTRACT(MONTH FROM o.updated_at) = $2
+		  AND EXTRACT(YEAR FROM o.updated_at)  = $3
+		ORDER BY o.updated_at DESC
+	`, factoryID, month, year)
+	if err != nil {
+		return nil, err
+	}
+	if orders == nil {
+		orders = []CurrentPeriodOrder{}
+	}
+
+	var summary CurrentPeriodSummary
+	summary.Month = month
+	summary.Year = year
+	summary.Orders = orders
+	for _, o := range orders {
+		summary.TotalOrders++
+		summary.TotalAmount += o.OrderAmount
+		summary.CommissionAmount += o.CommissionAmount
+		summary.VatAmount += o.CommissionVat
+	}
+	summary.GrandTotal = summary.CommissionAmount + summary.VatAmount
+	return &summary, nil
+}
+
 // GetByID returns a single invoice.
 func (r *CommissionInvoiceRepository) GetByID(invoiceID int64) (*CommissionInvoice, error) {
 	var item CommissionInvoice
