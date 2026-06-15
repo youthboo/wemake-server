@@ -124,6 +124,7 @@ type routeHandlers struct {
 	slip              *paymenthandler.SlipHandler
 	adminCommission   *adminhandler.AdminCommissionHandler
 	factoryInvoice    *factoryhandler.InvoiceHandler
+	factoryReview     *factoryhandler.ReviewHandler
 }
 
 func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
@@ -267,5 +268,6 @@ func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
 		slip:              paymenthandler.NewSlipHandler(slipRepo, walletRepo, mailSvc),
 		adminCommission:   adminhandler.NewAdminCommissionHandler(commissionInvoiceRepo, mailSvc),
 		factoryInvoice:    factoryhandler.NewInvoiceHandler(commissionInvoiceRepo, mailSvc),
+		factoryReview:     factoryhandler.NewReviewHandler(reviewRepo),
 	}
 }
