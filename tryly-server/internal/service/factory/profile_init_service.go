@@ -34,11 +34,13 @@ func (s *ProfileInitService) GetProfileInit(userID int64) (*domain.ProfileInitRe
 
 	factory, err := s.factory.GetPublicDetail(userID)
 	if err != nil {
+		logger.Error("GetPublicDetail failed", "user_id", userID, "err", err)
 		return nil, err
 	}
 
 	factoryTypes, err := s.master.GetFactoryTypes()
 	if err != nil {
+		logger.Error("GetFactoryTypes failed", "user_id", userID, "err", err)
 		return nil, err
 	}
 	if factoryTypes == nil {
@@ -47,6 +49,7 @@ func (s *ProfileInitService) GetProfileInit(userID int64) (*domain.ProfileInitRe
 
 	lbiCategories, err := s.catalog.GetCategories(domain.CatalogScopeAll, 0)
 	if err != nil {
+		logger.Error("GetCategories failed", "user_id", userID, "err", err)
 		return nil, err
 	}
 	if lbiCategories == nil {
@@ -55,6 +58,7 @@ func (s *ProfileInitService) GetProfileInit(userID int64) (*domain.ProfileInitRe
 
 	addresses, err := s.address.ListByUserID(userID)
 	if err != nil {
+		logger.Error("ListByUserID failed", "user_id", userID, "err", err)
 		return nil, err
 	}
 	if addresses == nil {
@@ -63,6 +67,7 @@ func (s *ProfileInitService) GetProfileInit(userID int64) (*domain.ProfileInitRe
 
 	certTypes, err := s.master.GetCertificates()
 	if err != nil {
+		logger.Error("GetCertificates failed", "user_id", userID, "err", err)
 		return nil, err
 	}
 	if certTypes == nil {

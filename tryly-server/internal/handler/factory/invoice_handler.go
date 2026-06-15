@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/cloudinary/cloudinary-go/v2"
 	"github.com/gofiber/fiber/v2"
@@ -67,6 +68,20 @@ func (h *InvoiceHandler) GetMyInvoice(c *fiber.Ctx) error {
 		"invoice": invoice,
 		"items":   items,
 	})
+}
+
+// GetCurrentPeriod GET /api/factories/me/invoices/current-period
+func (h *InvoiceHandler) GetCurrentPeriod(c *fiber.Ctx) error {
+	factoryID, err := helper.RequireAuthenticatedUserID(c)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	summary, err := h.invoices.GetCurrentPeriod(factoryID, int(now.Month()), now.Year())
+	if err != nil {
+		return helper.JSONInternal(c, "failed to fetch current period")
+	}
+	return c.JSON(summary)
 }
 
 // AttachCommSlip POST /api/factories/me/invoices/:invoice_id/slip
