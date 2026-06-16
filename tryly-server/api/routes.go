@@ -148,6 +148,9 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	api.Delete("/factories/me/bank-accounts/:account_id", middleware.RequireRole(h.authService, domain.RoleFactory), h.bankAccount.Delete)
 
 	// Factory invoices (B7 — factory side)
+	api.Get("/factories/me/reviews", middleware.RequireRole(h.authService, domain.RoleFactory), h.factoryReview.ListMyReviews)
+	api.Post("/factories/me/reviews/:id/reply", middleware.RequireRole(h.authService, domain.RoleFactory), h.factoryReview.ReplyToReview)
+
 	api.Get("/factories/me/invoices", middleware.RequireRole(h.authService, domain.RoleFactory), h.factoryInvoice.ListMyInvoices)
 	api.Get("/factories/me/invoices/current-period", middleware.RequireRole(h.authService, domain.RoleFactory), h.factoryInvoice.GetCurrentPeriod)
 	api.Get("/factories/me/invoices/:invoice_id", middleware.RequireRole(h.authService, domain.RoleFactory), h.factoryInvoice.GetMyInvoice)

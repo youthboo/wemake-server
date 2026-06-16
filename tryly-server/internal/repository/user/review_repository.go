@@ -163,6 +163,21 @@ func (r *ReviewRepository) UpdateByUser(reviewID, userID int64, rating int, comm
 	return &item, nil
 }
 
+func (r *ReviewRepository) ReplyByFactory(reviewID, factoryID, replierUserID int64, reply string) (*domain.FactoryReview, error) {
+	var item domain.FactoryReview
+	err := r.db.Get(&item, `
+		UPDATE factory_reviews
+		SET factory_reply = $1, factory_reply_at = NOW(), factory_reply_by = $2, updated_at = NOW()
+		WHERE review_id = $3 AND factory_id = $4 AND deleted_at IS NULL
+		RETURNING review_id, factory_id, user_id, order_id, rating, comment, image_urls,
+		          created_at, updated_at, factory_reply, factory_reply_at, factory_reply_by
+	`, strings.TrimSpace(reply), replierUserID, reviewID, factoryID)
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
 func (r *ReviewRepository) SoftDeleteByUser(reviewID, userID int64) (*domain.FactoryReview, error) {
 	var item domain.FactoryReview
 	err := r.db.Get(&item, `

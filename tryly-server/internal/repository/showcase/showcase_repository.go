@@ -656,18 +656,22 @@ func (r *ShowcaseRepository) GetFactoryReviewsForShowcase(factoryID int64) (*dom
 	}
 
 	type itemRow struct {
-		ReviewID     int64              `db:"review_id"`
-		ReviewerName sql.NullString     `db:"reviewer_name"`
-		Rating       float64            `db:"rating"`
-		Comment      string             `db:"comment"`
-		CreatedAt    string             `db:"created_at"`
-		ImageURLs    domain.StringArray `db:"image_urls"`
+		ReviewID       int64              `db:"review_id"`
+		ReviewerName   sql.NullString     `db:"reviewer_name"`
+		Rating         float64            `db:"rating"`
+		Comment        string             `db:"comment"`
+		CreatedAt      string             `db:"created_at"`
+		ImageURLs      domain.StringArray `db:"image_urls"`
+		FactoryReply   sql.NullString     `db:"factory_reply"`
+		FactoryReplyAt sql.NullString     `db:"factory_reply_at"`
 	}
 	var items []itemRow
 	if err := r.db.Select(&items, `
 		SELECT fr.review_id, fr.rating, fr.comment, fr.image_urls,
 		       TO_CHAR(fr.created_at,'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
-		       NULLIF(TRIM(CONCAT(c.first_name,' ',c.last_name)),'') AS reviewer_name
+		       NULLIF(TRIM(CONCAT(c.first_name,' ',c.last_name)),'') AS reviewer_name,
+		       fr.factory_reply,
+		       TO_CHAR(fr.factory_reply_at,'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS factory_reply_at
 		FROM factory_reviews fr
 		LEFT JOIN customers c ON c.user_id = fr.user_id
 		WHERE fr.factory_id = $1 AND fr.deleted_at IS NULL
@@ -693,14 +697,21 @@ func (r *ShowcaseRepository) GetFactoryReviewsForShowcase(factoryID int64) (*dom
 		if imgURLs == nil {
 			imgURLs = domain.StringArray{}
 		}
-		result.Items = append(result.Items, domain.ShowcaseReviewItem{
+		ri := domain.ShowcaseReviewItem{
 			ReviewID:     strconv.FormatInt(it.ReviewID, 10),
 			ReviewerName: name,
 			Rating:       it.Rating,
 			Comment:      it.Comment,
 			ImageURLs:    imgURLs,
 			CreatedAt:    it.CreatedAt,
-		})
+		}
+		if it.FactoryReply.Valid {
+			ri.FactoryReply = it.FactoryReply.String
+		}
+		if it.FactoryReplyAt.Valid {
+			ri.FactoryReplyAt = it.FactoryReplyAt.String
+		}
+		result.Items = append(result.Items, ri)
 	}
 	return result, nil
 }
