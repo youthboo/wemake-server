@@ -128,6 +128,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 
 	api.Get("/explore", h.explore.GetExplore)
 	api.Get("/categories", h.catalog.GetCategories)
+	api.Get("/lbi/hubs", h.catalog.GetHubs)
 	api.Get("/lbi/categories", h.catalog.GetLBICategories)
 	api.Get("/lbi/sub-categories", h.catalog.GetAllLBISubCategories)
 	api.Get("/categories/:id/sub-categories", h.catalog.GetSubCategories)

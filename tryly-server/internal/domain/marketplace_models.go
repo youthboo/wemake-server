@@ -18,6 +18,27 @@ type Category struct {
 	CategoryID int64  `db:"category_id" json:"category_id"`
 	Name       string `db:"name" json:"name"`
 	Scope      string `db:"scope" json:"scope,omitempty"`
+	HubID      int64  `db:"hub_id" json:"hub_id,omitempty"`
+}
+
+type Hub struct {
+	HubID int64  `db:"hub_id" json:"hub_id"`
+	Name  string `db:"name" json:"name"`
+	Scope string `db:"scope" json:"scope"`
+}
+
+type CategoryForHub struct {
+	CategoryID   int64    `db:"category_id" json:"category_id"`
+	Name         string   `db:"name" json:"name"`
+	FactoryCount int64    `db:"factory_count" json:"factory_count"`
+	SubPreview   []string `json:"sub_preview"`
+}
+
+type HubWithCategories struct {
+	HubID      int64            `json:"hub_id"`
+	Name       string           `json:"name"`
+	Scope      string           `json:"scope"`
+	Categories []CategoryForHub `json:"categories"`
 }
 
 // ExploreFactory is a lightweight factory card returned in GET /api/v1/explore.
@@ -41,6 +62,7 @@ type CategoryWithSubs struct {
 	CategoryID    int64         `json:"category_id"`
 	Name          string        `json:"name"`
 	Scope         string        `json:"scope,omitempty"`
+	HubID         int64         `json:"hub_id,omitempty"`
 	SubCategories []SubCategory `json:"sub_categories"`
 }
 

@@ -268,9 +268,10 @@ func (r *FrontendRepository) ListFactories(scope ...string) ([]FrontendFactoryRo
 		) lead ON lead.factory_id = u.user_id
 		LEFT JOIN (
 			SELECT mfc.factory_id,
-				array_agg(DISTINCT COALESCE(c.scope, 'PD')::text) AS category_scopes
+				array_agg(DISTINCT h.scope::text) AS category_scopes
 			FROM map_factory_categories mfc
 			JOIN lbi_categories c ON c.category_id = mfc.category_id
+			JOIN lbi_hub h ON h.hub_id = c.hub_id
 			GROUP BY mfc.factory_id
 		) cats ON cats.factory_id = u.user_id
 		WHERE u.role = 'FT' AND u.is_active = TRUE`

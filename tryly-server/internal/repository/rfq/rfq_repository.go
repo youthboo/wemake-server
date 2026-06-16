@@ -237,9 +237,10 @@ func (r *RFQRepository) ShippingMethodExists(shippingMethodID int64) (bool, erro
 func (r *RFQRepository) CategoryScope(categoryID int64) (string, bool, error) {
 	var scope sql.NullString
 	err := r.db.Get(&scope, `
-		SELECT COALESCE(scope, 'PD') AS scope
-		FROM lbi_categories
-		WHERE category_id = $1
+		SELECT h.scope
+		FROM lbi_categories c
+		JOIN lbi_hub h ON h.hub_id = c.hub_id
+		WHERE c.category_id = $1
 	`, categoryID)
 	if err == sql.ErrNoRows {
 		return "", false, nil
@@ -395,10 +396,11 @@ func (r *RFQRepository) ListMatchingFactoryIDsForKind(kind string, categoryID in
 			SELECT DISTINCT fs.factory_id
 			FROM factory_showcases fs
 			INNER JOIN lbi_categories cat ON cat.category_id = fs.category_id
+			INNER JOIN lbi_hub h ON h.hub_id = cat.hub_id
 			LEFT JOIN factory_profiles fp ON fp.user_id = fs.factory_id
 			WHERE fs.content_type = 'MT'
 			  AND fs.status = 'AC'
-			  AND COALESCE(cat.scope, 'PD') = 'MT'
+			  AND h.scope = 'MT'
 			  AND COALESCE(fp.approval_status, 'AP') <> 'SU'
 			  AND fs.category_id = $1
 		`

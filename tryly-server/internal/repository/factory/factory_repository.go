@@ -97,9 +97,10 @@ func (r *FactoryRepository) ListPublicVerified(scope ...string) ([]domain.Factor
 		) rev ON rev.factory_id = fp.user_id
 		LEFT JOIN (
 			SELECT mfc.factory_id,
-				array_to_json(array_agg(DISTINCT COALESCE(c.scope, 'PD')::text))::text AS category_scopes
+				array_to_json(array_agg(DISTINCT h.scope::text))::text AS category_scopes
 			FROM map_factory_categories mfc
 			JOIN lbi_categories c ON c.category_id = mfc.category_id
+			JOIN lbi_hub h ON h.hub_id = c.hub_id
 			GROUP BY mfc.factory_id
 		) cats ON cats.factory_id = fp.user_id
 		WHERE u.is_active = TRUE`
@@ -109,7 +110,8 @@ func (r *FactoryRepository) ListPublicVerified(scope ...string) ([]domain.Factor
 		query += ` AND EXISTS (
 			SELECT 1 FROM map_factory_categories mfc2
 			JOIN lbi_categories c2 ON c2.category_id = mfc2.category_id
-			WHERE mfc2.factory_id = fp.user_id AND COALESCE(c2.scope, 'PD') = $1
+			JOIN lbi_hub h2 ON h2.hub_id = c2.hub_id
+			WHERE mfc2.factory_id = fp.user_id AND h2.scope = $1
 		)`
 		args = append(args, filterScope)
 	}

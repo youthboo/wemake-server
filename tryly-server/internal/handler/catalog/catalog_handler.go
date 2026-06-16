@@ -1,6 +1,8 @@
 package catalog
 
 import (
+	"fmt"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/yourusername/wemake/internal/domain"
 	"github.com/yourusername/wemake/internal/domainutil"
@@ -39,6 +41,23 @@ func (h *CatalogHandler) GetCategories(c *fiber.Ctx) error {
 }
 
 func (h *CatalogHandler) GetLBICategories(c *fiber.Ctx) error {
+	// Support filtering by hub_id (new) or scope (legacy)
+	if hubIDStr := helper.QueryString(c, "hub_id"); hubIDStr != "" {
+		hubID, err := helper.ParsePositiveInt64Param(c, "hub_id")
+		if err != nil || hubID <= 0 {
+			// fallback: parse from query string directly
+			var id int64
+			if _, scanErr := fmt.Sscanf(hubIDStr, "%d", &id); scanErr != nil || id <= 0 {
+				return helper.BadRequestError(c, "INVALID_HUB_ID")
+			}
+			hubID = id
+		}
+		items, err := h.service.GetCategoriesByHub(hubID)
+		if err != nil {
+			return helper.JSONInternal(c, "failed to fetch categories")
+		}
+		return c.JSON(fiber.Map{"categories": items})
+	}
 	scope := domainutil.NormalizeStatus(helper.QueryString(c, "scope"))
 	if scope == "" {
 		scope = domain.CatalogScopeProduct
@@ -51,6 +70,18 @@ func (h *CatalogHandler) GetLBICategories(c *fiber.Ctx) error {
 		return helper.JSONInternal(c, "failed to fetch categories")
 	}
 	return c.JSON(fiber.Map{"categories": items})
+}
+
+func (h *CatalogHandler) GetHubs(c *fiber.Ctx) error {
+	scope := domainutil.NormalizeStatus(helper.QueryString(c, "scope"))
+	if scope != "" && !domainutil.StatusIn(scope, domain.CatalogScopeProduct, domain.CatalogScopeMaterial, domain.CatalogScopeAll) {
+		return helper.BadRequestError(c, "INVALID_SCOPE")
+	}
+	hubs, err := h.service.GetHubs(scope)
+	if err != nil {
+		return helper.JSONInternal(c, "failed to fetch hubs")
+	}
+	return c.JSON(fiber.Map{"hubs": hubs})
 }
 
 func (h *CatalogHandler) GetSubCategories(c *fiber.Ctx) error {

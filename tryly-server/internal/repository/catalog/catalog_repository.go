@@ -19,22 +19,31 @@ func NewCatalogRepository(db *sqlx.DB) *CatalogRepository {
 func (r *CatalogRepository) GetCategories(scope string, limit int) ([]domain.Category, error) {
 	var categories []domain.Category
 	scope = domainutil.NormalizeStatus(scope)
-	query := "SELECT category_id, name, COALESCE(scope, $1) AS scope FROM lbi_categories"
+	query := `SELECT c.category_id, c.name, h.scope, c.hub_id
+		FROM lbi_categories c
+		JOIN lbi_hub h ON h.hub_id = c.hub_id`
 	args := []interface{}{}
-	if scope == "" {
-		scope = domain.CatalogScopeProduct
-	}
-	args = append(args, domain.CatalogScopeProduct)
-	if scope != domain.CatalogScopeAll {
-		query += " WHERE COALESCE(scope, $1) = $2"
+	if scope != "" && scope != domain.CatalogScopeAll {
+		query += " WHERE h.scope = $1"
 		args = append(args, scope)
 	}
-	query += " ORDER BY CASE WHEN COALESCE(scope, $1) = 'PD' THEN 0 ELSE 1 END, category_id ASC"
+	query += " ORDER BY CASE WHEN h.scope = 'PD' THEN 0 ELSE 1 END, c.category_id ASC"
 	if limit > 0 {
 		query += fmt.Sprintf(" LIMIT $%d", len(args)+1)
 		args = append(args, limit)
 	}
 	err := r.db.Select(&categories, query, args...)
+	return categories, err
+}
+
+func (r *CatalogRepository) GetCategoriesByHub(hubID int64) ([]domain.Category, error) {
+	var categories []domain.Category
+	query := `SELECT c.category_id, c.name, h.scope, c.hub_id
+		FROM lbi_categories c
+		JOIN lbi_hub h ON h.hub_id = c.hub_id
+		WHERE c.hub_id = $1
+		ORDER BY c.category_id ASC`
+	err := r.db.Select(&categories, query, hubID)
 	return categories, err
 }
 
@@ -56,15 +65,29 @@ func (r *CatalogRepository) GetAllSubCategories(scope string) ([]domain.SubCateg
 		SELECT s.sub_category_id, s.category_id, s.name, s.sort_order, s.status
 		FROM lbi_sub_categories s
 		JOIN lbi_categories c ON c.category_id = s.category_id
+		JOIN lbi_hub h ON h.hub_id = c.hub_id
 		WHERE s.status = '1'
 	`
 	args := []interface{}{}
 	if scope != "" && scope != domain.CatalogScopeAll {
-		query += " AND COALESCE(c.scope, $1) = $1"
+		query += " AND h.scope = $1"
 		args = append(args, scope)
 	}
 	query += " ORDER BY s.category_id ASC, s.sub_category_id ASC, s.sort_order ASC"
 	err := r.db.Select(&subs, query, args...)
+	return subs, err
+}
+
+func (r *CatalogRepository) GetAllSubCategoriesByHub(hubID int64) ([]domain.SubCategory, error) {
+	var subs []domain.SubCategory
+	query := `
+		SELECT s.sub_category_id, s.category_id, s.name, s.sort_order, s.status
+		FROM lbi_sub_categories s
+		JOIN lbi_categories c ON c.category_id = s.category_id
+		WHERE s.status = '1' AND c.hub_id = $1
+		ORDER BY s.category_id ASC, s.sub_category_id ASC, s.sort_order ASC
+	`
+	err := r.db.Select(&subs, query, hubID)
 	return subs, err
 }
 
@@ -91,7 +114,110 @@ func (r *CatalogRepository) GetCategoriesWithSubs(scope string, limit int) ([]do
 			CategoryID:    cat.CategoryID,
 			Name:          cat.Name,
 			Scope:         cat.Scope,
+			HubID:         cat.HubID,
 			SubCategories: subs,
+		})
+	}
+	return result, nil
+}
+
+func (r *CatalogRepository) GetHubs(scope string) ([]domain.HubWithCategories, error) {
+	scope = domainutil.NormalizeStatus(scope)
+
+	var hubs []domain.Hub
+	hubQuery := "SELECT hub_id, name, scope FROM lbi_hub"
+	hubArgs := []interface{}{}
+	if scope != "" && scope != domain.CatalogScopeAll {
+		hubQuery += " WHERE scope = $1"
+		hubArgs = append(hubArgs, scope)
+	}
+	hubQuery += " ORDER BY hub_id ASC"
+	if err := r.db.Select(&hubs, hubQuery, hubArgs...); err != nil {
+		return nil, err
+	}
+
+	type catRow struct {
+		HubID        int64  `db:"hub_id"`
+		CategoryID   int64  `db:"category_id"`
+		Name         string `db:"name"`
+		FactoryCount int64  `db:"factory_count"`
+	}
+	catQuery := `
+		SELECT c.hub_id, c.category_id, c.name,
+			COUNT(DISTINCT mfc.factory_id) AS factory_count
+		FROM lbi_categories c
+		JOIN lbi_hub h ON h.hub_id = c.hub_id
+		LEFT JOIN map_factory_categories mfc ON mfc.category_id = c.category_id
+	`
+	catArgs := []interface{}{}
+	if scope != "" && scope != domain.CatalogScopeAll {
+		catQuery += " WHERE h.scope = $1"
+		catArgs = append(catArgs, scope)
+	}
+	catQuery += " GROUP BY c.hub_id, c.category_id, c.name ORDER BY c.hub_id ASC, c.category_id ASC"
+	var catRows []catRow
+	if err := r.db.Select(&catRows, catQuery, catArgs...); err != nil {
+		return nil, err
+	}
+
+	type subRow struct {
+		CategoryID int64  `db:"category_id"`
+		Name       string `db:"name"`
+		SortOrder  int64  `db:"sort_order"`
+	}
+	subQuery := `
+		SELECT s.category_id, s.name, s.sort_order
+		FROM lbi_sub_categories s
+		JOIN lbi_categories c ON c.category_id = s.category_id
+		JOIN lbi_hub h ON h.hub_id = c.hub_id
+		WHERE s.status = '1' AND s.name <> 'ทั้งหมด'
+	`
+	subArgs := []interface{}{}
+	if scope != "" && scope != domain.CatalogScopeAll {
+		subQuery += " AND h.scope = $1"
+		subArgs = append(subArgs, scope)
+	}
+	subQuery += " ORDER BY s.category_id ASC, s.sort_order ASC, s.sub_category_id ASC"
+	var subRows []subRow
+	if err := r.db.Select(&subRows, subQuery, subArgs...); err != nil {
+		return nil, err
+	}
+
+	// Build sub_preview map (category_id → first 3 sub names)
+	subPreviewMap := make(map[int64][]string)
+	for _, s := range subRows {
+		prev := subPreviewMap[s.CategoryID]
+		if len(prev) < 3 {
+			subPreviewMap[s.CategoryID] = append(prev, s.Name)
+		}
+	}
+
+	// Build categories per hub
+	catsByHub := make(map[int64][]domain.CategoryForHub)
+	for _, cr := range catRows {
+		sp := subPreviewMap[cr.CategoryID]
+		if sp == nil {
+			sp = []string{}
+		}
+		catsByHub[cr.HubID] = append(catsByHub[cr.HubID], domain.CategoryForHub{
+			CategoryID:   cr.CategoryID,
+			Name:         cr.Name,
+			FactoryCount: cr.FactoryCount,
+			SubPreview:   sp,
+		})
+	}
+
+	result := make([]domain.HubWithCategories, 0, len(hubs))
+	for _, h := range hubs {
+		cats := catsByHub[h.HubID]
+		if cats == nil {
+			cats = []domain.CategoryForHub{}
+		}
+		result = append(result, domain.HubWithCategories{
+			HubID:      h.HubID,
+			Name:       h.Name,
+			Scope:      h.Scope,
+			Categories: cats,
 		})
 	}
 	return result, nil

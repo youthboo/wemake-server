@@ -88,6 +88,14 @@ func (s *CatalogService) GetCategoriesWithSubs(scope string, limit int) ([]domai
 	return s.repo.GetCategoriesWithSubs(scope, limit)
 }
 
+func (s *CatalogService) GetCategoriesByHub(hubID int64) ([]domain.Category, error) {
+	return s.repo.GetCategoriesByHub(hubID)
+}
+
+func (s *CatalogService) GetHubs(scope string) ([]domain.HubWithCategories, error) {
+	return s.repo.GetHubs(scope)
+}
+
 func (s *CatalogService) GetUnits() ([]domain.Unit, error) {
 	return s.repo.GetUnits()
 }
