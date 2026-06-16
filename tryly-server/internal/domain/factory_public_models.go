@@ -72,14 +72,16 @@ type FactoryProfileCertificate struct {
 }
 
 type FactoryProfileReview struct {
-	ReviewID  int64     `json:"review_id"`
-	UserID    int64     `json:"user_id"`
-	Rating    float64   `json:"rating"`
-	Comment   *string   `json:"comment,omitempty"`
-	ImageURLs StringArray `json:"image_urls"`
-	CreatedAt time.Time `json:"created_at"`
-	FirstName *string   `json:"first_name,omitempty"`
-	LastName  *string   `json:"last_name,omitempty"`
+	ReviewID       int64       `json:"review_id"`
+	UserID         int64       `json:"user_id"`
+	Rating         float64     `json:"rating"`
+	Comment        *string     `json:"comment,omitempty"`
+	ImageURLs      StringArray `json:"image_urls"`
+	CreatedAt      time.Time   `json:"created_at"`
+	FirstName      *string     `json:"first_name,omitempty"`
+	LastName       *string     `json:"last_name,omitempty"`
+	FactoryReply   *string     `json:"factory_reply,omitempty"`
+	FactoryReplyAt *time.Time  `json:"factory_reply_at,omitempty"`
 }
 
 // FactoryPublicDetail is GET /api/v1/factories/:id aggregate for FE profile page.

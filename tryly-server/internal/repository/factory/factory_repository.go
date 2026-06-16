@@ -295,24 +295,27 @@ func (r *FactoryRepository) selectFactoryCertificates(factoryID int64) ([]domain
 }
 
 type factoryReviewScanRow struct {
-	ReviewID  int64              `db:"review_id"`
-	UserID    int64              `db:"user_id"`
-	Rating    float64            `db:"rating"`
-	Comment   sql.NullString     `db:"comment"`
-	ImageURLs domain.StringArray `db:"image_urls"`
-	CreatedAt time.Time          `db:"created_at"`
-	FirstName sql.NullString     `db:"first_name"`
-	LastName  sql.NullString     `db:"last_name"`
+	ReviewID       int64              `db:"review_id"`
+	UserID         int64              `db:"user_id"`
+	Rating         float64            `db:"rating"`
+	Comment        sql.NullString     `db:"comment"`
+	ImageURLs      domain.StringArray `db:"image_urls"`
+	CreatedAt      time.Time          `db:"created_at"`
+	FirstName      sql.NullString     `db:"first_name"`
+	LastName       sql.NullString     `db:"last_name"`
+	FactoryReply   sql.NullString     `db:"factory_reply"`
+	FactoryReplyAt *time.Time         `db:"factory_reply_at"`
 }
 
 func (r *FactoryRepository) selectFactoryReviews(factoryID int64, limit int) ([]domain.FactoryProfileReview, error) {
 	var revRows []factoryReviewScanRow
 	q := `
 		SELECT fr.review_id, fr.user_id, fr.rating, fr.comment, fr.image_urls, fr.created_at,
-		       c.first_name, c.last_name
+		       c.first_name, c.last_name,
+		       fr.factory_reply, fr.factory_reply_at
 		FROM factory_reviews fr
 		LEFT JOIN customers c ON c.user_id = fr.user_id
-		WHERE fr.factory_id = $1
+		WHERE fr.factory_id = $1 AND fr.deleted_at IS NULL
 		ORDER BY fr.created_at DESC
 		LIMIT $2
 	`
@@ -340,6 +343,11 @@ func (r *FactoryRepository) selectFactoryReviews(factoryID int64, limit int) ([]
 			s := rw.LastName.String
 			rwCopy.LastName = &s
 		}
+		if rw.FactoryReply.Valid {
+			s := rw.FactoryReply.String
+			rwCopy.FactoryReply = &s
+		}
+		rwCopy.FactoryReplyAt = rw.FactoryReplyAt
 		out = append(out, rwCopy)
 	}
 	return out, nil

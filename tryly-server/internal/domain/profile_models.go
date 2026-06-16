@@ -30,18 +30,20 @@ type TransactionListItem struct {
 }
 
 type UserReviewListItem struct {
-	ReviewID      int64       `json:"review_id"`
-	OrderID       *int64      `json:"order_id,omitempty"`
-	FactoryID     int64       `json:"factory_id"`
-	FactoryName   string      `json:"factory_name"`
-	FactoryAvatar *string     `json:"factory_avatar,omitempty"`
-	ReviewerName  *string     `json:"reviewer_name,omitempty"`
-	Rating        int         `json:"rating"`
-	Comment       string      `json:"comment"`
-	ImageURLs     StringArray `json:"image_urls"`
-	IsEditable    bool        `json:"is_editable"`
-	CreatedAt     time.Time   `json:"created_at"`
-	UpdatedAt     *time.Time  `json:"updated_at,omitempty"`
+	ReviewID      int64       `db:"review_id" json:"review_id"`
+	OrderID       *int64      `db:"order_id" json:"order_id,omitempty"`
+	FactoryID     int64       `db:"factory_id" json:"factory_id"`
+	FactoryName   string      `db:"factory_name" json:"factory_name"`
+	FactoryAvatar *string     `db:"factory_avatar" json:"factory_avatar,omitempty"`
+	ReviewerName  *string     `db:"reviewer_name" json:"reviewer_name,omitempty"`
+	Rating        float64     `db:"rating" json:"rating"`
+	Comment       string      `db:"comment" json:"comment"`
+	ImageURLs     StringArray `db:"image_urls" json:"image_urls"`
+	IsEditable    bool        `db:"is_editable" json:"is_editable"`
+	CreatedAt     time.Time   `db:"created_at" json:"created_at"`
+	UpdatedAt     *time.Time  `db:"updated_at" json:"updated_at,omitempty"`
+	FactoryReply  *string     `db:"factory_reply" json:"factory_reply,omitempty"`
+	FactoryReplyAt *time.Time `db:"factory_reply_at" json:"factory_reply_at,omitempty"`
 }
 
 type NotificationPreference struct {

@@ -299,14 +299,21 @@ func (s *FrontendService) GetFactoryDetail(factoryID int64) (*domain.FrontendFac
 		if imgURLs == nil {
 			imgURLs = domain.StringArray{}
 		}
-		reviews = append(reviews, domain.FrontendFactoryReview{
+		rev := domain.FrontendFactoryReview{
 			ID:        strconv.FormatInt(rr.ReviewID, 10),
 			Reviewer:  reviewer,
 			Rating:    rr.Rating,
 			Comment:   rr.Comment,
 			Date:      rr.CreatedAt,
 			ImageURLs: imgURLs,
-		})
+		}
+		if rr.FactoryReply.Valid {
+			rev.FactoryReply = rr.FactoryReply.String
+		}
+		if rr.FactoryReplyAt.Valid {
+			rev.FactoryReplyAt = rr.FactoryReplyAt.String
+		}
+		reviews = append(reviews, rev)
 	}
 
 	return &domain.FrontendFactoryDetail{

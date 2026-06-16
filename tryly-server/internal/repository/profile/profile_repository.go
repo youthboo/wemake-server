@@ -246,7 +246,7 @@ func (r *ProfileRepository) listReviews(fromWhere string, userID int64, page, li
 		` + selectReviewer + `,
 		fr.rating, COALESCE(fr.comment, '') AS comment, fr.image_urls,
 		(fr.created_at > NOW() - INTERVAL '7 days') AS is_editable,
-		fr.created_at, fr.updated_at
+		fr.created_at, fr.updated_at, fr.factory_reply, fr.factory_reply_at
 	` + fromWhere + ` ORDER BY fr.created_at DESC LIMIT $2 OFFSET $3`
 	var items []domain.UserReviewListItem
 	if err := r.db.Select(&items, query, userID, limit, offset); err != nil {
