@@ -50,14 +50,28 @@ var ErrInvalidFactoryCategory = errors.New("invalid category_id")
 
 
 // ListPublicVerified returns active factories for the public explore listing.
+// ListPublicVerifiedOpts holds optional filters for ListPublicVerified.
+type ListPublicVerifiedOpts struct {
+	Scope string // "PD" or "MT" — filter by hub scope
+	HubID int64  // filter by hub_id (lbi_hub.hub_id)
+}
+
 // Pass an optional scope ("PD" or "MT") to restrict to factories that have at
 // least one linked category with that scope in map_factory_categories.
 func (r *FactoryRepository) ListPublicVerified(scope ...string) ([]domain.FactoryListItem, error) {
+	return r.ListPublicVerifiedOpts(ListPublicVerifiedOpts{
+		Scope: func() string {
+			if len(scope) > 0 {
+				return strings.ToUpper(strings.TrimSpace(scope[0]))
+			}
+			return ""
+		}(),
+	})
+}
+
+func (r *FactoryRepository) ListPublicVerifiedOpts(opts ListPublicVerifiedOpts) ([]domain.FactoryListItem, error) {
 	var items []domain.FactoryListItem
-	filterScope := ""
-	if len(scope) > 0 {
-		filterScope = strings.ToUpper(strings.TrimSpace(scope[0]))
-	}
+	filterScope := strings.ToUpper(strings.TrimSpace(opts.Scope))
 
 	query := `
 		SELECT
@@ -84,7 +98,8 @@ func (r *FactoryRepository) ListPublicVerified(scope ...string) ([]domain.Factor
 				),
 				'[]'
 			) AS tags,
-			COALESCE(cats.category_scopes, '[]') AS category_scopes
+			COALESCE(cats.category_scopes, '[]') AS category_scopes,
+			COALESCE(cats.category_ids, '[]') AS category_ids
 		FROM factory_profiles fp
 		INNER JOIN users u ON u.user_id = fp.user_id AND u.role = 'FT' AND u.is_active = TRUE
 		LEFT JOIN lbi_provinces p ON p.row_id = fp.province_id
@@ -97,7 +112,8 @@ func (r *FactoryRepository) ListPublicVerified(scope ...string) ([]domain.Factor
 		) rev ON rev.factory_id = fp.user_id
 		LEFT JOIN (
 			SELECT mfc.factory_id,
-				array_to_json(array_agg(DISTINCT h.scope::text))::text AS category_scopes
+				array_to_json(array_agg(DISTINCT h.scope::text))::text AS category_scopes,
+				array_to_json(array_agg(DISTINCT c.category_id::bigint))::text AS category_ids
 			FROM map_factory_categories mfc
 			JOIN lbi_categories c ON c.category_id = mfc.category_id
 			JOIN lbi_hub h ON h.hub_id = c.hub_id
@@ -106,14 +122,21 @@ func (r *FactoryRepository) ListPublicVerified(scope ...string) ([]domain.Factor
 		WHERE u.is_active = TRUE`
 
 	var args []interface{}
-	if filterScope != "" {
+	if opts.HubID > 0 {
+		args = append(args, opts.HubID)
+		query += ` AND EXISTS (
+			SELECT 1 FROM map_factory_categories mfc2
+			JOIN lbi_categories c2 ON c2.category_id = mfc2.category_id
+			WHERE mfc2.factory_id = fp.user_id AND c2.hub_id = $1
+		)`
+	} else if filterScope != "" {
+		args = append(args, filterScope)
 		query += ` AND EXISTS (
 			SELECT 1 FROM map_factory_categories mfc2
 			JOIN lbi_categories c2 ON c2.category_id = mfc2.category_id
 			JOIN lbi_hub h2 ON h2.hub_id = c2.hub_id
 			WHERE mfc2.factory_id = fp.user_id AND h2.scope = $1
 		)`
-		args = append(args, filterScope)
 	}
 	query += "\n\t\tORDER BY COALESCE(rev.avg_rating, fp.rating) DESC NULLS LAST, fp.factory_name ASC"
 

@@ -268,11 +268,13 @@ func (h *ShowcaseHandler) List(c *fiber.Ctx) error {
 			sort := helper.QueryString(c, "sort")
 			catID, _ := helper.ParseOptionalPositiveInt64Query(c, "category")
 			subCatID, _ := helper.ParseOptionalPositiveInt64Query(c, "sub_cat")
+			hubID, _ := helper.ParseOptionalPositiveInt64Query(c, "hub_id")
 			result, err := h.service.ListPaginated(domain.ShowcasePaginatedFilter{
 				Types:         validTypes,
 				Keyword:       keyword,
 				CategoryID:    catID,
 				SubCategoryID: subCatID,
+				HubID:         hubID,
 				Sort:          sort,
 				Limit:         limit,
 				Page:          page,

@@ -20,6 +20,10 @@ func (s *FactoryService) ListPublic(scope ...string) ([]domain.FactoryListItem, 
 	return s.repo.ListPublicVerified(scope...)
 }
 
+func (s *FactoryService) ListPublicByHub(hubID int64) ([]domain.FactoryListItem, error) {
+	return s.repo.ListPublicVerifiedOpts(factoryrepo.ListPublicVerifiedOpts{HubID: hubID})
+}
+
 func (s *FactoryService) GetPublicDetail(factoryID int64) (*domain.FactoryPublicDetail, error) {
 	return s.repo.GetPublicDetail(factoryID)
 }

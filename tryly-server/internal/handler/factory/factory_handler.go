@@ -1,6 +1,7 @@
 package factory
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/yourusername/wemake/internal/dbutil"
@@ -85,9 +86,15 @@ func (h *FactoryHandler) Create(c *fiber.Ctx) error {
 
 func (h *FactoryHandler) List(c *fiber.Ctx) error {
 	scope := strings.ToUpper(strings.TrimSpace(c.Query("scope"))) // optional: "PD" or "MT"
+	var hubID int64
+	if raw := strings.TrimSpace(c.Query("hub_id")); raw != "" {
+		fmt.Sscanf(raw, "%d", &hubID)
+	}
 	var items []domain.FactoryListItem
 	var err error
-	if scope != "" {
+	if hubID > 0 {
+		items, err = h.service.ListPublicByHub(hubID)
+	} else if scope != "" {
 		items, err = h.service.ListPublic(scope)
 	} else {
 		items, err = h.service.ListPublic()

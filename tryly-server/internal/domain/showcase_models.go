@@ -70,6 +70,7 @@ type ShowcasePaginatedFilter struct {
 	Keyword       string
 	CategoryID    *int64
 	SubCategoryID *int64
+	HubID         *int64
 	Sort          string
 	Limit         int
 	Page          int

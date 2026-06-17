@@ -42,6 +42,9 @@ type FactoryListItem struct {
 	// CategoryScopes holds distinct lbi_categories.scope values ("PD", "MT") from
 	// map_factory_categories — used by the factory-type dropdown on /factory-ideas.
 	CategoryScopes     StringArray `json:"category_scopes" db:"category_scopes"`
+	// CategoryIDs holds all lbi_categories.category_id values from map_factory_categories —
+	// used by FE to filter factories by hub (hub.categories[].category_id overlap).
+	CategoryIDs        JSONInt64Array `json:"category_ids" db:"category_ids"`
 }
 
 type FactoryProfileCategory struct {

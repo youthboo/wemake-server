@@ -435,6 +435,12 @@ func (r *ShowcaseRepository) ListPaginated(filter domain.ShowcasePaginatedFilter
 		args = append(args, *filter.SubCategoryID)
 		argPos++
 	}
+	if filter.HubID != nil {
+		clauses = append(clauses, fmt.Sprintf(
+			"fs.category_id IN (SELECT category_id FROM lbi_categories WHERE hub_id = $%d)", argPos))
+		args = append(args, *filter.HubID)
+		argPos++
+	}
 
 	where := " WHERE " + strings.Join(clauses, " AND ")
 
