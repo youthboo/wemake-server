@@ -141,9 +141,7 @@ func (h *AdminFactoryHandler) mutateFactoryState(c *fiber.Ctx, fn func(int64, in
 		return helper.BadRequestError(c, err.Error())
 	}
 	var req dto.ApproveFactoryRequest
-	if err := helper.RequireBody(c, &req); err != nil {
-		return err
-	}
+	_ = c.BodyParser(&req) // body is optional — notes is optional
 	ip := c.IP()
 	note := helper.DereferenceString(req.Notes, "")
 	if err := fn(factoryID, actorID, note, &ip); err != nil {

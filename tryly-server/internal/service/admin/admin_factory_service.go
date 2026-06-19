@@ -37,6 +37,9 @@ func (s *AdminFactoryService) Approve(factoryID, actorID int64, note string, ip 
 	if err != nil {
 		return err
 	}
+	if detail.ApprovalStatus == "AP" {
+		return nil // already approved — idempotent
+	}
 	if detail.ApprovalStatus != "PE" && detail.ApprovalStatus != "RJ" {
 		return ErrFactoryApprovalState
 	}
