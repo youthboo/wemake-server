@@ -316,12 +316,21 @@ func (r *CommissionInvoiceRepository) AdminVerifySlip(invoiceID, adminID int64, 
 	return nil
 }
 
-// SendInvoice marks an invoice as sent.
+// MarkSent transitions DR → ST and sets email_sent_at.
 func (r *CommissionInvoiceRepository) MarkSent(invoiceID int64) error {
 	_, err := r.db.Exec(`
 		UPDATE commission_invoices
 		SET status = 'ST', email_sent_at = NOW(), updated_at = NOW()
 		WHERE invoice_id = $1 AND TRIM(status) = 'DR'
+	`, invoiceID)
+	return err
+}
+
+// UpdateEmailSentAt refreshes email_sent_at without changing status (used by resend).
+func (r *CommissionInvoiceRepository) UpdateEmailSentAt(invoiceID int64) error {
+	_, err := r.db.Exec(`
+		UPDATE commission_invoices SET email_sent_at = NOW(), updated_at = NOW()
+		WHERE invoice_id = $1
 	`, invoiceID)
 	return err
 }
