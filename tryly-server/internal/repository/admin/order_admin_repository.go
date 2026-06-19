@@ -73,6 +73,9 @@ func (r *AdminOrderRepository) ListAdmin(filter domain.AdminOrderFilter) ([]doma
 		"COALESCE(q.platform_commission_amount, 0) AS platform_commission_amount",
 		"COALESCE(q.vat_amount, 0) AS vat_amount",
 		"COALESCE(q.factory_net_receivable, 0) AS factory_net_receivable",
+		"COALESCE(q.grand_total, 0) AS grand_total",
+		"COALESCE(TRIM(o.slip_status), 'PE') AS slip_status",
+		"t.slip_url",
 		"o.payment_type",
 		"o.estimated_delivery",
 		"o.created_at",
@@ -82,6 +85,7 @@ func (r *AdminOrderRepository) ListAdmin(filter domain.AdminOrderFilter) ([]doma
 		InnerJoin("rfqs r ON r.rfq_id = q.rfq_id").
 		LeftJoin("factory_profiles fp ON fp.user_id = o.factory_id").
 		LeftJoin("customers cu ON cu.user_id = o.customer_id").
+		LeftJoin(`transactions t ON t.order_id = o.order_id AND t.type = 'BU' AND t.tx_id = (SELECT MAX(t2.tx_id) FROM transactions t2 WHERE t2.order_id = o.order_id AND t2.type = 'BU')`).
 		Where(conditions).
 		OrderBy("o.created_at DESC", "o.order_id DESC").
 		Limit(uint64(pageSize)).

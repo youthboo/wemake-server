@@ -190,6 +190,9 @@ type AdminOrderListItem struct {
 	PlatformCommissionAmount decimal.Decimal `db:"platform_commission_amount" json:"platform_commission_amount"`
 	VATAmount                decimal.Decimal `db:"vat_amount" json:"vat_amount"`
 	FactoryNetReceivable     decimal.Decimal `db:"factory_net_receivable" json:"factory_net_receivable"`
+	GrandTotal               decimal.Decimal `db:"grand_total" json:"grand_total"`
+	SlipStatus               *string    `db:"slip_status" json:"slip_status,omitempty"`
+	SlipURL                  *string    `db:"slip_url" json:"slip_url,omitempty"`
 	PaymentType              *string    `db:"payment_type" json:"payment_type,omitempty"`
 	EstimatedDelivery        *time.Time `db:"estimated_delivery" json:"estimated_delivery,omitempty"`
 	CreatedAt                time.Time  `db:"created_at" json:"created_at"`
