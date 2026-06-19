@@ -144,10 +144,12 @@ func (r *CatalogRepository) GetHubs(scope string) ([]domain.HubWithCategories, e
 	}
 	catQuery := `
 		SELECT c.hub_id, c.category_id, c.name,
-			COUNT(DISTINCT mfc.factory_id) AS factory_count
+			COUNT(DISTINCT CASE WHEN fp.approval_status = 'AP' AND u.is_active = TRUE THEN mfc.factory_id END) AS factory_count
 		FROM lbi_categories c
 		JOIN lbi_hub h ON h.hub_id = c.hub_id
 		LEFT JOIN map_factory_categories mfc ON mfc.category_id = c.category_id
+		LEFT JOIN factory_profiles fp ON fp.user_id = mfc.factory_id
+		LEFT JOIN users u ON u.user_id = mfc.factory_id
 	`
 	catArgs := []interface{}{}
 	if scope != "" && scope != domain.CatalogScopeAll {

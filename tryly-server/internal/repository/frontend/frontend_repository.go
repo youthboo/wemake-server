@@ -274,7 +274,7 @@ func (r *FrontendRepository) ListFactories(scope ...string) ([]FrontendFactoryRo
 			JOIN lbi_hub h ON h.hub_id = c.hub_id
 			GROUP BY mfc.factory_id
 		) cats ON cats.factory_id = u.user_id
-		WHERE u.role = 'FT' AND u.is_active = TRUE`
+		WHERE u.role = 'FT' AND u.is_active = TRUE AND fp.approval_status = 'AP'`
 
 	var args []interface{}
 	if filterScope != "" {

@@ -119,7 +119,7 @@ func (r *FactoryRepository) ListPublicVerifiedOpts(opts ListPublicVerifiedOpts) 
 			JOIN lbi_hub h ON h.hub_id = c.hub_id
 			GROUP BY mfc.factory_id
 		) cats ON cats.factory_id = fp.user_id
-		WHERE u.is_active = TRUE`
+		WHERE u.is_active = TRUE AND fp.approval_status = 'AP'`
 
 	var args []interface{}
 	if opts.HubID > 0 {

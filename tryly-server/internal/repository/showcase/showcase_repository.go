@@ -63,10 +63,10 @@ func (r *ShowcaseRepository) ListExplore(contentType string) ([]domain.ShowcaseE
 	var query string
 	var args []interface{}
 	if contentType != "" {
-		query = showcaseExploreBaseSQL + ` WHERE fs.status = 'AC' AND fs.content_type = $1 ORDER BY fs.created_at DESC`
+		query = showcaseExploreBaseSQL + ` WHERE fs.status = 'AC' AND fp.approval_status = 'AP' AND fs.content_type = $1 ORDER BY fs.created_at DESC`
 		args = append(args, contentType)
 	} else {
-		query = showcaseExploreBaseSQL + ` WHERE fs.status = 'AC' ORDER BY fs.created_at DESC`
+		query = showcaseExploreBaseSQL + ` WHERE fs.status = 'AC' AND fp.approval_status = 'AP' ORDER BY fs.created_at DESC`
 	}
 	err := r.db.Select(&items, query, args...)
 	return items, err
@@ -410,7 +410,7 @@ const showcasePaginatedBaseSQL = `
 `
 
 func (r *ShowcaseRepository) ListPaginated(filter domain.ShowcasePaginatedFilter) ([]domain.ShowcaseExploreItem, int64, error) {
-	clauses := []string{"fs.status = 'AC'"}
+	clauses := []string{"fs.status = 'AC'", "fp.approval_status = 'AP'"}
 	args := []interface{}{}
 	argPos := 1
 
@@ -445,7 +445,7 @@ func (r *ShowcaseRepository) ListPaginated(filter domain.ShowcasePaginatedFilter
 	where := " WHERE " + strings.Join(clauses, " AND ")
 
 	var total int64
-	if err := r.db.Get(&total, "SELECT COUNT(*) FROM factory_showcases fs"+where, args...); err != nil {
+	if err := r.db.Get(&total, "SELECT COUNT(*) FROM factory_showcases fs INNER JOIN factory_profiles fp ON fs.factory_id = fp.user_id"+where, args...); err != nil {
 		return nil, 0, err
 	}
 
@@ -508,7 +508,7 @@ func (r *ShowcaseRepository) GetHomeShowcases(types []string, limitPerType int) 
 			FROM factory_showcases
 			WHERE status = 'AC' AND content_type = ANY($1)
 		) fs
-		INNER JOIN factory_profiles fp ON fp.user_id = fs.factory_id
+		INNER JOIN factory_profiles fp ON fp.user_id = fs.factory_id AND fp.approval_status = 'AP'
 		LEFT JOIN lbi_provinces p ON p.row_id = fp.province_id
 		LEFT JOIN lbi_categories cat ON cat.category_id = fs.category_id
 		LEFT JOIN lbi_sub_categories sub ON sub.sub_category_id = fs.sub_category_id
