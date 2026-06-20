@@ -88,11 +88,11 @@ func (r *CustomerAdminRepository) GetCustomerDetail(userID int64) (*domain.Admin
 			COALESCE(c.last_name, '')                                     AS last_name,
 			COALESCE(u.phone, '')                                         AS phone,
 			COALESCE(NULLIF(TRIM(CONCAT_WS(', ',
-				NULLIF(c.address_line1, ''),
-				NULLIF(c.sub_district, ''),
-				NULLIF(c.district, ''),
-				NULLIF(c.province, ''),
-				NULLIF(c.postal_code, '')
+				NULLIF(addr.address_line1, ''),
+				NULLIF(addr.sub_district, ''),
+				NULLIF(addr.district, ''),
+				NULLIF(addr.province, ''),
+				NULLIF(addr.postal_code, '')
 			)), ''), '')                                                   AS address,
 			u.is_active,
 			COUNT(DISTINCT o.order_id)::int                               AS total_orders,
@@ -105,9 +105,24 @@ func (r *CustomerAdminRepository) GetCustomerDetail(userID int64) (*domain.Admin
 		LEFT JOIN customers c ON c.user_id = u.user_id
 		LEFT JOIN orders o    ON o.customer_id = u.user_id
 		LEFT JOIN wallets w   ON w.user_id = u.user_id
+		LEFT JOIN LATERAL (
+			SELECT
+				a.address_detail AS address_line1,
+				COALESCE(sd.name_th, '') AS sub_district,
+				COALESCE(d.name_th, '')  AS district,
+				COALESCE(p.name_th, '')  AS province,
+				a.zip_code               AS postal_code
+			FROM addresses a
+			LEFT JOIN lbi_sub_districts sd ON sd.row_id = a.sub_district_id
+			LEFT JOIN lbi_districts d      ON d.row_id  = a.district_id
+			LEFT JOIN lbi_provinces p      ON p.row_id  = a.province_id
+			WHERE a.user_id = u.user_id
+			ORDER BY a.is_default DESC, a.address_id DESC
+			LIMIT 1
+		) addr ON TRUE
 		WHERE u.user_id = $1 AND u.role = 'CT'
 		GROUP BY u.user_id, u.email, c.first_name, c.last_name, u.phone,
-		         c.address_line1, c.sub_district, c.district, c.province, c.postal_code,
+		         addr.address_line1, addr.sub_district, addr.district, addr.province, addr.postal_code,
 		         u.is_active, u.created_at, w.wallet_id, w.good_fund, w.pending_fund
 	`, userID)
 	if err != nil {
@@ -180,7 +195,7 @@ func (r *CustomerAdminRepository) ListCustomerOrders(userID int64, limit, offset
 	}
 
 	var total int
-	if err := r.db.Get(&total, `SELECT COUNT(*) FROM orders WHERE user_id = $1`, userID); err != nil {
+	if err := r.db.Get(&total, `SELECT COUNT(*) FROM orders WHERE customer_id = $1`, userID); err != nil {
 		return nil, 0, err
 	}
 
