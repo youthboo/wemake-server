@@ -203,13 +203,14 @@ func (r *CustomerAdminRepository) ListCustomerOrders(userID int64, limit, offset
 	if err := r.db.Select(&items, `
 		SELECT
 			o.order_id,
-			o.rfq_id,
+			q.rfq_id,
 			o.factory_id,
 			COALESCE(fp.factory_name, '')    AS factory_name,
-			COALESCE(o.total_amount, 0)       AS grand_total,
+			COALESCE(q.grand_total, 0)        AS grand_total,
 			o.status,
 			o.created_at::text               AS created_at
 		FROM orders o
+		INNER JOIN quotations q ON q.quote_id = o.quote_id
 		LEFT JOIN factory_profiles fp ON fp.user_id = o.factory_id
 		WHERE o.customer_id = $1
 		ORDER BY o.created_at DESC
