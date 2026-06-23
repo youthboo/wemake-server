@@ -23,6 +23,7 @@ type ConversationRow struct {
 	SourceShowcaseID      *int64    `db:"source_showcase_id"`
 	ConvType              string    `db:"conv_type"`
 	LastMessage           *string   `db:"last_message"`
+	LastMessageType       *string   `db:"last_message_type"`
 	UnreadCustomer        int       `db:"unread_customer"`
 	UnreadFactory         int       `db:"unread_factory"`
 	UpdatedAt             time.Time `db:"updated_at"`
@@ -41,6 +42,7 @@ type ConversationResponse struct {
 	SourceShowcaseID   *int64            `json:"source_showcase_id,omitempty"`
 	ConvType           string            `json:"conv_type"`
 	LastMessage        string            `json:"last_message"`
+	LastMessageType    string            `json:"last_message_type"`
 	UnreadCustomer     int               `json:"unread_customer"`
 	UnreadFactory      int               `json:"unread_factory"`
 	UpdatedAt          time.Time         `json:"updated_at"`

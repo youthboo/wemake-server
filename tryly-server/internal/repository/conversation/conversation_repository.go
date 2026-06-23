@@ -25,6 +25,7 @@ const conversationPartySelect = `
 		NULL::bigint AS source_showcase_id,
 		''::text AS conv_type,
 		c.last_message,
+		(SELECT TRIM(m.message_type) FROM messages m WHERE m.conv_id = c.conv_id ORDER BY m.created_at DESC LIMIT 1) AS last_message_type,
 		COALESCE(c.unread_customer, 0) AS unread_customer,
 		COALESCE(c.unread_factory, 0) AS unread_factory,
 		c.updated_at,

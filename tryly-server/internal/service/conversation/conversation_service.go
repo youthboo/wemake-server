@@ -210,6 +210,7 @@ func mapConversation(row *domain.ConversationRow) domain.ConversationResponse {
 		SourceShowcaseID: row.SourceShowcaseID,
 		ConvType:         row.ConvType,
 		LastMessage:      helper.DerefString(row.LastMessage),
+		LastMessageType:  helper.DerefString(row.LastMessageType),
 		UnreadCustomer:   row.UnreadCustomer,
 		UnreadFactory:    row.UnreadFactory,
 		UpdatedAt:        row.UpdatedAt,
