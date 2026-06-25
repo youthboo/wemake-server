@@ -377,7 +377,7 @@ const showcasePaginatedBaseSQL = `
 		fs.factory_id,
 		fs.content_type,
 		fs.title,
-		NULL::text AS excerpt,
+		LEFT(fs.content, 100)::text AS excerpt,
 		NULL::text AS image_url,
 		fs.category_id,
 		fs.sub_category_id,
