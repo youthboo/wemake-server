@@ -54,6 +54,8 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	admin.Get("/platform-config/history", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.platformConfig.ListHistory)
 	admin.Get("/tconfig", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.tconfig.GetAll)
 	admin.Patch("/tconfig", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.tconfig.PatchBulk)
+	admin.Get("/cronjobs", middleware.RequireRole(h.authService, domain.RoleAdmin, domain.RoleSuperAdmin), h.tcronjob.ListJobs)
+	admin.Patch("/cronjobs/:job_key", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.tcronjob.UpdateJob)
 	admin.Get("/platform-configs", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.platformConfig.ListAll)
 	// static sub-path must come before /:config_id to avoid param capture
 	admin.Get("/platform-configs/default-comm", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.platformConfig.GetDefaultComm)

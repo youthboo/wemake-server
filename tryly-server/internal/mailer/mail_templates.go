@@ -161,9 +161,20 @@ var mailTemplates = map[string]Template{
               </td></tr>
             </table>
 
-            <p style="margin:0 0 20px"><strong>กรุณาชำระเงินและแนบสลีปที่ระบบ Tryly:</strong></p>
+            <!-- Payment info box -->
+            <p style="margin:0 0 12px"><strong>ข้อมูลสำหรับโอนชำระค่า Commission:</strong></p>
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;margin:0 0 24px">
+              <tr><td style="padding:16px 20px;font-size:15px;color:#1e3a8a">
+                <p style="margin:0 0 6px">🏦 ธนาคาร: <strong>{{.BankName}}</strong></p>
+                <p style="margin:0 0 6px">💳 เลขบัญชี: <strong style="font-size:18px;letter-spacing:0.05em">{{.BankAccountNo}}</strong></p>
+                <p style="margin:0 0 6px">👤 ชื่อบัญชี: <strong>{{.AccountHolder}}</strong></p>
+                {{if .PromptPay}}<p style="margin:0">📱 PromptPay: <strong>{{.PromptPay}}</strong></p>{{end}}
+              </td></tr>
+            </table>
+
+            <p style="margin:0 0 8px"><strong>หลังโอนเงินแล้ว กรุณาแนบสลีปในระบบ Tryly:</strong></p>
             <p style="margin:0 0 32px;text-align:center">
-              <a href="{{.Link}}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;padding:12px 32px;border-radius:8px">ชำระค่า Commission</a>
+              <a href="{{.Link}}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;padding:12px 32px;border-radius:8px">แนบสลีปการโอน</a>
             </p>
 
             <p style="margin:0 0 4px">หากมีข้อสงสัย กรุณาติดต่อเราที่แอปพลิเคชัน Tryly: เมนู → ศูนย์ช่วยเหลือ</p>

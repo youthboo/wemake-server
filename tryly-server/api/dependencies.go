@@ -111,6 +111,7 @@ type routeHandlers struct {
 	paymentSchedule   *paymenthandler.PaymentScheduleHandler
 	platformConfig    *platformconfighandler.PlatformConfigHandler
 	tconfig           *tconfighandler.TConfigHandler
+	tcronjob          *tconfighandler.TcronjobHandler
 	adminFactory      *adminhandler.AdminFactoryHandler
 	adminDashboard    *adminhandler.AdminDashboardHandler
 	adminRFQ          *adminhandler.AdminRFQHandler
@@ -256,6 +257,7 @@ func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
 		paymentSchedule:   paymenthandler.NewPaymentScheduleHandler(paymentScheduleService),
 		platformConfig:    platformconfighandler.NewPlatformConfigHandler(platformConfigService, authService),
 		tconfig:           tconfighandler.NewTConfigHandler(tconfigRepo),
+		tcronjob:          tconfighandler.NewTcronjobHandler(db),
 		adminFactory:      adminhandler.NewAdminFactoryHandler(adminFactoryRepo, adminFactoryService),
 		adminDashboard:    adminhandler.NewAdminDashboardHandler(adminDashboardService),
 		adminRFQ:          adminhandler.NewAdminRFQHandler(adminRFQRepo, adminAuditRepo),
