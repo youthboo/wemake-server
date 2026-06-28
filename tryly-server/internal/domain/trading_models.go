@@ -13,7 +13,8 @@ type Quotation struct {
 	FactoryID          int64      `db:"factory_id" json:"factory_id"`
 	FactoryName        *string    `db:"factory_name" json:"factory_name"`
 	FactoryLogoURL     *string    `db:"factory_logo_url" json:"-"`
-	FactoryRatingAvg   *float64   `db:"factory_rating_avg" json:"-"`
+	FactoryRatingAvg   *float64   `db:"factory_rating_avg" json:"factory_rating_avg,omitempty"`
+	CompletedOrders    *int64     `db:"completed_orders" json:"completed_orders,omitempty"`
 	QuoteQuantity      float64         `db:"quote_quantity" json:"-"`
 	PricePerPiece      decimal.Decimal `db:"price_per_piece" json:"price_per_piece"`
 	MoldCost           decimal.Decimal `db:"mold_cost" json:"mold_cost"`

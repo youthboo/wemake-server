@@ -31,6 +31,7 @@ func quotationSelectBase() string {
 		) AS factory_name,
 		fp.image_url AS factory_logo_url,
 		fp.rating::double precision AS factory_rating_avg,
+		COALESCE((SELECT COUNT(*) FROM orders o WHERE o.factory_id = q.factory_id AND TRIM(o.status) = 'CP'), 0)::bigint AS completed_orders,
 		COALESCE(r.quantity, 1)::double precision AS quote_quantity,
 		q.price_per_piece, q.mold_cost, q.lead_time_days, q.shipping_method_id,
 		COALESCE(r.status, 'OP') AS rfq_status,
