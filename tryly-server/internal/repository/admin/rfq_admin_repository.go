@@ -6,6 +6,7 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 	"github.com/yourusername/wemake/internal/domain"
 	"github.com/yourusername/wemake/internal/domainutil"
 	rfqrepo "github.com/yourusername/wemake/internal/repository/rfq"
@@ -71,6 +72,7 @@ func (r *AdminRFQRepository) ListAdmin(filter domain.AdminRFQFilter) ([]domain.A
 		"r.quantity",
 		"r.status",
 		"COUNT(q.quote_id)::bigint AS quotation_count",
+		"COUNT(CASE WHEN TRIM(q.status) = 'AC' THEN 1 END)::bigint AS accepted_count",
 		"r.target_price",
 		"r.created_at",
 	).
@@ -111,10 +113,11 @@ func (r *AdminRFQRepository) GetAdminDetail(rfqID int64) (*domain.AdminRFQDetail
 	}
 	out := &domain.AdminRFQDetail{RFQ: rfq}
 	type row struct {
-		CustomerName   string         `db:"customer_name"`
-		CustomerEmail  string         `db:"customer_email"`
-		CustomerPhone  sql.NullString `db:"customer_phone"`
-		QuotationCount int64          `db:"quotation_count"`
+		CustomerName    string         `db:"customer_name"`
+		CustomerEmail   string         `db:"customer_email"`
+		CustomerPhone   sql.NullString `db:"customer_phone"`
+		QuotationCount  int64          `db:"quotation_count"`
+		ReferenceImages pq.StringArray `db:"reference_images"`
 	}
 
 	query := sq.StatementBuilder.PlaceholderFormat(sq.Dollar).Select(
@@ -122,19 +125,20 @@ func (r *AdminRFQRepository) GetAdminDetail(rfqID int64) (*domain.AdminRFQDetail
 		"u.email AS customer_email",
 		"NULLIF(u.phone, '') AS customer_phone",
 		"(SELECT COUNT(*) FROM quotations q WHERE q.rfq_id = r.rfq_id)::bigint AS quotation_count",
+		"COALESCE(r.reference_images, ARRAY[]::text[]) AS reference_images",
 	).
 		From("rfqs r").
 		InnerJoin("users u ON u.user_id = r.user_id").
 		LeftJoin("customers c ON c.user_id = r.user_id").
 		Where(sq.Eq{"r.rfq_id": rfqID})
 
-	sql, args, err := query.ToSql()
+	sqlStr, args, err := query.ToSql()
 	if err != nil {
 		return nil, err
 	}
 
 	var meta row
-	if err := r.db.Get(&meta, sql, args...); err != nil {
+	if err := r.db.Get(&meta, sqlStr, args...); err != nil {
 		return nil, err
 	}
 	out.CustomerName = meta.CustomerName
@@ -143,5 +147,32 @@ func (r *AdminRFQRepository) GetAdminDetail(rfqID int64) (*domain.AdminRFQDetail
 		out.CustomerPhone = &meta.CustomerPhone.String
 	}
 	out.QuotationCount = meta.QuotationCount
+	out.ReferenceImages = []string(meta.ReferenceImages)
+
+	// Load quotations with factory info
+	var quotations []domain.AdminRFQQuotation
+	_ = r.db.Select(&quotations, `
+		SELECT
+			q.quote_id, q.factory_id,
+			COALESCE(NULLIF(TRIM(fp.factory_name),''), 'โรงงาน #'||q.factory_id::text) AS factory_name,
+			fp.image_url AS factory_image_url,
+			fp.rating::float8 AS factory_rating,
+			TRIM(q.status) AS status,
+			q.price_per_piece::float8 AS price_per_piece,
+			q.lead_time_days,
+			COALESCE(q.grand_total, 0)::float8 AS grand_total,
+			sm.method_name AS shipping_method,
+			q.factory_note,
+			q.create_time::text AS create_time
+		FROM quotations q
+		JOIN factory_profiles fp ON fp.user_id = q.factory_id
+		LEFT JOIN lbi_shipping_methods sm ON sm.shipping_method_id = q.shipping_method_id
+		WHERE q.rfq_id = $1
+		ORDER BY q.create_time ASC
+	`, rfqID)
+	if quotations == nil {
+		quotations = []domain.AdminRFQQuotation{}
+	}
+	out.Quotations = quotations
 	return out, nil
 }

@@ -153,8 +153,24 @@ type AdminRFQListItem struct {
 	Quantity         int64      `db:"quantity" json:"quantity"`
 	Status           string     `db:"status" json:"status"`
 	QuotationCount   int64      `db:"quotation_count" json:"quotation_count"`
+	AcceptedCount    int64      `db:"accepted_count"  json:"accepted_count"`
 	TargetPrice      *decimal.Decimal `db:"target_price" json:"target_price,omitempty"`
 	CreatedAt        time.Time  `db:"created_at" json:"created_at"`
+}
+
+type AdminRFQQuotation struct {
+	QuoteID         int64    `db:"quote_id"         json:"quote_id"`
+	FactoryID       int64    `db:"factory_id"       json:"factory_id"`
+	FactoryName     string   `db:"factory_name"     json:"factory_name"`
+	FactoryImageURL *string  `db:"factory_image_url" json:"factory_image_url,omitempty"`
+	FactoryRating   *float64 `db:"factory_rating"   json:"factory_rating,omitempty"`
+	Status          string   `db:"status"           json:"status"`
+	PricePerPiece   float64  `db:"price_per_piece"  json:"price_per_piece"`
+	LeadTimeDays    int64    `db:"lead_time_days"   json:"lead_time_days"`
+	GrandTotal      float64  `db:"grand_total"      json:"grand_total"`
+	ShippingMethod  *string  `db:"shipping_method"  json:"shipping_method,omitempty"`
+	FactoryNote     *string  `db:"factory_note"     json:"factory_note,omitempty"`
+	CreateTime      string   `db:"create_time"      json:"create_time"`
 }
 
 type AdminRFQDetail struct {
@@ -163,6 +179,8 @@ type AdminRFQDetail struct {
 	CustomerEmail   string                  `json:"customer_email"`
 	CustomerPhone   *string                 `json:"customer_phone,omitempty"`
 	QuotationCount  int64                   `json:"quotation_count"`
+	ReferenceImages []string                `json:"reference_images,omitempty"`
+	Quotations      []AdminRFQQuotation     `json:"quotations"`
 }
 
 type AdminOrderFilter struct {
