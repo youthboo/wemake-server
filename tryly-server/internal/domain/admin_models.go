@@ -398,9 +398,13 @@ type AdminSettlementListItem struct {
 type AdminCustomerOrderItem struct {
 	OrderID     int64   `db:"order_id"     json:"order_id"`
 	RFQID       int64   `db:"rfq_id"       json:"rfq_id"`
+	RFQTitle    string  `db:"rfq_title"    json:"rfq_title"`
 	FactoryID   int64   `db:"factory_id"   json:"factory_id"`
 	FactoryName string  `db:"factory_name" json:"factory_name"`
 	GrandTotal  float64 `db:"grand_total"  json:"grand_total"`
 	Status      string  `db:"status"       json:"status"`
+	SlipStatus  string  `db:"slip_status"  json:"slip_status"`
+	SlipURL     *string `db:"slip_url"     json:"slip_url,omitempty"`
+	SlipUploadedAt *string `db:"slip_uploaded_at" json:"slip_uploaded_at,omitempty"`
 	CreatedAt   string  `db:"created_at"   json:"created_at"`
 }

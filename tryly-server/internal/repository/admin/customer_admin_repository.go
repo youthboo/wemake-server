@@ -204,14 +204,24 @@ func (r *CustomerAdminRepository) ListCustomerOrders(userID int64, limit, offset
 		SELECT
 			o.order_id,
 			q.rfq_id,
+			COALESCE(r.title, '')             AS rfq_title,
 			o.factory_id,
-			COALESCE(fp.factory_name, '')    AS factory_name,
+			COALESCE(fp.factory_name, '')     AS factory_name,
 			COALESCE(q.grand_total, 0)        AS grand_total,
-			o.status,
+			TRIM(o.status)                    AS status,
+			COALESCE(TRIM(o.slip_status),'PE') AS slip_status,
+			t.slip_url,
+			t.created_at::text               AS slip_uploaded_at,
 			o.created_at::text               AS created_at
 		FROM orders o
 		INNER JOIN quotations q ON q.quote_id = o.quote_id
+		LEFT JOIN rfqs r ON r.rfq_id = q.rfq_id
 		LEFT JOIN factory_profiles fp ON fp.user_id = o.factory_id
+		LEFT JOIN LATERAL (
+			SELECT slip_url, created_at FROM transactions
+			WHERE order_id = o.order_id AND type = 'BU'
+			ORDER BY created_at DESC LIMIT 1
+		) t ON true
 		WHERE o.customer_id = $1
 		ORDER BY o.created_at DESC
 		LIMIT $2 OFFSET $3
