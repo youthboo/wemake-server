@@ -10,6 +10,7 @@ import (
 	"github.com/cloudinary/cloudinary-go/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/yourusername/wemake/internal/domain"
 	"github.com/yourusername/wemake/internal/helper"
 	"github.com/yourusername/wemake/internal/mailer"
 	mediapkg "github.com/yourusername/wemake/internal/media"
@@ -108,12 +109,12 @@ func (h *InvoiceHandler) AttachCommSlip(c *fiber.Ctx) error {
 	}
 
 	status := strings.TrimSpace(invoice.Status)
-	if status != "ST" && status != "RJ" {
+	if status != "ST" && status != "RJ" && status != "PA" {
 		return helper.JSONError(c, fiber.StatusBadRequest, "ไม่สามารถแนบสลีปได้ในสถานะปัจจุบัน")
 	}
 
-	// Upload file
-	result, err := mediapkg.SaveUploadedFile(c, mediapkg.UploadOptions{
+	// Upload file(s) — accepts multiple images (jpg/jpeg/png) under the same "file" field.
+	results, err := mediapkg.SaveUploadedFiles(c, mediapkg.UploadOptions{
 		FieldName:             "file",
 		FileNamePrefix:        uuid.NewString(),
 		Folder:                "wemake/commission-slips",
@@ -129,10 +130,18 @@ func (h *InvoiceHandler) AttachCommSlip(c *fiber.Ctx) error {
 		}
 		return helper.JSONError(c, fiber.StatusBadRequest, "กรุณาแนบไฟล์รูปสลีป")
 	}
+	if len(results) > 10 {
+		return helper.JSONError(c, fiber.StatusBadRequest, "แนบได้สูงสุด 10 รูปต่อครั้ง")
+	}
+
+	slipURLs := make(domain.StringArray, 0, len(results))
+	for _, r := range results {
+		slipURLs = append(slipURLs, r.URL)
+	}
 
 	note := strings.TrimSpace(c.FormValue("note"))
 
-	if err := h.invoices.AttachFactorySlip(invoiceID, result.URL, note); err != nil {
+	if err := h.invoices.AttachFactorySlip(invoiceID, slipURLs, note); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return helper.JSONError(c, fiber.StatusBadRequest, "ไม่สามารถแนบสลีปได้ในสถานะปัจจุบัน")
 		}

@@ -3,6 +3,7 @@ package media
 import (
 	"context"
 	"fmt"
+	"mime/multipart"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,6 +64,40 @@ func SaveUploadedFile(c *fiber.Ctx, opts UploadOptions) (*UploadResult, error) {
 	if err != nil {
 		return nil, uploadError(fiber.StatusBadRequest, defaultString(opts.RequiredMessage, "file is required"), err)
 	}
+	return saveFileHeader(c, file, opts)
+}
+
+// SaveUploadedFiles uploads every file posted under opts.FieldName (multiple
+// files sharing the same form field name), in order. Fails fast on the first error.
+func SaveUploadedFiles(c *fiber.Ctx, opts UploadOptions) ([]*UploadResult, error) {
+	fieldName := opts.FieldName
+	if fieldName == "" {
+		fieldName = "file"
+	}
+	form, err := c.MultipartForm()
+	if err != nil {
+		return nil, uploadError(fiber.StatusBadRequest, defaultString(opts.RequiredMessage, "file is required"), err)
+	}
+	files := form.File[fieldName]
+	if len(files) == 0 {
+		return nil, uploadError(fiber.StatusBadRequest, defaultString(opts.RequiredMessage, "file is required"), nil)
+	}
+	results := make([]*UploadResult, 0, len(files))
+	for i, fh := range files {
+		fileOpts := opts
+		if opts.FileNamePrefix != "" {
+			fileOpts.FileNamePrefix = fmt.Sprintf("%s-%d", opts.FileNamePrefix, i)
+		}
+		result, err := saveFileHeader(c, fh, fileOpts)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, result)
+	}
+	return results, nil
+}
+
+func saveFileHeader(c *fiber.Ctx, file *multipart.FileHeader, opts UploadOptions) (*UploadResult, error) {
 	if opts.MaxSize > 0 && file.Size > opts.MaxSize {
 		return nil, uploadError(fiber.StatusBadRequest, defaultString(opts.MaxSizeMessage, "file exceeds maximum size"), nil)
 	}

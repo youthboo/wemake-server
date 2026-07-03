@@ -4,27 +4,28 @@ import (
 	"database/sql"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/yourusername/wemake/internal/domain"
 )
 
 // CommissionInvoice maps to commission_invoices table.
 type CommissionInvoice struct {
-	InvoiceID        int64   `db:"invoice_id"        json:"invoice_id"`
-	FactoryID        int64   `db:"factory_id"        json:"factory_id"`
-	FactoryName      string  `db:"factory_name"      json:"factory_name"`
-	PeriodMonth      int     `db:"period_month"      json:"period_month"`
-	PeriodYear       int     `db:"period_year"       json:"period_year"`
-	TotalOrders      int     `db:"total_orders"      json:"total_orders"`
-	TotalAmount      float64 `db:"total_amount"      json:"total_amount"`
-	CommissionAmount float64 `db:"commission_amount" json:"commission_amount"`
-	VatAmount        float64 `db:"vat_amount"        json:"vat_amount"`
-	GrandTotal       float64 `db:"grand_total"       json:"grand_total"`
-	Status           string  `db:"status"            json:"status"`
-	SlipURL          *string `db:"slip_url"          json:"slip_url,omitempty"`
-	SlipNote         *string `db:"slip_note"         json:"slip_note,omitempty"`
-	VerifiedBy       *int64  `db:"verified_by"       json:"verified_by,omitempty"`
-	VerifiedAt       *string `db:"verified_at"       json:"verified_at,omitempty"`
-	EmailSentAt      *string `db:"email_sent_at"     json:"email_sent_at,omitempty"`
-	CreatedAt        string  `db:"created_at"        json:"created_at"`
+	InvoiceID        int64               `db:"invoice_id"        json:"invoice_id"`
+	FactoryID        int64               `db:"factory_id"        json:"factory_id"`
+	FactoryName      string              `db:"factory_name"      json:"factory_name"`
+	PeriodMonth      int                 `db:"period_month"      json:"period_month"`
+	PeriodYear       int                 `db:"period_year"       json:"period_year"`
+	TotalOrders      int                 `db:"total_orders"      json:"total_orders"`
+	TotalAmount      float64             `db:"total_amount"      json:"total_amount"`
+	CommissionAmount float64             `db:"commission_amount" json:"commission_amount"`
+	VatAmount        float64             `db:"vat_amount"        json:"vat_amount"`
+	GrandTotal       float64             `db:"grand_total"       json:"grand_total"`
+	Status           string              `db:"status"            json:"status"`
+	SlipURLs         domain.StringArray  `db:"slip_urls"         json:"slip_urls"`
+	SlipNote         *string             `db:"slip_note"         json:"slip_note,omitempty"`
+	VerifiedBy       *int64              `db:"verified_by"       json:"verified_by,omitempty"`
+	VerifiedAt       *string             `db:"verified_at"       json:"verified_at,omitempty"`
+	EmailSentAt      *string             `db:"email_sent_at"     json:"email_sent_at,omitempty"`
+	CreatedAt        string              `db:"created_at"        json:"created_at"`
 }
 
 type CommissionInvoiceItem struct {
@@ -120,7 +121,7 @@ func (r *CommissionInvoiceRepository) ListAll(month, year int) ([]CommissionInvo
 		       ci.total_orders, ci.total_amount,
 		       ci.commission_amount, ci.vat_amount, ci.grand_total,
 		       TRIM(ci.status) AS status,
-		       ci.slip_url, ci.slip_note,
+		       ci.slip_urls, ci.slip_note,
 		       ci.verified_by, ci.verified_at::text AS verified_at,
 		       ci.email_sent_at::text AS email_sent_at,
 		       ci.created_at::text AS created_at
@@ -149,7 +150,7 @@ func (r *CommissionInvoiceRepository) ListByFactory(factoryID int64) ([]Commissi
 		       ci.total_orders, ci.total_amount,
 		       ci.commission_amount, ci.vat_amount, ci.grand_total,
 		       TRIM(ci.status) AS status,
-		       ci.slip_url, ci.slip_note,
+		       ci.slip_urls, ci.slip_note,
 		       ci.verified_by, ci.verified_at::text AS verified_at,
 		       ci.email_sent_at::text AS email_sent_at,
 		       ci.created_at::text AS created_at
@@ -244,7 +245,7 @@ func (r *CommissionInvoiceRepository) GetByID(invoiceID int64) (*CommissionInvoi
 		       ci.total_orders, ci.total_amount,
 		       ci.commission_amount, ci.vat_amount, ci.grand_total,
 		       TRIM(ci.status) AS status,
-		       ci.slip_url, ci.slip_note,
+		       ci.slip_urls, ci.slip_note,
 		       ci.verified_by, ci.verified_at::text AS verified_at,
 		       ci.email_sent_at::text AS email_sent_at,
 		       ci.created_at::text AS created_at
@@ -276,13 +277,14 @@ func (r *CommissionInvoiceRepository) GetItems(invoiceID int64) ([]CommissionInv
 	return items, nil
 }
 
-// AttachFactorySlip — factory uploads comm payment slip.
-func (r *CommissionInvoiceRepository) AttachFactorySlip(invoiceID int64, slipURL, slipNote string) error {
+// AttachFactorySlip — factory uploads or edits comm payment slip(s) (while ST/RJ/PA).
+// Replaces the full slip_urls set with slipURLs each time (so "edit" = re-upload wins).
+func (r *CommissionInvoiceRepository) AttachFactorySlip(invoiceID int64, slipURLs domain.StringArray, slipNote string) error {
 	res, err := r.db.Exec(`
 		UPDATE commission_invoices
-		SET slip_url = $2, slip_note = NULLIF($3, ''), status = 'PA', updated_at = NOW()
-		WHERE invoice_id = $1 AND TRIM(status) IN ('ST', 'RJ')
-	`, invoiceID, slipURL, slipNote)
+		SET slip_urls = $2, slip_note = NULLIF($3, ''), status = 'PA', updated_at = NOW()
+		WHERE invoice_id = $1 AND TRIM(status) IN ('ST', 'RJ', 'PA')
+	`, invoiceID, slipURLs, slipNote)
 	if err != nil {
 		return err
 	}
