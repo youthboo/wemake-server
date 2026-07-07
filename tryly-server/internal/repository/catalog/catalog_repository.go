@@ -131,7 +131,7 @@ func (r *CatalogRepository) GetHubs(scope string) ([]domain.HubWithCategories, e
 		hubQuery += " WHERE scope = $1"
 		hubArgs = append(hubArgs, scope)
 	}
-	hubQuery += " ORDER BY hub_id ASC"
+	hubQuery += " ORDER BY sort_order ASC, hub_id ASC"
 	if err := r.db.Select(&hubs, hubQuery, hubArgs...); err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ func (r *CatalogRepository) GetHubs(scope string) ([]domain.HubWithCategories, e
 		catQuery += " WHERE h.scope = $1"
 		catArgs = append(catArgs, scope)
 	}
-	catQuery += " GROUP BY c.hub_id, c.category_id, c.name ORDER BY c.hub_id ASC, c.category_id ASC"
+	catQuery += " GROUP BY c.hub_id, c.category_id, c.name, h.sort_order ORDER BY h.sort_order ASC, c.hub_id ASC, c.category_id ASC"
 	var catRows []catRow
 	if err := r.db.Select(&catRows, catQuery, catArgs...); err != nil {
 		return nil, err
