@@ -32,6 +32,7 @@ type CategoryForHub struct {
 	Name         string   `db:"name" json:"name"`
 	FactoryCount int64    `db:"factory_count" json:"factory_count"`
 	SubPreview   []string `json:"sub_preview"`
+	Img          string   `db:"img" json:"img"`
 }
 
 type HubWithCategories struct {

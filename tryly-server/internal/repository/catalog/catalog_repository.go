@@ -141,9 +141,10 @@ func (r *CatalogRepository) GetHubs(scope string) ([]domain.HubWithCategories, e
 		CategoryID   int64  `db:"category_id"`
 		Name         string `db:"name"`
 		FactoryCount int64  `db:"factory_count"`
+		Img          string `db:"img"`
 	}
 	catQuery := `
-		SELECT c.hub_id, c.category_id, c.name,
+		SELECT c.hub_id, c.category_id, c.name, COALESCE(c.img, '') AS img,
 			COUNT(DISTINCT CASE WHEN fp.approval_status = 'AP' AND u.is_active = TRUE THEN mfc.factory_id END) AS factory_count
 		FROM lbi_categories c
 		JOIN lbi_hub h ON h.hub_id = c.hub_id
@@ -206,6 +207,7 @@ func (r *CatalogRepository) GetHubs(scope string) ([]domain.HubWithCategories, e
 			Name:         cr.Name,
 			FactoryCount: cr.FactoryCount,
 			SubPreview:   sp,
+			Img:          cr.Img,
 		})
 	}
 
