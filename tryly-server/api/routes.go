@@ -110,6 +110,8 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	admin.Get("/factories/:factory_id/settlements", middleware.RequireRole(h.authService, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminCustomer.ListFactorySettlements)
 
 	// Commission invoices (B6, B7, B8)
+	admin.Patch("/categories/:id/img", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.adminCatalog.PatchCategoryImg)
+
 	admin.Post("/invoices/generate", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.adminCommission.GenerateInvoices)
 	admin.Get("/invoices", middleware.RequireRole(h.authService, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminCommission.ListInvoices)
 	admin.Get("/invoices/:invoice_id", middleware.RequireRole(h.authService, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminCommission.GetInvoice)

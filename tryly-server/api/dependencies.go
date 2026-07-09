@@ -127,6 +127,7 @@ type routeHandlers struct {
 	factoryInvoice    *factoryhandler.InvoiceHandler
 	mailRelay         *handler.MailRelayHandler
 	factoryReview     *factoryhandler.ReviewHandler
+	adminCatalog      *adminhandler.AdminCatalogHandler
 }
 
 func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
@@ -273,5 +274,6 @@ func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
 		factoryInvoice:    factoryhandler.NewInvoiceHandler(commissionInvoiceRepo, mailSvc, cld),
 		mailRelay:         handler.NewMailRelayHandler(mailSvc),
 		factoryReview:     factoryhandler.NewReviewHandler(reviewRepo),
+		adminCatalog:      adminhandler.NewAdminCatalogHandler(db),
 	}
 }
