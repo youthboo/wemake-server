@@ -17,10 +17,27 @@ import (
 type NotificationHandler struct {
 	service *notificationservice.NotificationService
 	hub     *sse.Hub
+	tickets *sse.TicketStore
 }
 
 func NewNotificationHandler(service *notificationservice.NotificationService, hub *sse.Hub) *NotificationHandler {
-	return &NotificationHandler{service: service, hub: hub}
+	return &NotificationHandler{service: service, hub: hub, tickets: sse.NewTicketStore()}
+}
+
+// IssueStreamTicket mints a short-lived, single-use ticket for opening the SSE
+// stream. The caller is authenticated normally (Authorization header / JWT) on
+// this POST, so no secret ends up in a URL. The client then opens
+// GET /notifications/stream?ticket=<value>.
+func (h *NotificationHandler) IssueStreamTicket(c *fiber.Ctx) error {
+	userID, err := helper.RequireAuthenticatedUserID(c)
+	if err != nil {
+		return err
+	}
+	ticket := h.tickets.Issue(userID)
+	if ticket == "" {
+		return helper.JSONError(c, fiber.StatusInternalServerError, "failed to issue stream ticket")
+	}
+	return c.JSON(fiber.Map{"ticket": ticket})
 }
 
 func filterTypes(filter string) []string {
@@ -130,9 +147,16 @@ type ssePayload struct {
 }
 
 func (h *NotificationHandler) Stream(c *fiber.Ctx) error {
-	userID, err := helper.RequireAuthenticatedUserID(c)
-	if err != nil {
-		return err
+	// Prefer a single-use ticket (?ticket=) so a long-lived JWT never appears in
+	// the URL (URLs leak into access/proxy logs and browser history). Fall back
+	// to the existing header / ?token= auth for backward compatibility.
+	userID, ok := h.tickets.Consume(c.Query("ticket"))
+	if !ok {
+		var err error
+		userID, err = helper.RequireAuthenticatedUserID(c)
+		if err != nil {
+			return err
+		}
 	}
 
 	c.Set("Content-Type", "text/event-stream")

@@ -3,6 +3,7 @@ package api
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	recovermw "github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/jmoiron/sqlx"
 	"github.com/yourusername/wemake/internal/config"
 	"github.com/yourusername/wemake/internal/domain"
@@ -20,6 +21,10 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 		// (JWT tokens + session cookies can easily exceed the 4 KB default).
 		ReadBufferSize: 16 * 1024,
 	})
+	// Recover middleware must be registered first so a panic in any downstream
+	// handler or middleware is turned into a 500 instead of killing the process.
+	app.Use(recovermw.New(recovermw.Config{EnableStackTrace: true}))
+
 	logger.Info("Setting up CORS", "corsOrigins", cfg.CORSOrigins)
 
 	// Fiber CORS middleware
@@ -312,7 +317,8 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	conversations.Post("/:conv_id/messages", h.message.CreateMessageByConvPath)
 
 	notifications := api.Group("/notifications")
-	notifications.Get("/stream", h.notification.Stream) // SSE — must be before /:noti_id
+	notifications.Post("/stream-ticket", h.notification.IssueStreamTicket) // mint short-lived SSE ticket
+	notifications.Get("/stream", h.notification.Stream)                    // SSE — must be before /:noti_id
 	notifications.Get("/", h.notification.List)
 	notifications.Get("/unread-count", h.notification.GetUnreadCount)
 	notifications.Post("/read-all", h.notification.MarkAllRead)      // spec

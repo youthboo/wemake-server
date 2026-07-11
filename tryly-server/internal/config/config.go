@@ -26,7 +26,7 @@ type Config struct {
 }
 
 func LoadConfig() (*Config, error) {
-	return &Config{
+	cfg := &Config{
 		Port:                getEnv("PORT", "3000"),
 		PublicBaseURL:       strings.TrimRight(getEnv("PUBLIC_BASE_URL", ""), "/"),
 		CloudinaryURL:       getEnv("CLOUDINARY_URL", ""),
@@ -43,7 +43,38 @@ func LoadConfig() (*Config, error) {
 		Environment:         getEnv("ENV", "development"),
 		JWTSecret:           getEnv("JWT_SECRET", "your-secret-key"),
 		CORSOrigins:         getEnv("CORS_ORIGINS", "*"),
-	}, nil
+	}
+
+	if err := cfg.validateForProduction(); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+// validateForProduction fails fast when required secrets are missing or left at
+// their insecure defaults, but ONLY when ENV=production. Development/demo runs
+// (the default) are unaffected, so this does not change local behavior.
+func (c *Config) validateForProduction() error {
+	if strings.ToLower(c.Environment) != "production" {
+		return nil
+	}
+
+	var problems []string
+	if c.JWTSecret == "" || c.JWTSecret == "your-secret-key" {
+		problems = append(problems, "JWT_SECRET must be set to a strong non-default value")
+	}
+	if c.DatabaseURL == "" && c.DBPassword == "" {
+		problems = append(problems, "DATABASE_URL (or DB_PASSWORD) must be set")
+	}
+	if c.CORSOrigins == "" || c.CORSOrigins == "*" {
+		problems = append(problems, "CORS_ORIGINS must be an explicit allowlist, not \"*\"")
+	}
+
+	if len(problems) > 0 {
+		return fmt.Errorf("insecure production config: %s", strings.Join(problems, "; "))
+	}
+	return nil
 }
 
 func getEnv(key, defaultValue string) string {
