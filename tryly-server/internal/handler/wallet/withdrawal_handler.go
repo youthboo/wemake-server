@@ -6,6 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/yourusername/wemake/internal/dto"
 	"github.com/yourusername/wemake/internal/helper"
+	walletrepo "github.com/yourusername/wemake/internal/repository/wallet"
 	walletservice "github.com/yourusername/wemake/internal/service/wallet"
 )
 
@@ -60,7 +61,11 @@ func (h *WithdrawalHandler) PatchStatus(c *fiber.Ctx) error {
 	if err := helper.RequireBody(c, &req); err != nil {
 		return err
 	}
-	if err := h.service.UpdateStatus(requestID, req.Status, req.Comments); err != nil {
+	var processedBy *int64
+	if actorID := helper.OptionalActorID(c); actorID > 0 {
+		processedBy = &actorID
+	}
+	if err := h.service.UpdateStatus(requestID, req.Status, req.Comments, req.SlipURL, processedBy); err != nil {
 		return helper.MapServiceError(c, err, withdrawalPatchStatusFallback, withdrawalPatchStatusResponses)
 	}
 	return c.JSON(fiber.Map{"message": "withdrawal status updated"})
@@ -76,6 +81,8 @@ var withdrawalCreateResponses = map[error]helper.ErrorResponse{
 var withdrawalPatchStatusFallback = helper.ErrorMessage(fiber.StatusInternalServerError, "failed to update withdrawal status")
 
 var withdrawalPatchStatusResponses = map[error]helper.ErrorResponse{
-	walletservice.ErrInvalidWithdrawalStatus: helper.ErrorMessage(fiber.StatusBadRequest, walletservice.ErrInvalidWithdrawalStatus.Error()),
-	sql.ErrNoRows:                            helper.ErrorMessage(fiber.StatusNotFound, "withdrawal request not found"),
+	walletservice.ErrInvalidWithdrawalStatus:      helper.ErrorMessage(fiber.StatusBadRequest, walletservice.ErrInvalidWithdrawalStatus.Error()),
+	walletservice.ErrSlipRequiredForComplete:      helper.ErrorMessage(fiber.StatusBadRequest, walletservice.ErrSlipRequiredForComplete.Error()),
+	walletrepo.ErrWithdrawalAlreadyProcessed:      helper.ErrorMessage(fiber.StatusBadRequest, "คำขอถอนเงินนี้ถูกดำเนินการแล้ว"),
+	sql.ErrNoRows:                                 helper.ErrorMessage(fiber.StatusNotFound, "withdrawal request not found"),
 }

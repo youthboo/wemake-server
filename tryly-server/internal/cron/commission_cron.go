@@ -188,6 +188,12 @@ func (c *CommissionCron) configVal(key string) string {
 
 // tick generates invoices for the previous month and emails all factories.
 func (c *CommissionCron) tick(cfg CronJobConfig) {
+	// Commission invoices only apply to the direct-pay flow (config_payment = 1).
+	// In escrow mode Tryly holds the funds, so there is nothing to invoice.
+	if v := c.configVal("config_payment"); v != "" && v != "1" {
+		log.Printf("[CRON] commission invoice skipped — config_payment=%s (escrow mode)", v)
+		return
+	}
 	loc, _ := time.LoadLocation("Asia/Bangkok")
 	if loc == nil {
 		loc = time.UTC

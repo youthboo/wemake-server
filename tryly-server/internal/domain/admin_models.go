@@ -241,6 +241,7 @@ type AdminWithdrawalListItem struct {
 	Status         string     `db:"status" json:"status"`
 	ProcessedAt    *time.Time `db:"processed_at" json:"processed_at,omitempty"`
 	Note           *string    `db:"note" json:"note,omitempty"`
+	SlipURL        *string    `db:"slip_url" json:"slip_url,omitempty"`
 	CreatedAt      time.Time  `db:"created_at" json:"created_at"`
 }
 

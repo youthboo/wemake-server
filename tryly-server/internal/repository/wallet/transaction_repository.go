@@ -168,3 +168,27 @@ func (r *TransactionRepository) SettleFactoryReceivables(tx *sqlx.Tx, orderID in
 	`, orderID)
 	return err
 }
+
+// SettleEscrowFunds — เรียกตอน order → CP (ลูกค้ากดรับ หรือ auto-close cron):
+// ย้ายยอด SC/PT ของ order จาก pending_fund → good_fund ของ wallet โรงงาน
+// แล้ว flip ทั้ง SC และ BU tx ที่ค้าง PT → ST.
+// WHERE status='PT' ทำให้ idempotent — เรียกซ้ำ หรือ order จาก direct-pay flow
+// (tx เป็น ST ตั้งแต่ approve) เป็น no-op. ต้องเรียกใน DB tx เดียวกับการ mark CP.
+func (r *TransactionRepository) SettleEscrowFunds(tx *sqlx.Tx, orderID int64) error {
+	if _, err := tx.Exec(`
+		UPDATE wallets w
+		SET good_fund    = w.good_fund + t.amount,
+		    pending_fund = GREATEST(w.pending_fund - t.amount, 0)
+		FROM transactions t
+		WHERE t.order_id = $1 AND t.type = 'SC' AND t.status = 'PT'
+		  AND w.wallet_id = t.wallet_id
+	`, orderID); err != nil {
+		return err
+	}
+	_, err := tx.Exec(`
+		UPDATE transactions
+		SET status = 'ST', updated_at = NOW()
+		WHERE order_id = $1 AND type IN ('SC', 'BU') AND status = 'PT'
+	`, orderID)
+	return err
+}

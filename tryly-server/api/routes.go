@@ -87,6 +87,8 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	admin.Get("/orders", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminOrder.List)
 	admin.Get("/orders/:order_id", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminOrder.GetByID)
 	admin.Patch("/orders/:order_id/status", middleware.RequireRole(h.authService, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminOrder.PatchStatus)
+	// Escrow mode: superadmin verifies customer payment slips (instead of factory)
+	admin.Patch("/orders/:order_id/verify-slip", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.slip.VerifySlipAdmin)
 	admin.Get("/withdrawals", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminOrder.ListWithdrawals)
 	admin.Patch("/withdrawals/:request_id", middleware.RequireRole(h.authService, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminOrder.PatchWithdrawal)
 	// Phase 1: dispute ยังไม่เปิด — เปิดเมื่อมี migration สร้างตาราง disputes
@@ -197,7 +199,10 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	addresses.Patch("/:address_id", h.address.PatchAddress)
 	addresses.Delete("/:address_id", h.address.DeleteAddress)
 
-	// Factory verify slip (B4)
+	// Public configs — whitelisted tconfig keys (config_payment + บัญชี Tryly)
+	api.Get("/configs/public", h.tconfig.GetPublic)
+
+	// Factory verify slip (B4) — ปิดเมื่อ escrow mode (config_payment != 1)
 	api.Patch("/factory/orders/:order_id/verify-slip", middleware.RequireRole(h.authService, domain.RoleFactory), h.slip.VerifySlip)
 
 	api.Get("/factory/rfq-board", h.factoryRFQBoard.GetBoard)

@@ -118,6 +118,78 @@ func (r *SlipRepository) ApproveSlip(orderID, verifiedBy int64) error {
 	return tx.Commit()
 }
 
+// ApproveSlipEscrow — escrow mode (config_payment != 1): superadmin approves the slip.
+// The BU transaction STAYS 'PT' (funds held by Tryly) and a factory receivable
+// (SC / PT) is created on the factory's wallet + pending_fund. Both settle to 'ST'
+// when the order reaches CP (see SettleEscrowFunds).
+func (r *SlipRepository) ApproveSlipEscrow(orderID, verifiedBy int64) error {
+	tx, err := r.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Mark latest BU tx verified but keep status PT (held in escrow)
+	var buAmount float64
+	err = tx.QueryRow(`
+		UPDATE transactions
+		SET verified_by = $2, verified_at = NOW(), updated_at = NOW()
+		WHERE tx_id = (
+		    SELECT MAX(tx_id) FROM transactions WHERE order_id = $1 AND type = 'BU' AND status = 'PT'
+		)
+		RETURNING amount::float8
+	`, orderID, verifiedBy).Scan(&buAmount)
+	if err != nil {
+		return err
+	}
+
+	// Factory receivable: ensure factory wallet, insert SC/PT tx, hold in pending_fund
+	var factoryID int64
+	if err := tx.Get(&factoryID, `SELECT factory_id FROM orders WHERE order_id = $1`, orderID); err != nil {
+		return err
+	}
+	// Ensure factory wallet — wallets.user_id has only a non-unique index,
+	// so we SELECT-then-INSERT instead of ON CONFLICT (user_id).
+	var factoryWalletID int64
+	err = tx.Get(&factoryWalletID, `SELECT wallet_id FROM wallets WHERE user_id = $1`, factoryID)
+	if err == sql.ErrNoRows {
+		err = tx.QueryRow(`
+			INSERT INTO wallets (user_id, good_fund, pending_fund)
+			VALUES ($1, 0, 0)
+			RETURNING wallet_id
+		`, factoryID).Scan(&factoryWalletID)
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO transactions (wallet_id, order_id, type, status, amount)
+		VALUES ($1, $2, 'SC', 'PT', $3)
+	`, factoryWalletID, orderID, buAmount); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
+		UPDATE wallets SET pending_fund = pending_fund + $2 WHERE wallet_id = $1
+	`, factoryWalletID, buAmount); err != nil {
+		return err
+	}
+
+	// Order: slip approved, payment done — same as direct-pay flow
+	res, err := tx.Exec(`
+		UPDATE orders SET slip_status = 'AP', status = 'PD', updated_at = NOW()
+		WHERE order_id = $1 AND TRIM(slip_status) = 'ST'
+	`, orderID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+
+	return tx.Commit()
+}
+
 // RejectSlip marks slip as rejected so customer can re-submit.
 func (r *SlipRepository) RejectSlip(orderID int64, reason string) error {
 	tx, err := r.db.Beginx()

@@ -349,9 +349,14 @@ func (s *OrderService) confirmReceiptTx(orderID int64, actorUserID *int64, note 
 			return err
 		}
 
-		// B3: wallet / pending_fund movement is removed from order flow.
-		// Settlement (pending → good) is now handled by the finance/settlement
-		// pipeline — not triggered here. settlement stays zero-value.
+		// Escrow settlement (config_payment != 1): release held funds to the factory —
+		// SC amounts pending_fund → good_fund + flip SC/BU tx PT → ST.
+		// Idempotent (WHERE status='PT'); a no-op for direct-pay orders whose tx
+		// already settled at slip-approve time.
+		if err := s.txLedger.SettleEscrowFunds(tx, orderID); err != nil {
+			return err
+		}
+
 		return s.repo.InsertActivityTx(tx, orderID, actorUserID, activityCode, map[string]interface{}{
 			"status_before": statusBefore,
 			"status_after":  domain.OrderStatusComplete,

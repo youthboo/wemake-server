@@ -1,7 +1,9 @@
 package admin
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"time"
 
@@ -121,13 +123,25 @@ func (h *AdminOrderHandler) PatchWithdrawal(c *fiber.Ctx) error {
 	status := domainutil.NormalizeStatus(req.Status)
 	v := domain.NewValidationCollector()
 	v.AddIf(!domainutil.StatusIn(status, domain.WithdrawalStatusApproved, domain.WithdrawalStatusRejected, domain.WithdrawalStatusComplete), "status", "must be AP, RJ, or CP")
+	// เมื่อโอนเสร็จ (CP) superadmin ต้องแนบสลิปโอนเงิน (อัปโหลดผ่าน /media/upload ก่อน)
+	v.AddIf(status == domain.WithdrawalStatusComplete && (req.SlipURL == nil || *req.SlipURL == ""), "slip_url", "is required when completing a withdrawal")
 	if err := helper.ValidateRequest(c, v); err != nil {
 		return err
 	}
-	if err := h.withdrawal.UpdateStatus(requestID, status, req.Comments); err != nil {
+	actorID := helper.OptionalActorID(c)
+	var processedBy *int64
+	if actorID > 0 {
+		processedBy = &actorID
+	}
+	if err := h.withdrawal.UpdateStatus(requestID, status, req.Comments, req.SlipURL, processedBy); err != nil {
+		if errors.Is(err, walletrepo.ErrWithdrawalAlreadyProcessed) {
+			return helper.JSONError(c, fiber.StatusBadRequest, "คำขอถอนเงินนี้ถูกดำเนินการแล้ว")
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			return helper.JSONError(c, fiber.StatusNotFound, "withdrawal request not found")
+		}
 		return helper.JSONInternal(c, "failed to update withdrawal")
 	}
-	actorID := helper.OptionalActorID(c)
 	payload, _ := json.Marshal(map[string]interface{}{"status": status, "comments": req.Comments})
 	ip := c.IP()
 	_ = h.audit.Insert(&domain.AdminAuditLog{ActorID: actorID, Action: "WITHDRAWAL_STATUS_CHANGE", TargetType: "withdrawal", TargetID: strconv.FormatInt(requestID, 10), Payload: payload, IPAddress: &ip})

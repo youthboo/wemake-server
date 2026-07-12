@@ -23,6 +23,22 @@ func (r *TConfigRepository) GetAll() ([]Item, error) {
 	return items, err
 }
 
+// GetValue returns the value for a key, or "" when the key is missing.
+func (r *TConfigRepository) GetValue(key string) string {
+	var v string
+	if err := r.db.Get(&v, `SELECT value FROM tconfig WHERE key = $1`, key); err != nil {
+		return ""
+	}
+	return v
+}
+
+// IsEscrowMode reports whether the platform runs the escrow payment flow.
+// config_payment = "1" (or missing key) → direct-pay flow; anything else → escrow.
+func (r *TConfigRepository) IsEscrowMode() bool {
+	v := r.GetValue("config_payment")
+	return v != "" && v != "1"
+}
+
 func (r *TConfigRepository) Set(key, value string) error {
 	_, err := r.db.Exec(`
 		INSERT INTO tconfig (key, value) VALUES ($1, $2)

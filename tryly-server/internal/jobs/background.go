@@ -292,6 +292,54 @@ func expirePendingDeposits(db *sqlx.DB) {
 	if len(clRows) > 0 {
 		logger.Info("expired deposit cancellation job completed", "cancelled_count", len(clRows), "from_status", "PE", "to_status", "CL")
 	}
+
+	// ขั้น 3: WS → CL — ลูกค้าไม่แนบสลีปภายในกำหนดชำระ (due date ของงวดแรก
+	// ตั้งไว้ตอนสร้าง order = created_at + 3 วัน) ให้ยกเลิกคำสั่งซื้ออัตโนมัติ
+	// พร้อม unlock quotation กลับเป็น PD เช่นเดียวกับ flow PE → CL
+	var wsRows []clOrderRow
+	err = db.Select(&wsRows, `
+		WITH overdue_orders AS (
+			SELECT o.order_id, o.quote_id
+			FROM orders o
+			WHERE o.status = 'WS'
+			  AND COALESCE(
+				(
+					SELECT ps.due_date::timestamp + TIME '23:59:59'
+					FROM payment_schedules ps
+					WHERE ps.order_id = o.order_id
+					ORDER BY ps.installment_no ASC, ps.schedule_id ASC
+					LIMIT 1
+				),
+				o.created_at + INTERVAL '3 days'
+			  ) < NOW()
+		)
+		UPDATE orders o
+		SET status = 'CL',
+		    updated_at = NOW()
+		FROM overdue_orders e
+		WHERE o.order_id = e.order_id
+		RETURNING o.order_id, o.quote_id
+	`)
+	if err != nil {
+		logger.Error("wait-slip expiration job failed", "err", err, "from_status", "WS", "to_status", "CL")
+		return
+	}
+	for _, row := range wsRows {
+		if _, err := db.Exec(`
+			UPDATE quotations
+			SET status = 'PD', is_locked = FALSE, log_timestamp = NOW()
+			WHERE quote_id = $1 AND status = 'AC'
+		`, row.QuoteID); err != nil {
+			logger.Error("quotation unlock failed during wait-slip cancellation", "order_id", row.OrderID, "quote_id", row.QuoteID, "err", err)
+		}
+		payload, _ := json.Marshal(map[string]interface{}{"order_id": row.OrderID, "quote_id": row.QuoteID})
+		if _, err := db.Exec(`INSERT INTO domain_events (event_type, payload) VALUES ($1, $2)`, "order.auto_cancelled", payload); err != nil {
+			logger.Error("auto cancelled domain event insert failed", "order_id", row.OrderID, "quote_id", row.QuoteID, "err", err)
+		}
+	}
+	if len(wsRows) > 0 {
+		logger.Info("wait-slip expiration job completed", "cancelled_count", len(wsRows), "from_status", "WS", "to_status", "CL")
+	}
 }
 
 // --------------------------------------------------------------------------

@@ -74,7 +74,9 @@ type WithdrawalRequest struct {
 	AccountName   string     `db:"account_name" json:"account_name"`
 	Status        string     `db:"status" json:"status"` // PE, AP, RJ, CP
 	ProcessedAt   *time.Time `db:"processed_at" json:"processed_at,omitempty"`
+	ProcessedBy   *int64     `db:"processed_by" json:"processed_by,omitempty"`
 	Note          *string    `db:"note" json:"note,omitempty"`
+	SlipURL       *string    `db:"slip_url" json:"slip_url,omitempty"`
 	CreatedAt     time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt     time.Time  `db:"updated_at" json:"updated_at"`
 }

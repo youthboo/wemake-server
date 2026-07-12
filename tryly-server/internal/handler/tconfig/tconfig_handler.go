@@ -28,6 +28,36 @@ func (h *TConfigHandler) GetAll(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"configs": result})
 }
 
+// publicConfigKeys — whitelist ของ key ที่เปิดเผยได้โดยไม่ต้อง auth
+// (frontend ใช้ branch payment flow + แสดงบัญชี Tryly ใน escrow mode)
+var publicConfigKeys = []string{
+	"config_payment",
+	"tryly_bank_name",
+	"tryly_bank_account_no",
+	"tryly_account_holder",
+	"tryly_promptpay",
+}
+
+// GetPublic returns only whitelisted config keys.
+// GET /api/v1/configs/public (no auth required)
+func (h *TConfigHandler) GetPublic(c *fiber.Ctx) error {
+	items, err := h.repo.GetAll()
+	if err != nil {
+		return helper.WriteAPIError(c, helper.InternalServerAPIError("FETCH_TCONFIG_FAILED", "failed to fetch config"))
+	}
+	allowed := make(map[string]bool, len(publicConfigKeys))
+	for _, k := range publicConfigKeys {
+		allowed[k] = true
+	}
+	result := make(map[string]string)
+	for _, item := range items {
+		if allowed[item.Key] {
+			result[item.Key] = item.Value
+		}
+	}
+	return c.JSON(fiber.Map{"configs": result})
+}
+
 // PatchBulk upserts one or more key-value pairs.
 // PATCH /admin/tconfig
 // Body: { "platform_name": "...", "rfq_expired": "30" }

@@ -30,6 +30,7 @@ var (
 	ErrPaymentTermsInvalid     = errors.New("PAYMENT_TERMS_INVALID")
 	ErrQuotationExpired        = errors.New("QUOTATION_EXPIRED")
 	ErrFactorySuspended        = errors.New("FACTORY_SUSPENDED")
+	ErrFactoryNotVerified      = errors.New("FACTORY_NOT_VERIFIED")
 	ErrFactoryHighlightInvalid = errors.New("factory_highlight must be at most 200 characters")
 )
 
@@ -58,15 +59,30 @@ func NewQuotationService(db *sqlx.DB, repo *quotationrepo.QuotationRepository, r
 	return &QuotationService{db: db, repo: repo, rfqRepo: rfqRepo, items: items, commission: commission, orders: orders, factories: factories, notifications: notifications, messages: messages}
 }
 
+// ensureFactoryCanQuote blocks quotation creation from factories that are not
+// fully approved: suspended (SU) → ErrFactorySuspended, anything other than
+// approved (AP, e.g. PE pending / RJ rejected) → ErrFactoryNotVerified.
+func (s *QuotationService) ensureFactoryCanQuote(factoryID int64) error {
+	if s.factories == nil {
+		return nil
+	}
+	approvalStatus, err := s.factories.GetApprovalStatus(factoryID)
+	if err != nil {
+		return err
+	}
+	switch approvalStatus {
+	case "AP":
+		return nil
+	case "SU":
+		return ErrFactorySuspended
+	default:
+		return ErrFactoryNotVerified
+	}
+}
+
 func (s *QuotationService) Create(item *domain.Quotation) error {
-	if s.factories != nil {
-		approvalStatus, err := s.factories.GetApprovalStatus(item.FactoryID)
-		if err != nil {
-			return err
-		}
-		if approvalStatus == "SU" {
-			return ErrFactorySuspended
-		}
+	if err := s.ensureFactoryCanQuote(item.FactoryID); err != nil {
+		return err
 	}
 	if err := normalizeFactoryHighlight(item); err != nil {
 		return err
@@ -436,6 +452,10 @@ func validateQuotationTerms(incoterms, paymentTerms *string, validityDays int) e
 }
 
 func (s *QuotationService) CreateDetailed(item *domain.Quotation) error {
+	// CreateRevision delegates here, so this guard covers both paths.
+	if err := s.ensureFactoryCanQuote(item.FactoryID); err != nil {
+		return err
+	}
 	if err := validateQuotationItems(item.Items); err != nil {
 		return err
 	}

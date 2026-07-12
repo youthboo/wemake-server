@@ -11,6 +11,7 @@ import (
 
 var ErrInsufficientFunds = errors.New("insufficient wallet funds for withdrawal")
 var ErrInvalidWithdrawalStatus = errors.New("status must be AP, RJ, or CP")
+var ErrSlipRequiredForComplete = errors.New("slip_url is required when completing a withdrawal")
 
 type WithdrawalService struct {
 	repo       *walletrepo.WithdrawalRepository
@@ -26,23 +27,20 @@ func (s *WithdrawalService) Create(factoryID int64, amount float64, bankAccountN
 	if err != nil {
 		return nil, err
 	}
-	wallet, err := s.walletRepo.GetByUserID(factoryID)
-	if err != nil {
-		return nil, err
-	}
-	decimalAmount := helper.MoneyDecimal(amount)
-	if helper.IsMoneyLess(wallet.GoodFund, decimalAmount) {
-		return nil, ErrInsufficientFunds
-	}
 	w := &domain.WithdrawalRequest{
 		WalletID:      *walletID,
 		FactoryID:     factoryID,
-		Amount:        decimalAmount,
+		Amount:        helper.MoneyDecimal(amount),
 		BankAccountNo: bankAccountNo,
 		BankName:      bankName,
 		AccountName:   accountName,
 	}
+	// Repo holds the funds (good_fund → pending_fund) atomically with a
+	// balance guard in the UPDATE, so concurrent requests cannot overdraw.
 	if err := s.repo.Create(w); err != nil {
+		if errors.Is(err, walletrepo.ErrWithdrawalHoldFailed) {
+			return nil, ErrInsufficientFunds
+		}
 		return nil, err
 	}
 	return w, nil
@@ -52,10 +50,14 @@ func (s *WithdrawalService) ListByFactoryID(factoryID int64) ([]domain.Withdrawa
 	return s.repo.ListByFactoryID(factoryID)
 }
 
-func (s *WithdrawalService) UpdateStatus(requestID int64, status string, note *string) error {
+func (s *WithdrawalService) UpdateStatus(requestID int64, status string, note *string, slipURL *string, processedBy *int64) error {
 	status = domainutil.NormalizeStatus(status)
 	if !domainutil.StatusIn(status, "AP", "RJ", "CP") {
 		return ErrInvalidWithdrawalStatus
 	}
-	return s.repo.UpdateStatus(requestID, status, note)
+	// เมื่อโอนเสร็จ (CP) superadmin ต้องแนบสลิปโอนเงินเสมอ
+	if status == "CP" && (slipURL == nil || *slipURL == "") {
+		return ErrSlipRequiredForComplete
+	}
+	return s.repo.UpdateStatus(requestID, status, note, slipURL, processedBy)
 }

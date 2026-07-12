@@ -148,6 +148,7 @@ func DeleteConfigErrorMap() map[error]helper.ErrorResponse {
 func CreateQuotationErrorMap() map[error]helper.ErrorResponse {
 	return map[error]helper.ErrorResponse{
 		quotationservice.ErrFactorySuspended:        helper.ErrorMessage(fiber.StatusForbidden, "factory account is suspended"),
+		quotationservice.ErrFactoryNotVerified:      helper.ErrorMessage(fiber.StatusForbidden, "factory is not verified yet"),
 		quotationservice.ErrFactoryHighlightInvalid: helper.ErrorMessage(fiber.StatusBadRequest, "HIGHLIGHT_TOO_LONG"),
 		quotationservice.ErrPaymentTermsInvalid:     helper.ErrorMessage(fiber.StatusBadRequest, "invalid payment terms"),
 		quotationservice.ErrInvalidShippingMethod:   helper.ErrorMessage(fiber.StatusBadRequest, "invalid shipping method"),
@@ -175,6 +176,7 @@ func PatchQuotationErrorMap() map[error]helper.ErrorResponse {
 func CreateDetailedErrorMap() map[error]helper.ErrorResponse {
 	return map[error]helper.ErrorResponse{
 		quotationservice.ErrFactorySuspended:        helper.ErrorMessage(fiber.StatusForbidden, "factory account is suspended"),
+		quotationservice.ErrFactoryNotVerified:      helper.ErrorMessage(fiber.StatusForbidden, "factory is not verified yet"),
 		quotationservice.ErrFactoryHighlightInvalid: helper.ErrorMessage(fiber.StatusBadRequest, "HIGHLIGHT_TOO_LONG"),
 	}
 }

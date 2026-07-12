@@ -125,14 +125,14 @@ func (s *OrderService) MarkShipped(orderID, factoryID int64, trackingNo, courier
 }
 
 func (s *OrderService) AutoCloseShippedOrders() (int, error) {
-	cutoff := time.Now().AddDate(0, 0, -20)
+	cutoff := time.Now().AddDate(0, 0, -14)
 	candidates, err := s.repo.ListAutoCloseCandidates(cutoff)
 	if err != nil {
 		return 0, err
 	}
 	closed := 0
 	for _, orderID := range candidates {
-		if _, err := s.confirmReceiptTx(orderID, nil, "auto close after 20 days", nil, "AUTO_CLOSE_20_DAYS", true); err != nil {
+		if _, err := s.confirmReceiptTx(orderID, nil, "auto close after 14 days", nil, "AUTO_CLOSE_14_DAYS", true); err != nil {
 			// Keep processing next orders; this job should be best-effort.
 			continue
 		}

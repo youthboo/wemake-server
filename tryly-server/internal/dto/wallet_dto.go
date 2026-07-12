@@ -28,8 +28,10 @@ type WithdrawalRequest struct {
 }
 
 type PatchWithdrawalStatusRequest struct {
-	Status   string `json:"status" validate:"notblank"`
+	Status   string  `json:"status" validate:"notblank"`
 	Comments *string `json:"comments"`
+	// SlipURL — สลิปโอนเงินจาก superadmin (อัปโหลดผ่าน /media/upload ก่อน); บังคับเมื่อ status = CP
+	SlipURL *string `json:"slip_url"`
 }
 
 // Payment Schedule DTOs

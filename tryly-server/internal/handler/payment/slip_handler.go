@@ -13,18 +13,20 @@ import (
 	"github.com/yourusername/wemake/internal/mailer"
 	mediapkg "github.com/yourusername/wemake/internal/media"
 	orderrepo "github.com/yourusername/wemake/internal/repository/order"
+	tconfigrepo "github.com/yourusername/wemake/internal/repository/tconfig"
 	walletrepo "github.com/yourusername/wemake/internal/repository/wallet"
 )
 
 type SlipHandler struct {
 	slips   *orderrepo.SlipRepository
 	wallets *walletrepo.WalletRepository
+	tconfig *tconfigrepo.TConfigRepository
 	mail    *mailer.Mailer
 	cld     *cloudinary.Cloudinary
 }
 
-func NewSlipHandler(slips *orderrepo.SlipRepository, wallets *walletrepo.WalletRepository, mail *mailer.Mailer, cld *cloudinary.Cloudinary) *SlipHandler {
-	return &SlipHandler{slips: slips, wallets: wallets, mail: mail, cld: cld}
+func NewSlipHandler(slips *orderrepo.SlipRepository, wallets *walletrepo.WalletRepository, tconfig *tconfigrepo.TConfigRepository, mail *mailer.Mailer, cld *cloudinary.Cloudinary) *SlipHandler {
+	return &SlipHandler{slips: slips, wallets: wallets, tconfig: tconfig, mail: mail, cld: cld}
 }
 
 // AttachSlip POST /api/orders/:order_id/slip — customer uploads payment slip
@@ -139,7 +141,22 @@ func (h *SlipHandler) GetSlip(c *fiber.Ctx) error {
 }
 
 // VerifySlip PATCH /api/factory/orders/:order_id/verify-slip — factory approves/rejects
+// (direct-pay flow only; blocked when escrow mode is enabled)
 func (h *SlipHandler) VerifySlip(c *fiber.Ctx) error {
+	if h.tconfig != nil && h.tconfig.IsEscrowMode() {
+		return helper.JSONError(c, fiber.StatusForbidden,
+			"ระบบอยู่ในโหมดชำระผ่าน Tryly — การตรวจสอบสลีปทำโดยผู้ดูแลระบบ")
+	}
+	return h.verifySlip(c, false)
+}
+
+// VerifySlipAdmin PATCH /api/admin/orders/:order_id/verify-slip — superadmin approves/rejects
+// (escrow mode: funds stay held as PT until the order completes)
+func (h *SlipHandler) VerifySlipAdmin(c *fiber.Ctx) error {
+	return h.verifySlip(c, true)
+}
+
+func (h *SlipHandler) verifySlip(c *fiber.Ctx, asAdmin bool) error {
 	userID, err := helper.RequireAuthenticatedUserID(c)
 	if err != nil {
 		return err
@@ -156,7 +173,7 @@ func (h *SlipHandler) VerifySlip(c *fiber.Ctx) error {
 		}
 		return helper.JSONInternal(c, "failed to fetch order")
 	}
-	if own.FactoryID != userID {
+	if !asAdmin && own.FactoryID != userID {
 		return helper.JSONError(c, fiber.StatusForbidden, "forbidden")
 	}
 	if own.SlipStatus != "ST" {
@@ -173,10 +190,19 @@ func (h *SlipHandler) VerifySlip(c *fiber.Ctx) error {
 	body.Action = strings.TrimSpace(strings.ToLower(body.Action))
 	body.Reason = strings.TrimSpace(body.Reason)
 
+	escrow := h.tconfig != nil && h.tconfig.IsEscrowMode()
+
 	switch body.Action {
 	case "approve":
-		if err := h.slips.ApproveSlip(orderID, userID); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
+		var approveErr error
+		if asAdmin && escrow {
+			// Escrow: hold funds (BU stays PT) + create factory receivable
+			approveErr = h.slips.ApproveSlipEscrow(orderID, userID)
+		} else {
+			approveErr = h.slips.ApproveSlip(orderID, userID)
+		}
+		if approveErr != nil {
+			if errors.Is(approveErr, sql.ErrNoRows) {
 				return helper.JSONError(c, fiber.StatusBadRequest, "ไม่สามารถ approve ได้ในสถานะปัจจุบัน")
 			}
 			return helper.JSONInternal(c, "failed to approve slip")

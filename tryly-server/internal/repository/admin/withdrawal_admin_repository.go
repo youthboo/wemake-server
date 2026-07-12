@@ -36,7 +36,7 @@ func (r *AdminWithdrawalRepository) ListAdmin(status string, factoryID *int64, p
 	if err := r.db.Select(&items, `
 		SELECT wr.request_id, wr.factory_id, COALESCE(fp.factory_name, 'Factory #' || wr.factory_id::text) AS factory_name,
 		       wr.amount, wr.bank_account_no, wr.bank_name, wr.account_name,
-		       wr.status, wr.processed_at, wr.note, wr.created_at
+		       wr.status, wr.processed_at, wr.note, wr.slip_url, wr.created_at
 		FROM withdrawal_requests wr
 		LEFT JOIN factory_profiles fp ON fp.user_id = wr.factory_id
 		WHERE `+where+`
