@@ -118,6 +118,25 @@ func (r *SlipRepository) ApproveSlip(orderID, verifiedBy int64) error {
 	return tx.Commit()
 }
 
+// ensurePlatformWallet resolves the Tryly platform wallet from tconfig
+// (key = platform_user_id) and creates it lazily. Must be called inside a tx.
+func ensurePlatformWallet(tx *sqlx.Tx) (int64, error) {
+	var uid int64
+	if err := tx.Get(&uid, `SELECT (value)::bigint FROM tconfig WHERE key = 'platform_user_id'`); err != nil {
+		return 0, err
+	}
+	var walletID int64
+	err := tx.Get(&walletID, `SELECT wallet_id FROM wallets WHERE user_id = $1`, uid)
+	if err == sql.ErrNoRows {
+		err = tx.QueryRow(`
+			INSERT INTO wallets (user_id, good_fund, pending_fund)
+			VALUES ($1, 0, 0)
+			RETURNING wallet_id
+		`, uid).Scan(&walletID)
+	}
+	return walletID, err
+}
+
 // ApproveSlipEscrow — escrow mode (config_payment != 1): superadmin approves the slip.
 // The BU transaction STAYS 'PT' (funds held by Tryly) and a factory receivable
 // (SC / PT) is created on the factory's wallet + pending_fund. Both settle to 'ST'
@@ -143,9 +162,17 @@ func (r *SlipRepository) ApproveSlipEscrow(orderID, verifiedBy int64) error {
 		return err
 	}
 
-	// Factory receivable: ensure factory wallet, insert SC/PT tx, hold in pending_fund
+	// Factory receivable = ยอดหลังหักค่าคอมมิชชัน platform (factory_net_receivable
+	// จาก quotation ที่ยอมรับแล้ว) — โรงงานได้รับ net ไม่ใช่ยอดเต็มที่ลูกค้าจ่าย.
+	// Tryly ถือส่วนต่าง (commission) ไว้. fallback เป็น buAmount ถ้าไม่มี quotation.
 	var factoryID int64
-	if err := tx.Get(&factoryID, `SELECT factory_id FROM orders WHERE order_id = $1`, orderID); err != nil {
+	var netReceivable float64
+	if err := tx.QueryRow(`
+		SELECT o.factory_id, COALESCE(NULLIF(q.factory_net_receivable, 0), $2)
+		FROM orders o
+		LEFT JOIN quotations q ON q.quote_id = o.quote_id
+		WHERE o.order_id = $1
+	`, orderID, buAmount).Scan(&factoryID, &netReceivable); err != nil {
 		return err
 	}
 	// Ensure factory wallet — wallets.user_id has only a non-unique index,
@@ -165,12 +192,42 @@ func (r *SlipRepository) ApproveSlipEscrow(orderID, verifiedBy int64) error {
 	if _, err := tx.Exec(`
 		INSERT INTO transactions (wallet_id, order_id, type, status, amount)
 		VALUES ($1, $2, 'SC', 'PT', $3)
-	`, factoryWalletID, orderID, buAmount); err != nil {
+	`, factoryWalletID, orderID, netReceivable); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(`
 		UPDATE wallets SET pending_fund = pending_fund + $2 WHERE wallet_id = $1
-	`, factoryWalletID, buAmount); err != nil {
+	`, factoryWalletID, netReceivable); err != nil {
+		return err
+	}
+
+	// Platform (SA) wallet legs — เงินลูกค้าเข้า escrow ของ Tryly ก่อน:
+	//   EI (escrow-in) = grand_total ที่ลูกค้าจ่าย → SA.pending (Tryly ถือไว้)
+	//   CM (commission) = ส่วนต่าง (grand - net) → realized เข้า SA.good ตอน settle
+	// ทำให้ ledger conserved: SA(commission) + FT(net) = grand_total
+	commission := buAmount - netReceivable
+	if commission < 0 {
+		commission = 0
+	}
+	platformWalletID, err := ensurePlatformWallet(tx)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO transactions (wallet_id, order_id, type, status, amount)
+		VALUES ($1, $2, 'EI', 'PT', $3)
+	`, platformWalletID, orderID, buAmount); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO transactions (wallet_id, order_id, type, status, amount)
+		VALUES ($1, $2, 'CM', 'PT', $3)
+	`, platformWalletID, orderID, commission); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
+		UPDATE wallets SET pending_fund = pending_fund + $2 WHERE wallet_id = $1
+	`, platformWalletID, buAmount); err != nil {
 		return err
 	}
 

@@ -169,12 +169,16 @@ func (r *TransactionRepository) SettleFactoryReceivables(tx *sqlx.Tx, orderID in
 	return err
 }
 
-// SettleEscrowFunds — เรียกตอน order → CP (ลูกค้ากดรับ หรือ auto-close cron):
-// ย้ายยอด SC/PT ของ order จาก pending_fund → good_fund ของ wallet โรงงาน
-// แล้ว flip ทั้ง SC และ BU tx ที่ค้าง PT → ST.
-// WHERE status='PT' ทำให้ idempotent — เรียกซ้ำ หรือ order จาก direct-pay flow
-// (tx เป็น ST ตั้งแต่ approve) เป็น no-op. ต้องเรียกใน DB tx เดียวกับการ mark CP.
+// SettleEscrowFunds — เรียกตอน order → CP (ลูกค้ากดรับ หรือ auto-close cron).
+// กระจายเงิน escrow ตาม model CT → SA → FT:
+//   SC (factory net)     : FT.pending → FT.good        (โรงงานถอนได้)
+//   EI (escrow-in)       : SA.pending -= grand_total   (ปล่อยเงินที่ถือไว้)
+//   CM (commission)      : SA.good += commission       (รายได้ Tryly realized)
+// แล้ว flip SC/EI/CM/BU ที่ค้าง PT → ST.
+// WHERE status='PT' ทำให้ idempotent (เรียกซ้ำ / order direct-pay = no-op).
+// ต้องเรียกใน DB tx เดียวกับการ mark order = CP.
 func (r *TransactionRepository) SettleEscrowFunds(tx *sqlx.Tx, orderID int64) error {
+	// FT: factory net receivable — pending → good
 	if _, err := tx.Exec(`
 		UPDATE wallets w
 		SET good_fund    = w.good_fund + t.amount,
@@ -185,10 +189,30 @@ func (r *TransactionRepository) SettleEscrowFunds(tx *sqlx.Tx, orderID int64) er
 	`, orderID); err != nil {
 		return err
 	}
+	// SA: release escrow hold (EI) — ลด pending ตามยอดที่ถือไว้
+	if _, err := tx.Exec(`
+		UPDATE wallets w
+		SET pending_fund = GREATEST(w.pending_fund - t.amount, 0)
+		FROM transactions t
+		WHERE t.order_id = $1 AND t.type = 'EI' AND t.status = 'PT'
+		  AND w.wallet_id = t.wallet_id
+	`, orderID); err != nil {
+		return err
+	}
+	// SA: realize commission (CM) — เข้า good_fund เป็นรายได้ Tryly
+	if _, err := tx.Exec(`
+		UPDATE wallets w
+		SET good_fund = w.good_fund + t.amount
+		FROM transactions t
+		WHERE t.order_id = $1 AND t.type = 'CM' AND t.status = 'PT'
+		  AND w.wallet_id = t.wallet_id
+	`, orderID); err != nil {
+		return err
+	}
 	_, err := tx.Exec(`
 		UPDATE transactions
 		SET status = 'ST', updated_at = NOW()
-		WHERE order_id = $1 AND type IN ('SC', 'BU') AND status = 'PT'
+		WHERE order_id = $1 AND type IN ('SC', 'EI', 'CM', 'BU') AND status = 'PT'
 	`, orderID)
 	return err
 }

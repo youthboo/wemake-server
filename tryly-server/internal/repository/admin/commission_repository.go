@@ -45,6 +45,49 @@ func NewCommissionInvoiceRepository(db *sqlx.DB) *CommissionInvoiceRepository {
 	return &CommissionInvoiceRepository{db: db}
 }
 
+// EscrowCommissionRow — ค่าคอมมิชชันที่ Tryly ได้รับต่อ 1 ออเดอร์ (escrow mode).
+// อ่านจาก quotation ที่ยอมรับแล้วของแต่ละ order
+type EscrowCommissionRow struct {
+	OrderID        int64   `db:"order_id"         json:"order_id"`
+	FactoryID      int64   `db:"factory_id"       json:"factory_id"`
+	FactoryName    string  `db:"factory_name"     json:"factory_name"`
+	CustomerName   string  `db:"customer_name"    json:"customer_name"`
+	Status         string  `db:"status"           json:"status"`
+	GrandTotal     float64 `db:"grand_total"      json:"grand_total"`
+	CommissionRate float64 `db:"commission_rate"  json:"commission_rate"`
+	CommissionAmt  float64 `db:"commission_amount" json:"commission_amount"`
+	VatAmount      float64 `db:"vat_amount"       json:"vat_amount"`
+	FactoryNet     float64 `db:"factory_net"      json:"factory_net"`
+	CreatedAt      string  `db:"created_at"       json:"created_at"`
+}
+
+// ListEscrowCommissions returns per-order commission Tryly earns in the escrow flow.
+// Only orders whose payment slip was approved (slip_status = 'AP') count as realized.
+func (r *CommissionInvoiceRepository) ListEscrowCommissions() ([]EscrowCommissionRow, error) {
+	rows := []EscrowCommissionRow{}
+	err := r.db.Select(&rows, `
+		SELECT o.order_id,
+		       o.factory_id,
+		       COALESCE(fp.factory_name, 'Factory #' || o.factory_id::text) AS factory_name,
+		       COALESCE(NULLIF(TRIM(CONCAT(cu.first_name, ' ', cu.last_name)), ''),
+		                'ลูกค้า #' || o.customer_id::text)                    AS customer_name,
+		       TRIM(o.status)                            AS status,
+		       COALESCE(q.grand_total, o.total_amount)   AS grand_total,
+		       COALESCE(q.platform_commission_rate, 0)   AS commission_rate,
+		       COALESCE(q.platform_commission_amount, 0) AS commission_amount,
+		       COALESCE(q.vat_amount, 0)                 AS vat_amount,
+		       COALESCE(q.factory_net_receivable, 0)     AS factory_net,
+		       o.created_at::text                        AS created_at
+		FROM orders o
+		LEFT JOIN quotations q       ON q.quote_id  = o.quote_id
+		LEFT JOIN factory_profiles fp ON fp.user_id  = o.factory_id
+		LEFT JOIN customers cu        ON cu.user_id  = o.customer_id
+		WHERE TRIM(COALESCE(o.slip_status, '')) = 'AP'
+		ORDER BY o.created_at DESC, o.order_id DESC
+	`)
+	return rows, err
+}
+
 // GenerateForMonth creates invoices for all factories that have approved orders in the given month.
 // Factories that already have an invoice for the period are skipped (incremental).
 func (r *CommissionInvoiceRepository) GenerateForMonth(month, year int) (int, error) {

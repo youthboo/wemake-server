@@ -189,6 +189,26 @@ func (h *AdminCommissionHandler) sendCommissionEmail(invoice *adminrepo.Commissi
 	}, "invoice", invoiceID)
 }
 
+// ListEscrowCommissions GET /api/admin/commission/orders
+// ค่าคอมมิชชันที่ Tryly ได้รับต่อออเดอร์ (escrow flow)
+func (h *AdminCommissionHandler) ListEscrowCommissions(c *fiber.Ctx) error {
+	rows, err := h.invoices.ListEscrowCommissions()
+	if err != nil {
+		return helper.JSONInternal(c, "failed to fetch escrow commissions")
+	}
+	var total, totalGross float64
+	for _, r := range rows {
+		total += r.CommissionAmt
+		totalGross += r.GrandTotal
+	}
+	return c.JSON(fiber.Map{
+		"orders":            rows,
+		"total_commission":  total,
+		"total_gross":       totalGross,
+		"count":             len(rows),
+	})
+}
+
 // GetSummary GET /api/admin/commission/summary
 func (h *AdminCommissionHandler) GetSummary(c *fiber.Ctx) error {
 	month, _ := strconv.Atoi(c.Query("month", "0"))
