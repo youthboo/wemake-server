@@ -49,6 +49,14 @@ func NullablePositiveInt64(v int64) interface{} {
 	return v
 }
 
+// NullableString returns nil for empty/whitespace strings so they persist as SQL NULL.
+func NullableString(v string) interface{} {
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	return v
+}
+
 func NormalizeStatus(v string) string {
 	return strings.ToUpper(strings.TrimSpace(v))
 }

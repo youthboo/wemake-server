@@ -31,14 +31,15 @@ func (r *MessageRepository) CreateTx(exec interface {
 	if item.MessageType == "" {
 		item.MessageType = "TX"
 	}
-	// messages table has no reference_type column — message_type is the sole
-	// discriminator. reference_id stores the linked entity's primary key.
+	// reference_type = "สิ่งที่ข้อความอ้างถึง" (RQ/OD/PD/PM/ID) — เก็บตรง ๆ
+	// แยกจาก message_type ("รูปแบบข้อความ"). reference_id = PK ของ entity นั้น
 	query := `
-		INSERT INTO messages (reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, is_read)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO messages (reference_type, reference_id, sender_id, receiver_id, content, attachment_url, created_at, conv_id, message_type, quote_data, is_read)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 	_, err := exec.Exec(
 		query,
+		domainutil.NullableString(item.ReferenceType),
 		domainutil.NullablePositiveInt64(item.ReferenceID),
 		item.SenderID,
 		item.ReceiverID,
@@ -97,19 +98,20 @@ func referenceTypeFromMessageType(mt string) string {
 
 func (r *MessageRepository) ListByReference(referenceType string, referenceID int64, userID int64) ([]domain.Message, error) {
 	var items []domain.Message
-	// Derive reference_type from message_type in SELECT so the caller gets a
-	// consistent field without relying on a messages.reference_type column.
+	// Prefer the stored reference_type; fall back to deriving from message_type
+	// for legacy rows (migration 028 backfilled what it could; TX-order rows stay NULL).
 	query := `
 		SELECT m.message_id,
-		       CASE m.message_type
-		         WHEN 'QT'             THEN 'RQ'
-		         WHEN 'rfq_card'       THEN 'RQ'
-		         WHEN 'quotation_card' THEN 'RQ'
-		         WHEN 'PD'             THEN 'PD'
-		         WHEN 'PM'             THEN 'PM'
-		         WHEN 'ID'             THEN 'ID'
-		         ELSE ''
-		       END                      AS reference_type,
+		       COALESCE(NULLIF(m.reference_type, ''),
+		         CASE m.message_type
+		           WHEN 'QT'             THEN 'RQ'
+		           WHEN 'rfq_card'       THEN 'RQ'
+		           WHEN 'quotation_card' THEN 'RQ'
+		           WHEN 'PD'             THEN 'PD'
+		           WHEN 'PM'             THEN 'PM'
+		           WHEN 'ID'             THEN 'ID'
+		           ELSE ''
+		         END)                     AS reference_type,
 		       COALESCE(m.reference_id, 0) AS reference_id,
 		       CASE WHEN m.message_type IN ('QT','rfq_card','quotation_card')
 		            THEN rq.title ELSE NULL END AS rfq_title,
@@ -120,27 +122,31 @@ func (r *MessageRepository) ListByReference(referenceType string, referenceID in
 		LEFT JOIN rfqs rq ON rq.rfq_id = m.reference_id
 		                  AND m.message_type IN ('QT','rfq_card','quotation_card')
 		WHERE m.reference_id = $1 AND (m.sender_id = $2 OR m.receiver_id = $2)
+		  -- filter by reference_type so order/rfq sharing an id don't collide;
+		  -- legacy rows (NULL/'') stay lenient to preserve existing behavior.
+		  AND (m.reference_type = $3 OR m.reference_type IS NULL OR m.reference_type = '')
 		ORDER BY m.created_at ASC
 	`
-	err := r.db.Select(&items, query, referenceID, userID)
+	err := r.db.Select(&items, query, referenceID, userID, referenceType)
 	return items, err
 }
 
 func (r *MessageRepository) ListByConvID(convID int64) ([]domain.Message, error) {
 	var items []domain.Message
-	// reference_type is derived from message_type — no reference_type column in DB.
-	// JOINs are driven by message_type to fetch related titles.
+	// Prefer stored reference_type; fall back to deriving from message_type for
+	// legacy rows. JOINs stay driven by message_type to fetch related titles.
 	query := `
 		SELECT m.message_id,
-		       CASE m.message_type
-		         WHEN 'QT'             THEN 'RQ'
-		         WHEN 'rfq_card'       THEN 'RQ'
-		         WHEN 'quotation_card' THEN 'RQ'
-		         WHEN 'PD'             THEN 'PD'
-		         WHEN 'PM'             THEN 'PM'
-		         WHEN 'ID'             THEN 'ID'
-		         ELSE ''
-		       END                      AS reference_type,
+		       COALESCE(NULLIF(m.reference_type, ''),
+		         CASE m.message_type
+		           WHEN 'QT'             THEN 'RQ'
+		           WHEN 'rfq_card'       THEN 'RQ'
+		           WHEN 'quotation_card' THEN 'RQ'
+		           WHEN 'PD'             THEN 'PD'
+		           WHEN 'PM'             THEN 'PM'
+		           WHEN 'ID'             THEN 'ID'
+		           ELSE ''
+		         END)                     AS reference_type,
 		       COALESCE(m.reference_id, 0) AS reference_id,
 		       rq.title                 AS rfq_title,
 		       CASE

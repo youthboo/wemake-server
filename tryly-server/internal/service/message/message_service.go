@@ -119,6 +119,7 @@ func (s *MessageService) buildQuoteDataFromDB(rfqID, factoryID int64, existing *
 func (s *MessageService) Create(item *domain.Message) error {
 	item.MessageID = "msg-" + uuid.NewString()
 	item.MessageType = normalizeMessageType(item.MessageType)
+	item.ReferenceType = resolveMessageReferenceType(item)
 	item.Content = strings.TrimSpace(item.Content)
 	item.AttachmentURL = strings.TrimSpace(item.AttachmentURL)
 	if item.QuoteData != nil {
@@ -176,6 +177,7 @@ func (s *MessageService) CreateTx(tx interface {
 }, item *domain.Message) error {
 	item.MessageID = "msg-" + uuid.NewString()
 	item.MessageType = normalizeMessageType(item.MessageType)
+	item.ReferenceType = resolveMessageReferenceType(item)
 	item.Content = strings.TrimSpace(item.Content)
 	item.AttachmentURL = strings.TrimSpace(item.AttachmentURL)
 	if item.QuoteData != nil {
@@ -223,6 +225,17 @@ func normalizeMessageType(t string) string {
 	}
 }
 
+// resolveMessageReferenceType picks the reference_type to persist:
+// prefer the explicit value from the client (normalized); fall back to deriving
+// from message_type for older callers that don't send reference_type.
+func resolveMessageReferenceType(item *domain.Message) string {
+	rt := normalizeMessageRefType(item.ReferenceType)
+	if rt == "" {
+		rt = refTypeFromMessageType(item.MessageType)
+	}
+	return rt
+}
+
 // refTypeFromMessageType derives the logical reference category from message_type
 // so we can validate reference_id without a messages.reference_type DB column.
 func refTypeFromMessageType(mt string) string {
@@ -243,15 +256,21 @@ func (s *MessageService) validateCreate(item *domain.Message) error {
 		return ErrSenderReceiverSame
 	}
 
-	// Validate reference_id based on message_type (not a reference_type column).
-	refType := refTypeFromMessageType(item.MessageType)
+	// Validate reference_id against the resolved reference_type (item.ReferenceType
+	// was set from the explicit value or derived from message_type by the caller).
+	refType := item.ReferenceType
+	if refType != "" {
+		if _, ok := allowedMessageReferenceTypes[refType]; !ok {
+			return ErrInvalidReferenceType
+		}
+	}
 	if refType != "" && item.ReferenceID > 0 {
 		exists, err := s.repo.ReferenceExists(refType, item.ReferenceID)
 		if err != nil {
 			return err
 		}
 		if !exists {
-			return fmt.Errorf("%w for message_type=%s", ErrReferenceNotFound, item.MessageType)
+			return fmt.Errorf("%w for reference_type=%s", ErrReferenceNotFound, refType)
 		}
 	}
 
