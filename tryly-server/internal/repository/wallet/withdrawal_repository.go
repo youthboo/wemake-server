@@ -120,11 +120,11 @@ func (r *WithdrawalRepository) UpdateStatus(requestID int64, status string, note
 
 	res, err := tx.Exec(`
 		UPDATE withdrawal_requests
-		SET status = $1,
+		SET status = $1::char(2),
 		    note = COALESCE($2, note),
 		    slip_url = COALESCE($3, slip_url),
 		    processed_by = COALESCE($4, processed_by),
-		    processed_at = CASE WHEN $1 IN ('AP','RJ','CP') THEN NOW() ELSE processed_at END,
+		    processed_at = CASE WHEN $1::text IN ('AP','RJ','CP') THEN NOW() ELSE processed_at END,
 		    updated_at = NOW()
 		WHERE request_id = $5
 	`, status, note, slipURL, processedBy, requestID)

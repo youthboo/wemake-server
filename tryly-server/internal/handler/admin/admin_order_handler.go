@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"log"
 	"strconv"
 	"time"
 
@@ -140,6 +141,7 @@ func (h *AdminOrderHandler) PatchWithdrawal(c *fiber.Ctx) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return helper.JSONError(c, fiber.StatusNotFound, "withdrawal request not found")
 		}
+		log.Printf("[withdrawal] PatchWithdrawal request_id=%d status=%s failed: %v", requestID, status, err)
 		return helper.JSONInternal(c, "failed to update withdrawal")
 	}
 	payload, _ := json.Marshal(map[string]interface{}{"status": status, "comments": req.Comments})
