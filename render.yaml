@@ -56,3 +56,11 @@ services:
       # Set in Render Dashboard (Neon / external Postgres). Do not commit credentials to git.
       - key: DATABASE_URL
         sync: false
+      # SlipOK payment-slip verification (https://slipok.com) — branch #71317.
+      # Set actual values in Render Dashboard; never commit the key to git.
+      - key: SLIPOK_BRANCH_ID
+        sync: false
+      - key: SLIPOK_API_KEY
+        sync: false
+      - key: SLIPOK_AUTO_APPROVE_CAP
+        value: "50000"

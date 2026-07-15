@@ -108,6 +108,13 @@ func (s *QuotationService) Create(item *domain.Quotation) error {
 			}
 		}
 	}
+	// Price by the factory's counter-proposed quantity when it provides one;
+	// otherwise fall back to the customer's RFQ quantity. (factory_qty is a
+	// valid counter-offer and must drive the totals, not just be stored.)
+	effectiveQty := rfqQty
+	if item.FactoryQty != nil && *item.FactoryQty > 0 {
+		effectiveQty = float64(*item.FactoryQty)
+	}
 	if item.ShippingMethodID <= 0 {
 		item.ShippingMethodID = 2 // default: จัดส่งเดลิเวอรี่
 	}
@@ -127,7 +134,7 @@ func (s *QuotationService) Create(item *domain.Quotation) error {
 		breakdown, err := s.commission.Calculate(walletservice.CommissionInput{
 			Items: []domain.QuotationItem{{
 				Description: "สินค้า",
-				Qty:         rfqQty,
+				Qty:         effectiveQty,
 				UnitPrice:   helper.DecimalToFloat(item.PricePerPiece),
 				DiscountPct: 0,
 			}},
@@ -335,11 +342,16 @@ func (s *QuotationService) PatchBody(
 			rfqQty = float64(rfq.Quantity)
 		}
 	}
+	// Re-price by the factory's counter-proposed qty when set (see Create above).
+	effectiveQty := rfqQty
+	if q2.FactoryQty != nil && *q2.FactoryQty > 0 {
+		effectiveQty = float64(*q2.FactoryQty)
+	}
 	if s.commission != nil {
 		breakdown, calcErr := s.commission.Calculate(walletservice.CommissionInput{
 			Items: []domain.QuotationItem{{
 				Description: "สินค้า",
-				Qty:         rfqQty,
+				Qty:         effectiveQty,
 				UnitPrice:   helper.DecimalToFloat(q2.PricePerPiece),
 				DiscountPct: 0,
 			}},

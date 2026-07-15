@@ -2,9 +2,17 @@ package order
 
 import (
 	"database/sql"
+	"encoding/json"
+	"errors"
+	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 )
+
+// ErrDuplicateSlip means the bank reference has already been used by another
+// verified slip (replay protection via the partial unique index).
+var ErrDuplicateSlip = errors.New("slip bank reference already used")
 
 type SlipInfo struct {
 	OrderID    int64   `db:"order_id"    json:"order_id"`
@@ -148,9 +156,87 @@ func (r *SlipRepository) ApproveSlipEscrow(orderID, verifiedBy int64) error {
 	}
 	defer tx.Rollback()
 
+	if err := approveSlipEscrowTx(tx, orderID, verifiedBy); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// AutoApproveSlipEscrow is the SlipOK auto-verify path: it stamps the SlipOK
+// verification metadata (bank_ref + verify_status='verified' + raw response)
+// onto the BU transaction — which trips the partial unique index on bank_ref if
+// the reference was already used (replay) → ErrDuplicateSlip — then runs the
+// same escrow-approve ledger as the manual admin path.
+func (r *SlipRepository) AutoApproveSlipEscrow(orderID, verifiedBy int64, bankRef string, transferredAt time.Time, raw json.RawMessage) error {
+	tx, err := r.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if err := setSlipVerifyMeta(tx, orderID, "verified", bankRef, transferredAt, raw); err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			return ErrDuplicateSlip
+		}
+		return err
+	}
+	if err := approveSlipEscrowTx(tx, orderID, verifiedBy); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// RecordSlipVerifyResult stores SlipOK verification metadata WITHOUT approving —
+// used when auto-verify does not fully pass (invalid / retry / unavailable /
+// failed a condition). The slip stays 'ST' (pending) for manual admin review.
+// A surrogate bankRef (real ref + suffix) is safe to pass since verify_status
+// is not 'verified' and therefore not covered by the unique index.
+func (r *SlipRepository) RecordSlipVerifyResult(orderID int64, verifyStatus, bankRef string, transferredAt time.Time, raw json.RawMessage) error {
+	tx, err := r.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := setSlipVerifyMeta(tx, orderID, verifyStatus, bankRef, transferredAt, raw); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// setSlipVerifyMeta updates the latest pending BU transaction of an order with
+// SlipOK verification metadata. Must run inside a tx.
+func setSlipVerifyMeta(tx *sqlx.Tx, orderID int64, verifyStatus, bankRef string, transferredAt time.Time, raw json.RawMessage) error {
+	var refArg interface{}
+	if bankRef != "" {
+		refArg = bankRef
+	}
+	var atArg interface{}
+	if !transferredAt.IsZero() {
+		atArg = transferredAt
+	}
+	var rawArg interface{}
+	if len(raw) > 0 {
+		rawArg = []byte(raw)
+	}
+	_, err := tx.Exec(`
+		UPDATE transactions
+		SET verify_status = $2,
+		    bank_ref = COALESCE($3, bank_ref),
+		    transferred_at = COALESCE($4, transferred_at),
+		    verify_response = COALESCE($5, verify_response),
+		    updated_at = NOW()
+		WHERE tx_id = (
+		    SELECT MAX(tx_id) FROM transactions WHERE order_id = $1 AND type = 'BU' AND status = 'PT'
+		)
+	`, orderID, verifyStatus, refArg, atArg, rawArg)
+	return err
+}
+
+func approveSlipEscrowTx(tx *sqlx.Tx, orderID, verifiedBy int64) error {
 	// Mark latest BU tx verified but keep status PT (held in escrow)
 	var buAmount float64
-	err = tx.QueryRow(`
+	err := tx.QueryRow(`
 		UPDATE transactions
 		SET verified_by = $2, verified_at = NOW(), updated_at = NOW()
 		WHERE tx_id = (
@@ -244,7 +330,7 @@ func (r *SlipRepository) ApproveSlipEscrow(orderID, verifiedBy int64) error {
 		return sql.ErrNoRows
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 // RejectSlip marks slip as rejected so customer can re-submit.
@@ -285,12 +371,13 @@ func (r *SlipRepository) RejectSlip(orderID int64, reason string) error {
 
 // GetOrderOwnership returns customer_id, factory_id, slip_status, order status.
 type OrderOwnership struct {
-	OrderID     int64   `db:"order_id"`
-	CustomerID  int64   `db:"customer_id"`
-	FactoryID   int64   `db:"factory_id"`
-	Status      string  `db:"status"`
-	SlipStatus  string  `db:"slip_status"`
-	TotalAmount float64 `db:"total_amount"`
+	OrderID     int64     `db:"order_id"`
+	CustomerID  int64     `db:"customer_id"`
+	FactoryID   int64     `db:"factory_id"`
+	Status      string    `db:"status"`
+	SlipStatus  string    `db:"slip_status"`
+	TotalAmount float64   `db:"total_amount"`
+	CreatedAt   time.Time `db:"created_at"`
 }
 
 func (r *SlipRepository) GetOrderOwnership(orderID int64) (*OrderOwnership, error) {
@@ -299,11 +386,20 @@ func (r *SlipRepository) GetOrderOwnership(orderID int64) (*OrderOwnership, erro
 		SELECT order_id, customer_id, factory_id,
 		       TRIM(status) AS status,
 		       COALESCE(TRIM(slip_status), 'PE') AS slip_status,
-		       COALESCE(total_amount, 0)::float8 AS total_amount
+		       COALESCE(total_amount, 0)::float8 AS total_amount,
+		       created_at
 		FROM orders WHERE order_id = $1
 	`, orderID)
 	if err != nil {
 		return nil, err
 	}
 	return &item, nil
+}
+
+// PlatformUserID returns the Tryly platform (SA) user id from tconfig — used as
+// the "verified_by" actor when SlipOK auto-approves a slip.
+func (r *SlipRepository) PlatformUserID() (int64, error) {
+	var uid int64
+	err := r.db.Get(&uid, `SELECT (value)::bigint FROM tconfig WHERE key = 'platform_user_id'`)
+	return uid, err
 }

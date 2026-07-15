@@ -4,7 +4,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
+	"math"
 	"strings"
+	"time"
 
 	"github.com/cloudinary/cloudinary-go/v2"
 	"github.com/gofiber/fiber/v2"
@@ -15,18 +18,21 @@ import (
 	orderrepo "github.com/yourusername/wemake/internal/repository/order"
 	tconfigrepo "github.com/yourusername/wemake/internal/repository/tconfig"
 	walletrepo "github.com/yourusername/wemake/internal/repository/wallet"
+	"github.com/yourusername/wemake/internal/slipok"
 )
 
 type SlipHandler struct {
-	slips   *orderrepo.SlipRepository
-	wallets *walletrepo.WalletRepository
-	tconfig *tconfigrepo.TConfigRepository
-	mail    *mailer.Mailer
-	cld     *cloudinary.Cloudinary
+	slips          *orderrepo.SlipRepository
+	wallets        *walletrepo.WalletRepository
+	tconfig        *tconfigrepo.TConfigRepository
+	mail           *mailer.Mailer
+	cld            *cloudinary.Cloudinary
+	slipok         *slipok.Client
+	autoApproveCap float64
 }
 
-func NewSlipHandler(slips *orderrepo.SlipRepository, wallets *walletrepo.WalletRepository, tconfig *tconfigrepo.TConfigRepository, mail *mailer.Mailer, cld *cloudinary.Cloudinary) *SlipHandler {
-	return &SlipHandler{slips: slips, wallets: wallets, tconfig: tconfig, mail: mail, cld: cld}
+func NewSlipHandler(slips *orderrepo.SlipRepository, wallets *walletrepo.WalletRepository, tconfig *tconfigrepo.TConfigRepository, mail *mailer.Mailer, cld *cloudinary.Cloudinary, slipokClient *slipok.Client, autoApproveCap float64) *SlipHandler {
+	return &SlipHandler{slips: slips, wallets: wallets, tconfig: tconfig, mail: mail, cld: cld, slipok: slipokClient, autoApproveCap: autoApproveCap}
 }
 
 // AttachSlip POST /api/orders/:order_id/slip — customer uploads payment slip
@@ -86,6 +92,14 @@ func (h *SlipHandler) AttachSlip(c *fiber.Ctx) error {
 			return helper.JSONError(c, fiber.StatusBadRequest, "ไม่สามารถแนบสลีปได้ในสถานะปัจจุบัน")
 		}
 		return helper.JSONInternal(c, "failed to attach slip")
+	}
+
+	// Escrow mode: try to auto-verify the slip via SlipOK immediately (sync).
+	// This is best-effort: on any failure the slip simply stays 'ST' (pending)
+	// for manual admin review — the customer can close the page and the factory
+	// can still proceed once the slip is approved (item 4: resilient callback).
+	if h.tconfig != nil && h.tconfig.IsEscrowMode() && h.slipok.Enabled() {
+		h.autoVerifySlip(orderID, own, result.URL)
 	}
 
 	info, _ := h.slips.GetSlipInfo(orderID)
@@ -236,4 +250,79 @@ func (h *SlipHandler) verifySlip(c *fiber.Ctx, asAdmin bool) error {
 
 	info, _ := h.slips.GetSlipInfo(orderID)
 	return c.JSON(info)
+}
+
+// autoVerifySlip runs SlipOK verification for a freshly-attached slip (escrow).
+// Best-effort: never fails the request — it only upgrades the slip to approved
+// when every condition passes, otherwise leaves it 'ST' for manual review.
+func (h *SlipHandler) autoVerifySlip(orderID int64, own *orderrepo.OrderOwnership, imageURL string) {
+	res := h.slipok.VerifyByURL(imageURL)
+	switch res.Status {
+	case slipok.StatusOK:
+		if reason := h.checkSlipConditions(own, res); reason == "" {
+			verifiedBy, err := h.slips.PlatformUserID()
+			if err != nil {
+				log.Printf("[slip] auto-verify order=%d: platform user lookup failed: %v", orderID, err)
+				_ = h.slips.RecordSlipVerifyResult(orderID, "pending", "", res.TransferredAt, res.Raw)
+				return
+			}
+			if err := h.slips.AutoApproveSlipEscrow(orderID, verifiedBy, res.TransRef, res.TransferredAt, res.Raw); err != nil {
+				if errors.Is(err, orderrepo.ErrDuplicateSlip) {
+					log.Printf("[slip] auto-verify order=%d: duplicate bank ref %q", orderID, res.TransRef)
+					_ = h.slips.RecordSlipVerifyResult(orderID, "failed", res.TransRef+"#dup", res.TransferredAt, res.Raw)
+					return
+				}
+				log.Printf("[slip] auto-verify order=%d: escrow approve failed: %v", orderID, err)
+			}
+			return
+		} else {
+			log.Printf("[slip] auto-verify order=%d: condition failed (%s) — pending manual review", orderID, reason)
+			_ = h.slips.RecordSlipVerifyResult(orderID, "failed", res.TransRef+"#chk", res.TransferredAt, res.Raw)
+		}
+	case slipok.StatusRetry:
+		log.Printf("[slip] auto-verify order=%d: bank delay/retry (%d min) — pending", orderID, res.DelayMinutes)
+		_ = h.slips.RecordSlipVerifyResult(orderID, "pending", "", res.TransferredAt, res.Raw)
+	case slipok.StatusUnavailable:
+		log.Printf("[slip] auto-verify order=%d: SlipOK unavailable (%s) — pending manual", orderID, res.Message)
+		_ = h.slips.RecordSlipVerifyResult(orderID, "pending", "", time.Time{}, res.Raw)
+	default: // StatusInvalid
+		log.Printf("[slip] auto-verify order=%d: invalid slip (code=%d) — pending manual", orderID, res.Code)
+		_ = h.slips.RecordSlipVerifyResult(orderID, "pending", "", res.TransferredAt, res.Raw)
+	}
+}
+
+// checkSlipConditions returns "" when the slip may be auto-approved, otherwise a
+// short reason. auto-approve requires ALL conditions to pass at once (spec §2).
+func (h *SlipHandler) checkSlipConditions(own *orderrepo.OrderOwnership, res *slipok.Result) string {
+	// 1. amount matches the order exactly
+	if math.Abs(res.Amount-own.TotalAmount) > 0.01 {
+		return "amount"
+	}
+	// 6. amount within the auto-approve cap (high value → force manual)
+	if h.autoApproveCap > 0 && res.Amount > h.autoApproveCap {
+		return "over_cap"
+	}
+	// 5. transfer time must be after the order was created and not in the future
+	if !res.TransferredAt.IsZero() {
+		if res.TransferredAt.Before(own.CreatedAt) {
+			return "too_early"
+		}
+		if res.TransferredAt.After(time.Now().Add(10 * time.Minute)) {
+			return "future"
+		}
+	}
+	// 4. receiver = Tryly's central account or PromptPay (masked → normalize compare)
+	acc := strings.TrimSpace(h.tconfig.GetValue("tryly_bank_account_no"))
+	pp := strings.TrimSpace(h.tconfig.GetValue("tryly_promptpay"))
+	matched := false
+	if res.ReceiverAccount != "" && acc != "" && slipok.AccountMatches(res.ReceiverAccount, acc) {
+		matched = true
+	}
+	if !matched && res.ReceiverProxy != "" && pp != "" && slipok.AccountMatches(res.ReceiverProxy, pp) {
+		matched = true
+	}
+	if !matched {
+		return "receiver"
+	}
+	return ""
 }

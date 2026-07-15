@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -23,6 +24,9 @@ type Config struct {
 	Environment         string
 	JWTSecret           string
 	CORSOrigins         string
+	SlipOKBranchID      string
+	SlipOKAPIKey        string
+	SlipOKAutoApproveCap float64
 }
 
 func LoadConfig() (*Config, error) {
@@ -43,6 +47,9 @@ func LoadConfig() (*Config, error) {
 		Environment:         getEnv("ENV", "development"),
 		JWTSecret:           getEnv("JWT_SECRET", "your-secret-key"),
 		CORSOrigins:         getEnv("CORS_ORIGINS", "*"),
+		SlipOKBranchID:      getEnv("SLIPOK_BRANCH_ID", ""),
+		SlipOKAPIKey:        getEnv("SLIPOK_API_KEY", ""),
+		SlipOKAutoApproveCap: getEnvFloat("SLIPOK_AUTO_APPROVE_CAP", 50000),
 	}
 
 	if err := cfg.validateForProduction(); err != nil {
@@ -80,6 +87,15 @@ func (c *Config) validateForProduction() error {
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
+	}
+	return defaultValue
+}
+
+func getEnvFloat(key string, defaultValue float64) float64 {
+	if value := os.Getenv(key); value != "" {
+		if f, err := strconv.ParseFloat(value, 64); err == nil {
+			return f
+		}
 	}
 	return defaultValue
 }

@@ -71,6 +71,7 @@ import (
 	showcaseservice "github.com/yourusername/wemake/internal/service/showcase"
 	userservice "github.com/yourusername/wemake/internal/service/user"
 	walletservice "github.com/yourusername/wemake/internal/service/wallet"
+	"github.com/yourusername/wemake/internal/slipok"
 	"github.com/yourusername/wemake/internal/sse"
 )
 
@@ -269,7 +270,7 @@ func newRouteHandlers(db *sqlx.DB, cfg *config.Config) *routeHandlers {
 		meRFQOrders:       mehandler.NewMeRFQOrdersHandler(meRFQOrdersService),
 		factoryRFQBoard:   rfqhandler.NewFactoryRFQBoardHandler(rfqService, quotationService, authService, platformConfigRepo),
 		bankAccount:       factoryhandler.NewBankAccountHandler(bankAccountRepo),
-		slip:              paymenthandler.NewSlipHandler(slipRepo, walletRepo, tconfigRepo, mailSvc, cld),
+		slip:              paymenthandler.NewSlipHandler(slipRepo, walletRepo, tconfigRepo, mailSvc, cld, slipok.NewClient(cfg.SlipOKBranchID, cfg.SlipOKAPIKey), cfg.SlipOKAutoApproveCap),
 		adminCommission:   adminhandler.NewAdminCommissionHandler(commissionInvoiceRepo, mailSvc),
 		factoryInvoice:    factoryhandler.NewInvoiceHandler(commissionInvoiceRepo, mailSvc, cld),
 		mailRelay:         handler.NewMailRelayHandler(mailSvc),
