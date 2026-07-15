@@ -259,7 +259,11 @@ func (s *OrderService) BulkCheckout(input BulkCheckoutInput) (*BulkCheckoutResul
 			if q.FactoryID == input.UserID {
 				return ErrSelfTransaction
 			}
-			if q.Status != domain.QuotationStatusPrepared {
+			// Allow Prepared (never ordered) OR Accepted (its previous order was
+			// cancelled). An Accepted quote that still has an ACTIVE order is
+			// blocked below by OrderExistsForQuoteTx — so re-ordering only works
+			// once the earlier order is cancelled. Other states stay rejected.
+			if q.Status != domain.QuotationStatusPrepared && q.Status != domain.QuotationStatusAccepted {
 				return ErrQuotationInvalidState
 			}
 			if q.ValidUntil != nil && q.ValidUntil.Before(now.UTC()) {

@@ -55,6 +55,13 @@ func (s *OrderService) Cancel(orderID, userID int64, role string) error {
 	if err := s.repo.UpdateStatus(orderID, domain.OrderStatusCancelledByCustomer); err != nil {
 		return err
 	}
+	// Release the quotation so the customer can re-order it while it is still
+	// valid (checkout re-checks valid_until, so expired quotations stay blocked).
+	if order.QuotationID > 0 {
+		if err := s.repo.RevertQuotationToPrepared(order.QuotationID); err != nil {
+			return err
+		}
+	}
 	if err := s.repo.InsertActivity(orderID, &userID, "ORDER_CANCELLED", map[string]interface{}{
 		"status":          domain.OrderStatusCancelledByCustomer,
 		"previous_status": order.Status,

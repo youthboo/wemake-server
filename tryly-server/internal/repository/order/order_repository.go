@@ -194,11 +194,29 @@ func (r *OrderRepository) CreateTx(tx *sqlx.Tx, order *domain.Order) error {
 // OrderExistsForQuoteTx returns true if an order already exists for the quotation.
 func (r *OrderRepository) OrderExistsForQuoteTx(tx *sqlx.Tx, quoteID int64) (bool, error) {
 	var n int
-	err := tx.Get(&n, `SELECT COUNT(*) FROM orders WHERE quote_id = $1`, quoteID)
+	// Cancelled orders (CN/CC) do NOT block re-ordering — a customer may place
+	// the order again from the same quotation while it is still valid.
+	err := tx.Get(&n, `
+		SELECT COUNT(*) FROM orders
+		WHERE quote_id = $1 AND TRIM(status) NOT IN ('CN', 'CC')
+	`, quoteID)
 	if err != nil {
 		return false, err
 	}
 	return n > 0, nil
+}
+
+// RevertQuotationToPrepared releases an accepted quotation back to the
+// re-orderable Prepared state after its order was cancelled, so the customer
+// can order it again. The checkout flow still re-checks valid_until, so an
+// expired quotation stays blocked. No-op if the quotation is not 'AC'.
+func (r *OrderRepository) RevertQuotationToPrepared(quoteID int64) error {
+	_, err := r.db.Exec(`
+		UPDATE quotations
+		SET status = 'PD', is_locked = FALSE, log_timestamp = NOW()
+		WHERE quote_id = $1 AND TRIM(status) = 'AC'
+	`, quoteID)
+	return err
 }
 
 // GetOrderSourceByQuotationIDTx loads quotation + RFQ ownership inside a transaction.
