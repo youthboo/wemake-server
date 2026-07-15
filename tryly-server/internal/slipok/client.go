@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"regexp"
 	"strings"
@@ -101,6 +102,8 @@ type apiData struct {
 }
 
 // VerifyByURL sends the slip image URL to SlipOK.
+// NOTE: the URL must be PUBLICLY reachable by SlipOK's servers — a localhost /
+// private URL makes SlipOK fail with "รูปภาพไม่ถูกต้อง". Prefer VerifyByFile.
 // log is left false: SlipOK just reads the slip; WE do amount/receiver/dedup checks.
 func (c *Client) VerifyByURL(imageURL string) *Result {
 	if !c.Enabled() {
@@ -114,7 +117,38 @@ func (c *Client) VerifyByURL(imageURL string) *Result {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-authorization", c.apiKey)
+	return c.do(req)
+}
 
+// VerifyByFile uploads the slip image bytes to SlipOK as multipart/form-data.
+// Works regardless of where the app is hosted (no public URL needed).
+func (c *Client) VerifyByFile(filename string, data []byte) *Result {
+	if !c.Enabled() {
+		return &Result{Status: StatusUnavailable, Message: "SlipOK not configured"}
+	}
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	fw, err := w.CreateFormFile("files", filename)
+	if err != nil {
+		return &Result{Status: StatusUnavailable, Message: err.Error()}
+	}
+	if _, err := fw.Write(data); err != nil {
+		return &Result{Status: StatusUnavailable, Message: err.Error()}
+	}
+	if err := w.Close(); err != nil {
+		return &Result{Status: StatusUnavailable, Message: err.Error()}
+	}
+	url := fmt.Sprintf("https://api.slipok.com/api/line/apikey/%s", c.branchID)
+	req, err := http.NewRequest(http.MethodPost, url, &buf)
+	if err != nil {
+		return &Result{Status: StatusUnavailable, Message: err.Error()}
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("x-authorization", c.apiKey)
+	return c.do(req)
+}
+
+func (c *Client) do(req *http.Request) *Result {
 	resp, err := c.http.Do(req)
 	if err != nil {
 		// network/timeout → our side is unavailable, never blame the user
