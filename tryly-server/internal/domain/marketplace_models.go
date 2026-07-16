@@ -25,6 +25,7 @@ type Hub struct {
 	HubID int64  `db:"hub_id" json:"hub_id"`
 	Name  string `db:"name" json:"name"`
 	Scope string `db:"scope" json:"scope"`
+	Img   string `db:"img" json:"img"`
 }
 
 type CategoryForHub struct {
@@ -39,6 +40,7 @@ type HubWithCategories struct {
 	HubID      int64            `json:"hub_id"`
 	Name       string           `json:"name"`
 	Scope      string           `json:"scope"`
+	Img        string           `json:"img"`
 	Categories []CategoryForHub `json:"categories"`
 }
 

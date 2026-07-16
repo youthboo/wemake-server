@@ -42,3 +42,31 @@ func (h *AdminCatalogHandler) PatchCategoryImg(c *fiber.Ctx) error {
 	}
 	return c.JSON(fiber.Map{"ok": true, "category_id": id, "img": body.Img})
 }
+
+// PatchHubImg PATCH /api/admin/hubs/:id/img
+// Body: {"img": "<url>"}
+func (h *AdminCatalogHandler) PatchHubImg(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil || id <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid hub id"})
+	}
+
+	var body struct {
+		Img string `json:"img"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+	}
+	body.Img = strings.TrimSpace(body.Img)
+
+	res, err := h.db.Exec(`UPDATE lbi_hub SET img = $1 WHERE hub_id = $2`, body.Img, id)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update hub image"})
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "hub not found"})
+	}
+	return c.JSON(fiber.Map{"ok": true, "hub_id": id, "img": body.Img})
+}
+

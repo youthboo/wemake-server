@@ -125,7 +125,7 @@ func (r *CatalogRepository) GetHubs(scope string) ([]domain.HubWithCategories, e
 	scope = domainutil.NormalizeStatus(scope)
 
 	var hubs []domain.Hub
-	hubQuery := "SELECT hub_id, name, scope FROM lbi_hub"
+	hubQuery := "SELECT hub_id, name, scope, COALESCE(img, '') AS img FROM lbi_hub"
 	hubArgs := []interface{}{}
 	if scope != "" && scope != domain.CatalogScopeAll {
 		hubQuery += " WHERE scope = $1"
@@ -221,6 +221,7 @@ func (r *CatalogRepository) GetHubs(scope string) ([]domain.HubWithCategories, e
 			HubID:      h.HubID,
 			Name:       h.Name,
 			Scope:      h.Scope,
+			Img:        h.Img,
 			Categories: cats,
 		})
 	}
