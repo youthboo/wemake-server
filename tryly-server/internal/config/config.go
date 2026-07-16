@@ -104,17 +104,22 @@ func (c *Config) GetDSN() string {
 	// Always pin the session timezone to Bangkok so that TIMESTAMP WITHOUT
 	// TIME ZONE columns and PostgreSQL NOW() / CURRENT_TIMESTAMP produce
 	// Bangkok wall-clock values on every server environment (local or cloud).
+	//
+	// IMPORTANT: lib/pq SILENTLY IGNORES a `TimeZone=` / `timezone=` DSN param —
+	// the only reliable way to set the session GUC is via libpq `options`
+	// (`-c timezone=...`). Using the wrong form leaves the session at UTC and
+	// stores UTC wall-clock, which the FE then renders 7h off.
 	const bangkokTZ = "Asia/Bangkok"
 	if c.DatabaseURL != "" {
-		// Append as query parameter for URL-style DSNs (e.g. Render DATABASE_URL).
+		// URL-style DSN (e.g. Render DATABASE_URL): pass options url-encoded.
 		sep := "?"
 		if strings.Contains(c.DatabaseURL, "?") {
 			sep = "&"
 		}
-		return c.DatabaseURL + sep + "TimeZone=" + bangkokTZ
+		return c.DatabaseURL + sep + "options=-c%20timezone%3DAsia%2FBangkok"
 	}
 	return fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s TimeZone=%s",
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s options='-c timezone=%s'",
 		c.DBHost,
 		c.DBPort,
 		c.DBUser,
