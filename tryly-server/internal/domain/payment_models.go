@@ -83,15 +83,31 @@ type WithdrawalRequest struct {
 
 // Dispute represents an order dispute.
 type Dispute struct {
-	DisputeID  int64      `db:"dispute_id" json:"dispute_id"`
-	OrderID    int64      `db:"order_id" json:"order_id"`
-	OpenedBy   int64      `db:"opened_by" json:"opened_by"`
-	Reason     string     `db:"reason" json:"reason"`
-	Status     string     `db:"status" json:"status"` // OP, RS, CL
-	Resolution *string    `db:"resolution" json:"resolution,omitempty"`
-	ResolvedAt *time.Time `db:"resolved_at" json:"resolved_at,omitempty"`
-	CreatedAt  time.Time  `db:"created_at" json:"created_at"`
-	UpdatedAt  time.Time  `db:"updated_at" json:"updated_at"`
+	DisputeID     int64       `db:"dispute_id" json:"dispute_id"`
+	OrderID       int64       `db:"order_id" json:"order_id"`
+	OpenedBy      int64       `db:"opened_by" json:"opened_by"`
+	Category      string      `db:"category" json:"category"` // NR=ไม่ได้รับสินค้า, ND=ไม่ตรงปก, OT=อื่นๆ
+	Reason        string      `db:"reason" json:"reason"`
+	EvidenceURLs  StringArray `db:"evidence_urls" json:"evidence_urls"`
+	RefundAccount     *string `db:"refund_account" json:"refund_account,omitempty"`
+	RefundAccountName *string `db:"refund_account_name" json:"refund_account_name,omitempty"`
+	ContactEmail      *string `db:"contact_email" json:"contact_email,omitempty"`
+	ContactPhone      *string `db:"contact_phone" json:"contact_phone,omitempty"`
+	ReturnTrackingNo   *string     `db:"return_tracking_no" json:"return_tracking_no,omitempty"`
+	ReturnCourier      *string     `db:"return_courier" json:"return_courier,omitempty"`
+	ReturnNote         *string     `db:"return_note" json:"return_note,omitempty"`
+	ReturnEvidenceURLs StringArray `db:"return_evidence_urls" json:"return_evidence_urls"`
+	ReturnRequestedAt  *time.Time  `db:"return_requested_at" json:"return_requested_at,omitempty"`
+	ReturnSubmittedAt  *time.Time  `db:"return_submitted_at" json:"return_submitted_at,omitempty"`
+	PriorOrderStatus *string `db:"prior_order_status" json:"prior_order_status,omitempty"`
+	Status        string      `db:"status" json:"status"` // OP, RF (refunded), RJ (rejected)
+	Resolution    *string     `db:"resolution" json:"resolution,omitempty"`
+	RefundAmount  *decimal.Decimal `db:"refund_amount" json:"refund_amount,omitempty"`
+	RefundSlipURL *string     `db:"refund_slip_url" json:"refund_slip_url,omitempty"`
+	ResolvedBy    *int64      `db:"resolved_by" json:"resolved_by,omitempty"`
+	ResolvedAt    *time.Time  `db:"resolved_at" json:"resolved_at,omitempty"`
+	CreatedAt     time.Time   `db:"created_at" json:"created_at"`
+	UpdatedAt     time.Time   `db:"updated_at" json:"updated_at"`
 }
 
 // QuotationTemplate represents a factory's reusable quotation template.

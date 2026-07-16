@@ -58,6 +58,9 @@ func (h *SlipHandler) AttachSlip(c *fiber.Ctx) error {
 	if own.CustomerID != userID {
 		return helper.JSONError(c, fiber.StatusForbidden, "forbidden")
 	}
+	if own.Status == "CC" || own.Status == "CN" || own.Status == "RF" {
+		return helper.JSONError(c, fiber.StatusBadRequest, "ออเดอร์นี้ถูกยกเลิก/คืนเงินแล้ว ไม่สามารถแนบสลิปได้")
+	}
 	if own.SlipStatus != "PE" && own.SlipStatus != "RJ" {
 		return helper.JSONError(c, fiber.StatusBadRequest, "ไม่สามารถแนบสลีปได้ในสถานะปัจจุบัน")
 	}

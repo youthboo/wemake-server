@@ -83,6 +83,9 @@ func (r *CommissionInvoiceRepository) ListEscrowCommissions() ([]EscrowCommissio
 		LEFT JOIN factory_profiles fp ON fp.user_id  = o.factory_id
 		LEFT JOIN customers cu        ON cu.user_id  = o.customer_id
 		WHERE TRIM(COALESCE(o.slip_status, '')) = 'AP'
+		  -- exclude cancelled/refunded orders: their commission was voided (CM → RJ)
+		  -- even though slip_status may still read 'AP' from before the resolution
+		  AND TRIM(o.status) NOT IN ('CC', 'CN', 'RF')
 		ORDER BY o.created_at DESC, o.order_id DESC
 	`)
 	return rows, err

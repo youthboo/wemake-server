@@ -53,15 +53,35 @@ type MarkShippedRequest struct {
 }
 
 type CreateDisputeRequest struct {
-	Category    string   `json:"category" validate:"notblank"`
-	Title       string   `json:"title" validate:"notblank"`
+	Category    string   `json:"category" validate:"notblank"` // NR=ไม่ได้รับสินค้า, ND=ไม่ตรงปก, OT=อื่นๆ
 	Description string   `json:"description" validate:"notblank"`
-	ImageURLs   []string `json:"image_urls"`
+	ImageURLs   []string `json:"image_urls"` // รูปหลักฐาน (อัปโหลดผ่าน /media ก่อน)
+	// บัญชีปลายทางสำหรับโอนเงินคืน + ช่องทางติดต่อกลับ
+	RefundAccount     string `json:"refund_account" validate:"notblank"`      // เลขบัญชี / พร้อมเพย์
+	RefundAccountName string `json:"refund_account_name" validate:"notblank"` // ชื่อบัญชี
+	ContactEmail      string `json:"contact_email"`
+	ContactPhone      string `json:"contact_phone" validate:"notblank"`
 }
 
 type PatchDisputeStatusRequest struct {
 	Status   string  `json:"status" validate:"notblank"`
 	Comments *string `json:"comments"`
+}
+
+// SubmitReturnRequest — ลูกค้าแนบหลักฐานการส่งสินค้าคืน (RT → RC)
+type SubmitReturnRequest struct {
+	TrackingNo string   `json:"tracking_no"`
+	Courier    string   `json:"courier"`
+	Note       string   `json:"note"`
+	ImageURLs  []string `json:"image_urls"` // บิล/หลักฐานการจัดส่ง
+}
+
+// ResolveDisputeRequest — superadmin ตัดสิน ticket
+type ResolveDisputeRequest struct {
+	Action        string  `json:"action" validate:"notblank"` // "request_return" | "refund" | "reject"
+	Resolution    string  `json:"resolution"`                 // หมายเหตุ
+	RefundAmount  float64 `json:"refund_amount"`              // 0 = เต็มจำนวน; >0 = คืนบางส่วน
+	RefundSlipURL string  `json:"refund_slip_url"`            // required เมื่อ refund
 }
 
 type VerifyPaymentRequest struct {

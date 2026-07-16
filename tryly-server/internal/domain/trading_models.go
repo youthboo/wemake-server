@@ -271,6 +271,7 @@ type OrderDetailResponse struct {
 	TrackingNo        *string                    `json:"tracking_no,omitempty"`
 	Courier           *string                    `json:"courier,omitempty"`
 	ShippedAt         *time.Time                 `json:"shipped_at,omitempty"`
+	CompletedAt       *time.Time                 `json:"completed_at,omitempty"`
 	CreatedAt         time.Time                  `json:"created_at"`
 	UpdatedAt         time.Time                  `json:"updated_at"`
 	NextAction        *OrderNextAction           `json:"next_action"`

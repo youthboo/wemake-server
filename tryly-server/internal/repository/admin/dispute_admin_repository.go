@@ -39,11 +39,23 @@ func (r *AdminDisputeRepository) ListAdmin(status string, orderID *int64, page, 
 			d.order_id,
 			COALESCE(r.title, '') AS rfq_title,
 			COALESCE(fp.factory_name, 'Factory #' || o.factory_id::text) AS factory_name,
-			COALESCE(NULLIF(TRIM(CONCAT(c.first_name, ' ', c.last_name)), ''), 'ลูกค้า #' || o.user_id::text) AS customer_name,
+			COALESCE(NULLIF(TRIM(CONCAT(c.first_name, ' ', c.last_name)), ''), 'ลูกค้า #' || o.customer_id::text) AS customer_name,
 			d.opened_by,
+			d.category,
 			d.reason,
+			d.evidence_urls,
+			d.refund_account,
+			d.refund_account_name,
+			d.contact_email,
+			d.contact_phone,
+			d.return_tracking_no,
+			d.return_courier,
+			d.return_note,
+			d.return_evidence_urls,
+			COALESCE(o.total_amount, 0) AS order_amount,
 			d.status,
 			d.resolution,
+			d.refund_amount,
 			d.created_at,
 			d.resolved_at
 		FROM disputes d
@@ -51,9 +63,9 @@ func (r *AdminDisputeRepository) ListAdmin(status string, orderID *int64, page, 
 		INNER JOIN quotations q ON q.quote_id = o.quote_id
 		INNER JOIN rfqs r ON r.rfq_id = q.rfq_id
 		LEFT JOIN factory_profiles fp ON fp.user_id = o.factory_id
-		LEFT JOIN customers c ON c.user_id = o.user_id
+		LEFT JOIN customers c ON c.user_id = o.customer_id
 		WHERE `+where+`
-		ORDER BY created_at DESC, dispute_id DESC
+		ORDER BY d.created_at DESC, d.dispute_id DESC
 		LIMIT $`+fmt.Sprint(len(args)-1)+` OFFSET $`+fmt.Sprint(len(args)), args...); err != nil {
 		return nil, 0, err
 	}

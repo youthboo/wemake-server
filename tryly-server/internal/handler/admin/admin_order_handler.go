@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -159,33 +160,75 @@ func (h *AdminOrderHandler) ListDisputes(c *fiber.Ctx) error {
 	}
 	items, total, err := h.adminDispute.ListAdmin(query.String("status"), orderID, page, pageSize)
 	if err != nil {
+		log.Printf("[dispute] ListAdmin failed: %v", err)
 		return helper.JSONInternal(c, "failed to fetch disputes")
 	}
 	return helper.PaginatedResponse(c, items, page, pageSize, total)
 }
 
+// PatchDispute — superadmin resolves a refund ticket: "refund" (full refund +
+// attach transfer slip → reverse escrow, cancel order) or "reject" (close).
 func (h *AdminOrderHandler) PatchDispute(c *fiber.Ctx) error {
 	disputeID, err := helper.ParsePositiveInt64Param(c, "dispute_id")
 	if err != nil {
 		return helper.JSONError(c, fiber.StatusBadRequest, "invalid dispute_id")
 	}
-	var req dto.PatchDisputeStatusRequest
+	var req dto.ResolveDisputeRequest
 	if err := helper.RequireBody(c, &req); err != nil {
 		return err
 	}
-	status := domainutil.NormalizeStatus(req.Status)
-	v := domain.NewValidationCollector()
-	v.AddIf(!domainutil.StatusIn(status, "RS", "CL"), "status", "must be RS or CL")
-	if err := helper.ValidateRequest(c, v); err != nil {
-		return err
-	}
-	if err := h.dispute.UpdateStatus(disputeID, status, req.Comments); err != nil {
-		return helper.JSONInternal(c, "failed to update dispute")
-	}
 	actorID := helper.OptionalActorID(c)
-	payload, _ := json.Marshal(map[string]interface{}{"status": status, "comments": req.Comments})
+	action := strings.ToLower(strings.TrimSpace(req.Action))
+
+	switch action {
+	case "request_return":
+		if err := h.dispute.RequestReturn(disputeID, actorID, req.Resolution); err != nil {
+			if errors.Is(err, walletrepo.ErrReturnReasonRequired) {
+				return helper.JSONError(c, fiber.StatusBadRequest, "กรุณาระบุคำแนะนำ/ที่อยู่สำหรับให้ลูกค้าส่งสินค้าคืน (อย่างน้อย 10 ตัวอักษร)")
+			}
+			if errors.Is(err, walletrepo.ErrDisputeAlreadyResolved) {
+				return helper.JSONError(c, fiber.StatusBadRequest, "คำร้องนี้ถูกดำเนินการแล้ว")
+			}
+			if errors.Is(err, sql.ErrNoRows) {
+				return helper.JSONError(c, fiber.StatusNotFound, "ไม่พบคำร้อง")
+			}
+			log.Printf("[dispute] request_return id=%d failed: %v", disputeID, err)
+			return helper.JSONInternal(c, "failed to request return")
+		}
+	case "refund":
+		if strings.TrimSpace(req.RefundSlipURL) == "" {
+			return helper.JSONError(c, fiber.StatusBadRequest, "กรุณาแนบสลิปการโอนเงินคืน")
+		}
+		if _, err := h.dispute.Refund(disputeID, actorID, req.RefundAmount, req.Resolution, req.RefundSlipURL); err != nil {
+			if errors.Is(err, walletrepo.ErrDisputeAlreadyResolved) {
+				return helper.JSONError(c, fiber.StatusBadRequest, "คำร้องนี้ถูกดำเนินการแล้ว")
+			}
+			if errors.Is(err, walletrepo.ErrInvalidRefundAmount) {
+				return helper.JSONError(c, fiber.StatusBadRequest, "ยอดคืนไม่ถูกต้อง (ต้องมากกว่า 0 และไม่เกินยอดคำสั่งซื้อ)")
+			}
+			if errors.Is(err, sql.ErrNoRows) {
+				return helper.JSONError(c, fiber.StatusNotFound, "ไม่พบคำร้อง")
+			}
+			log.Printf("[dispute] refund id=%d failed: %v", disputeID, err)
+			return helper.JSONInternal(c, "failed to refund dispute")
+		}
+	case "reject":
+		if err := h.dispute.Reject(disputeID, actorID, req.Resolution); err != nil {
+			if errors.Is(err, walletrepo.ErrDisputeAlreadyResolved) {
+				return helper.JSONError(c, fiber.StatusBadRequest, "คำร้องนี้ถูกดำเนินการแล้ว")
+			}
+			if errors.Is(err, sql.ErrNoRows) {
+				return helper.JSONError(c, fiber.StatusNotFound, "ไม่พบคำร้อง")
+			}
+			return helper.JSONInternal(c, "failed to reject dispute")
+		}
+	default:
+		return helper.JSONError(c, fiber.StatusBadRequest, "action must be 'request_return', 'refund' or 'reject'")
+	}
+
+	payload, _ := json.Marshal(map[string]interface{}{"action": action, "resolution": req.Resolution})
 	ip := c.IP()
-	_ = h.audit.Insert(&domain.AdminAuditLog{ActorID: actorID, Action: "DISPUTE_STATUS_CHANGE", TargetType: "dispute", TargetID: strconv.FormatInt(disputeID, 10), Payload: payload, IPAddress: &ip})
+	_ = h.audit.Insert(&domain.AdminAuditLog{ActorID: actorID, Action: "DISPUTE_RESOLVE", TargetType: "dispute", TargetID: strconv.FormatInt(disputeID, 10), Payload: payload, IPAddress: &ip})
 	item, _ := h.dispute.GetByID(disputeID)
 	return c.JSON(item)
 }

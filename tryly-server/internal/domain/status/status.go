@@ -34,6 +34,7 @@ func IsValidOrder(value string) bool {
 		domain.OrderStatusDelivered,
 		domain.OrderStatusAccepted,
 		domain.OrderStatusComplete,
+		domain.OrderStatusRefunded,
 		domain.OrderStatusCancelled:
 		return true
 	default:
@@ -61,6 +62,8 @@ func OrderLabelTH(value string) string {
 		return "จัดส่งแล้ว"
 	case domain.OrderStatusComplete:
 		return "เสร็จสิ้น"
+	case domain.OrderStatusRefunded:
+		return "คืนเงินแล้ว"
 	case domain.OrderStatusCancelled:
 		return "ยกเลิก"
 	default:
@@ -251,6 +254,8 @@ func FrontendOrder(value string) string {
 		return "shipped"
 	case domain.OrderStatusComplete:
 		return "completed"
+	case domain.OrderStatusRefunded:
+		return "refunded"
 	default:
 		return strings.ToLower(strings.TrimSpace(value))
 	}

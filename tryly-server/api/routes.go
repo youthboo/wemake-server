@@ -91,9 +91,9 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	admin.Patch("/orders/:order_id/verify-slip", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.slip.VerifySlipAdmin)
 	admin.Get("/withdrawals", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminOrder.ListWithdrawals)
 	admin.Patch("/withdrawals/:request_id", middleware.RequireRole(h.authService, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminOrder.PatchWithdrawal)
-	// Phase 1: dispute ยังไม่เปิด — เปิดเมื่อมี migration สร้างตาราง disputes
-	// admin.Get("/disputes", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminOrder.ListDisputes)
-	// admin.Patch("/disputes/:dispute_id", middleware.RequireRole(h.authService, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminOrder.PatchDispute)
+	// Customer complaint / refund tickets — superadmin reviews & resolves.
+	admin.Get("/disputes", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminOrder.ListDisputes)
+	admin.Patch("/disputes/:dispute_id", middleware.RequireRole(h.authService, domain.RoleSuperAdmin), h.adminOrder.PatchDispute)
 	admin.Get("/commission-rules", middleware.RequireRole(h.authService, domain.RoleAccountManager, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminConfig.ListRules)
 	admin.Post("/commission-rules", middleware.RequireRole(h.authService, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminConfig.CreateRule)
 	admin.Delete("/commission-rules/:rule_id", middleware.RequireRole(h.authService, domain.RoleAdmin, domain.RoleSuperAdmin), h.adminConfig.DeleteRule)
@@ -272,9 +272,11 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	orders.Post("/:order_id/payments/:tx_id/verify", h.order.VerifyPayment)
 	orders.Patch("/:order_id/status", h.order.PatchOrderStatus)
 	orders.Patch("/:order_id/cancel", h.order.CancelOrder)
-	// Phase 1: dispute ยังไม่เปิด
-	// orders.Post("/:order_id/disputes", h.dispute.Create)
-	// orders.Get("/:order_id/disputes", h.dispute.GetByOrderID)
+	// Customer opens / views a complaint (refund ticket) on their own order,
+	// and (when asked) attaches return-shipping evidence.
+	orders.Post("/:order_id/disputes", h.dispute.Create)
+	orders.Get("/:order_id/disputes", h.dispute.GetByOrderID)
+	orders.Post("/:order_id/disputes/return", h.dispute.SubmitReturn)
 	orders.Get("/:order_id/payment-schedules", h.paymentSchedule.List)
 	orders.Post("/:order_id/payment-schedules", h.paymentSchedule.Create)
 	orders.Post("/:order_id/production-updates", h.production.CreateUpdate)
@@ -378,9 +380,7 @@ func SetupRoutes(db *sqlx.DB, cfg *config.Config) *fiber.App {
 	settlements.Get("/:settlement_id", h.settlement.GetByID)
 	settlements.Patch("/:settlement_id/status", h.settlement.PatchStatus)
 
-	// Phase 1: dispute ยังไม่เปิด
-	// disputes := api.Group("/disputes")
-	// disputes.Patch("/:dispute_id", h.dispute.PatchStatus)
+	// Dispute resolution is superadmin-only (via /admin/disputes/:id).
 
 	paymentSchedules := api.Group("/payment-schedules")
 	paymentSchedules.Patch("/:schedule_id", h.paymentSchedule.PatchStatus)

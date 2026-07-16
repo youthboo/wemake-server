@@ -180,7 +180,7 @@ func (r *SessionRepository) ListOrdersByUserID(userID int64) ([]SessionOrderRow,
 		JOIN quotations q ON q.quote_id = o.quote_id
 		JOIN rfqs rfq ON rfq.rfq_id = q.rfq_id
 		JOIN factory_profiles fp ON fp.user_id = o.factory_id
-		WHERE o.user_id = $1 AND o.status NOT IN ('CP', 'CN', 'CL')
+		WHERE o.customer_id = $1 AND o.status NOT IN ('CP', 'CN', 'CL')
 		ORDER BY o.created_at DESC
 		LIMIT $2
 	`, userID, sessionOrderLimit)

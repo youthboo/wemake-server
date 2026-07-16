@@ -143,6 +143,7 @@ func (s *OrderService) buildOrderDetailResponse(row *orderrepo.OrderDetailRow) (
 		TrackingNo:        row.TrackingNo,
 		Courier:           row.Courier,
 		ShippedAt:         timePtrInTH(row.ShippedAt),
+		CompletedAt:       timePtrInTH(row.CompletedAt),
 		CreatedAt:         row.CreatedAt.In(thailandLocation),
 		UpdatedAt:         row.UpdatedAt.In(thailandLocation),
 		NextAction:        buildNextAction(row, statusCode, depositDueDate, depositPaidAt, finalPaidAt, nowTH),

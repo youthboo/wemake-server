@@ -75,6 +75,7 @@ type OrderDetailRow struct {
 	TrackingNo         *string    `db:"tracking_no"`
 	Courier            *string    `db:"courier"`
 	ShippedAt          *time.Time `db:"shipped_at"`
+	CompletedAt        *time.Time `db:"completed_at"`
 	CreatedAt          time.Time  `db:"created_at"`
 	UpdatedAt          time.Time  `db:"updated_at"`
 	FactoryName        string     `db:"factory_name"`
@@ -623,6 +624,7 @@ func (r *OrderRepository) GetDetailByParticipant(orderID, userID int64, role str
 			o.tracking_no,
 			o.courier,
 			NULL::timestamp AS shipped_at,
+			o.completed_at,
 			o.created_at,
 			o.updated_at,
 			COALESCE(fp.factory_name, '') AS factory_name,

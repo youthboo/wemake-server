@@ -74,10 +74,15 @@ func (r *SlipRepository) AttachSlip(orderID, walletID int64, amount float64, sli
 		return err
 	}
 
-	// Update order slip_status + status
+	// Update order slip_status + status — guard against attaching a slip to an
+	// already-cancelled order (CC/CN). Cancel() only updates orders.status, not
+	// slip_status, so a rejected slip_status ('RJ') can survive a cancellation
+	// and would otherwise still satisfy this UPDATE's old slip_status-only guard,
+	// silently resurrecting a cancelled order back into the active payment flow.
 	res, err := tx.Exec(`
 		UPDATE orders SET slip_status = 'ST', status = 'WA', updated_at = NOW()
 		WHERE order_id = $1 AND TRIM(slip_status) IN ('PE', 'RJ')
+		  AND TRIM(status) NOT IN ('CC', 'CN', 'RF')
 	`, orderID)
 	if err != nil {
 		return err
@@ -110,10 +115,12 @@ func (r *SlipRepository) ApproveSlip(orderID, verifiedBy int64) error {
 		return err
 	}
 
-	// Update order: slip_status = AP, status = PD (Payment Done)
+	// Update order: slip_status = AP, status = PD (Payment Done) — guard against
+	// approving a slip on an already-cancelled order (see AttachSlip comment).
 	res, err := tx.Exec(`
 		UPDATE orders SET slip_status = 'AP', status = 'PD', updated_at = NOW()
 		WHERE order_id = $1 AND TRIM(slip_status) = 'ST'
+		  AND TRIM(status) NOT IN ('CC', 'CN', 'RF')
 	`, orderID)
 	if err != nil {
 		return err
@@ -317,10 +324,12 @@ func approveSlipEscrowTx(tx *sqlx.Tx, orderID, verifiedBy int64) error {
 		return err
 	}
 
-	// Order: slip approved, payment done — same as direct-pay flow
+	// Order: slip approved, payment done — same as direct-pay flow. Guard against
+	// approving a slip on an already-cancelled order (see AttachSlip comment).
 	res, err := tx.Exec(`
 		UPDATE orders SET slip_status = 'AP', status = 'PD', updated_at = NOW()
 		WHERE order_id = $1 AND TRIM(slip_status) = 'ST'
+		  AND TRIM(status) NOT IN ('CC', 'CN', 'RF')
 	`, orderID)
 	if err != nil {
 		return err
@@ -353,10 +362,12 @@ func (r *SlipRepository) RejectSlip(orderID int64, reason string) error {
 		return err
 	}
 
-	// Update order slip_status back to RJ, status back to WS
+	// Update order slip_status back to RJ, status back to WS — guard against an
+	// already-cancelled order (see AttachSlip comment).
 	res, err := tx.Exec(`
 		UPDATE orders SET slip_status = 'RJ', status = 'WS', updated_at = NOW()
 		WHERE order_id = $1 AND TRIM(slip_status) = 'ST'
+		  AND TRIM(status) NOT IN ('CC', 'CN', 'RF')
 	`, orderID)
 	if err != nil {
 		return err

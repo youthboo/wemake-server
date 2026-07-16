@@ -15,6 +15,20 @@ const (
 	OrderStatusComplete            = "CP"
 	OrderStatusCancelled           = "CN"
 	OrderStatusCancelledByCustomer = "CC"
+	OrderStatusDisputed            = "DP" // ลูกค้าเปิด ticket ร้องเรียน/ขอคืนเงิน
+	OrderStatusRefunded            = "RF" // คืนเงินเต็มจำนวนสำเร็จ (terminal) — แยกจากยกเลิกธรรมดา
+)
+
+const (
+	DisputeStatusOpen         = "OP" // รอ superadmin ตรวจสอบ
+	DisputeStatusReturnWait   = "RT" // อนุมัติแล้ว รอลูกค้าส่งสินค้าคืน
+	DisputeStatusReturnCheck  = "RC" // ลูกค้าส่งคืนแล้ว รอเจ้าหน้าที่ตรวจรับ
+	DisputeStatusRefunded     = "RF" // คืนเงินแล้ว (เต็ม/บางส่วน)
+	DisputeStatusRejected     = "RJ" // ปฏิเสธคำร้อง
+
+	DisputeCategoryNotReceived = "NR" // ไม่ได้รับสินค้า
+	DisputeCategoryNotAsDesc   = "ND" // สินค้าไม่ตรงปก
+	DisputeCategoryOther       = "OT" // อื่นๆ
 )
 
 const (
