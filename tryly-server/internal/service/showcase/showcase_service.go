@@ -523,6 +523,10 @@ func (s *ShowcaseService) GetHomeShowcases(types []string, limitPerType int) (ma
 	return s.repo.GetHomeShowcases(types, limitPerType)
 }
 
+func (s *ShowcaseService) GetHubShowcases(hubID int64, limitPerHub int) ([]domain.HubShowcaseGroup, error) {
+	return s.repo.GetHubShowcases(hubID, limitPerHub)
+}
+
 func (s *ShowcaseService) ListPaginated(filter domain.ShowcasePaginatedFilter) (*domain.ShowcasePaginatedResponse, error) {
 	items, total, err := s.repo.ListPaginated(filter)
 	if err != nil {

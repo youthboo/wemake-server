@@ -99,3 +99,7 @@ func (s *CatalogService) GetHubs(scope string) ([]domain.HubWithCategories, erro
 func (s *CatalogService) GetUnits() ([]domain.Unit, error) {
 	return s.repo.GetUnits()
 }
+
+func (s *CatalogService) GetHubShowcases(hubID int64, limitPerHub int) ([]domain.HubShowcaseGroup, error) {
+	return s.showcaseService.GetHubShowcases(hubID, limitPerHub)
+}

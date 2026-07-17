@@ -295,6 +295,14 @@ type HomePromoSlide struct {
 	LinkTo   string  `db:"link_to" json:"link_to"`
 }
 
+// HubShowcaseGroup is one hub with its top showcases — used by GET /api/v1/hubs/showcases.
+type HubShowcaseGroup struct {
+	HubID     int64               `json:"hub_id"`
+	HubName   string              `json:"hub_name"`
+	HubImg    string              `json:"hub_img"`
+	Showcases []ShowcaseExploreItem `json:"showcases"`
+}
+
 type ShowcaseAnalytics struct {
 	ShowcaseID      int64   `db:"showcase_id" json:"showcase_id"`
 	FactoryID       int64   `db:"factory_id" json:"factory_id"`

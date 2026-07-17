@@ -116,3 +116,23 @@ func (h *CatalogHandler) GetUnits(c *fiber.Ctx) error {
 	}
 	return c.JSON(items)
 }
+
+// GetHubShowcases returns showcases grouped by hub.
+// GET /api/v1/hubs/showcases           → all hubs
+// GET /api/v1/hubs/:hub_id/showcases   → single hub
+func (h *CatalogHandler) GetHubShowcases(c *fiber.Ctx) error {
+	var hubID int64
+	if idStr := c.Params("hub_id"); idStr != "" {
+		id, err := helper.ParsePositiveInt64Param(c, "hub_id")
+		if err != nil {
+			return helper.BadRequestError(c, "INVALID_HUB_ID")
+		}
+		hubID = id
+	}
+	limit := helper.QueryParams(c).Int("limit", 8)
+	groups, err := h.service.GetHubShowcases(hubID, limit)
+	if err != nil {
+		return helper.JSONInternal(c, "failed to fetch hub showcases")
+	}
+	return c.JSON(fiber.Map{"hubs": groups})
+}

@@ -524,6 +524,91 @@ func (r *ShowcaseRepository) GetHomeShowcases(types []string, limitPerType int) 
 	return result, nil
 }
 
+// GetHubShowcases returns showcases grouped by hub. If hubID > 0 only that hub
+// is returned; otherwise all hubs with at least one showcase are included.
+func (r *ShowcaseRepository) GetHubShowcases(hubID int64, limitPerHub int) ([]domain.HubShowcaseGroup, error) {
+	if limitPerHub <= 0 {
+		limitPerHub = 8
+	}
+
+	hubFilter := ""
+	args := []interface{}{limitPerHub}
+	if hubID > 0 {
+		hubFilter = "AND h.hub_id = $2"
+		args = append(args, hubID)
+	}
+
+	q := fmt.Sprintf(`
+		WITH ranked AS (
+			SELECT
+				fs.showcase_id, fs.factory_id, fs.content_type, fs.title,
+				NULL::text AS excerpt,
+				NULLIF(fs.linked_showcases->>0, '') AS image_url,
+				fs.category_id, fs.sub_category_id, fs.moq, fs.unit_id, fs.lead_time_days,
+				fs.base_price, fs.promo_price,
+				fs.start_date, fs.end_date,
+				COALESCE(fs.linked_showcases, '[]'::jsonb) AS linked_showcases,
+				'[]'::jsonb AS tags,
+				fs.likes_count, 0::bigint AS view_count,
+				fs.status, fs.created_at, fs.updated_at, fs.published_at,
+				fp.factory_name,
+				fp.image_url AS factory_image_url,
+				fp.rating::float8 AS factory_rating,
+				(fp.approval_status = 'AP') AS factory_verified,
+				p.name_th AS province_name,
+				cat.name AS category_name,
+				sub.name AS sub_category_name,
+				h.hub_id, h.name AS hub_name, COALESCE(h.img, '') AS hub_img,
+				ROW_NUMBER() OVER (PARTITION BY h.hub_id ORDER BY fs.published_at DESC NULLS LAST) AS rn
+			FROM factory_showcases fs
+			INNER JOIN lbi_categories cat ON cat.category_id = fs.category_id
+			INNER JOIN lbi_hub h ON h.hub_id = cat.hub_id %s
+			INNER JOIN factory_profiles fp ON fp.user_id = fs.factory_id AND fp.approval_status = 'AP'
+			LEFT JOIN lbi_provinces p ON p.row_id = fp.province_id
+			LEFT JOIN lbi_sub_categories sub ON sub.sub_category_id = fs.sub_category_id
+			WHERE fs.status = 'AC'
+		)
+		SELECT * FROM ranked WHERE rn <= $1
+		ORDER BY hub_id, rn
+	`, hubFilter)
+
+	type row struct {
+		domain.ShowcaseExploreItem
+		HubID   int64  `db:"hub_id"`
+		HubName string `db:"hub_name"`
+		HubImg  string `db:"hub_img"`
+		Rn      int    `db:"rn"`
+	}
+
+	var rows []row
+	if err := r.db.Select(&rows, q, args...); err != nil {
+		return nil, err
+	}
+
+	hubMap := map[int64]*domain.HubShowcaseGroup{}
+	var order []int64
+	for _, r := range rows {
+		g, ok := hubMap[r.HubID]
+		if !ok {
+			g = &domain.HubShowcaseGroup{
+				HubID:     r.HubID,
+				HubName:   r.HubName,
+				HubImg:    r.HubImg,
+				Showcases: []domain.ShowcaseExploreItem{},
+			}
+			hubMap[r.HubID] = g
+			order = append(order, r.HubID)
+		}
+		g.Showcases = append(g.Showcases, r.ShowcaseExploreItem)
+	}
+
+	out := make([]domain.HubShowcaseGroup, 0, len(order))
+	for _, id := range order {
+		out = append(out, *hubMap[id])
+	}
+	return out, nil
+}
+
 // ListHomePromoSlides returns banner slides from PM showcases (fallback until promo_slides table exists).
 func (r *ShowcaseRepository) ListHomePromoSlides(limit int) ([]domain.HomePromoSlide, error) {
 	if limit <= 0 {
